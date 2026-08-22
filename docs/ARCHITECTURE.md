@@ -1,316 +1,383 @@
-# webui Architecture
+# Architecture
 
-> Companion document to [README.md](../README.md). Describes the
-> modularized structure introduced in 2026-08 (Stage 0–4) — what each
-> file is responsible for, how they wire up, and the contract between
-> backend and frontend.
+> Companion to [README.md](../README.md). This document is for people
+> modifying the webui or integrating with it. It describes the runtime
+> topology, the module boundaries, the request lifecycle, and the SSE
+> payload contract.
 
-## High level
+## 1. High-level topology
 
 ```
-[Browser :7890/]
-    │  GET /                                → public/index.html (527 lines, mostly markup)
-    │  GET /styles/main.css?v=2             → external CSS file (2774 lines)
-    │  GET /app/main.js?v=2                 → ES module (4294 lines)
-    │  GET /lib/marked.min.js               → markdown library
-    │  GET /brand-logo.png                  → branding asset
-    │  fetch POST /api/send {content, ...}  → spawn mcode exec, push chat lines
-    │  fetch POST /api/upload               → save attachment, return @path
-    │  EventSource / SSE  ←─────────────────────┐
-    ▼                                            │
-[Node server.js (55 lines)]                       │
-   │  http.createServer(handleRequest)           │
-   │  delegates to server/router.js               │
-   ▼                                            │
-[server/router.js — URL → handler dispatch]      │
-   │  ┌─────────────┬──────────────┐             │
-   ▼  ▼             ▼              ▼             │
-[server/lib/* — pure modules]                    │
-   │  config / lan / models / db / sessions      │
-   │  / acp-client / state-bus / mcode-exec      │
-   │  / mcode-acp / mavis-usage / usage / settings│
-   │  / upload / workspace / slash / static      │
-   ▼                                             │
-[server/routes/* — one file per URL family]      │
-   /api/send   /api/events   /api/state          │
-   /api/sessions/*  /api/upload  /api/settings    │
-   /api/usage  /api/workspace  /api/models       │
-   /api/health  /api/debug/{inject,state}        │
-   └──────────── pushStateFor ──────────┬────────┘
-                                          │
-[activeChildByCid (mcode subprocess / acp client)] │
-                                          │
-   (mcode.exec / mcode acp subprocess spawns)──┘
+                              ┌─────────────────────────────────────────────┐
+                              │  Browser (public/)                          │
+                              │   • index.html (markup)                     │
+                              │   • app/main.js (ES module)                 │
+                              │   • styles/main.css                         │
+                              └─────────────────────────────────────────────┘
+                                  │ ▲                          │ ▲
+                  fetch / JSON   │ │  EventSource / SSE        │ │
+                                  ▼ │                          ▼ │
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │  server.js — bootstrap only (≈ 100 lines)                            │
+   │   • installGlobalErrorHandlers()                                     │
+   │   • preflight: mcode.cmd exists, upload dir writable, etc.            │
+   │   • http.createServer(handleRequest)                                 │
+   └──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │  server/router.js — declarative route table                          │
+   │                                                                      │
+   │  LAN guard: !isLocalRequest(req) && !getLanBroadcast() → 403         │
+   │                                                                      │
+   │  ┌─ static  ┐ ┌─ /api/health  ┐  ┌─ /api/state  ┐ ┌─ /api/sessions ┐ │
+   │  │ index   │ │ health.js     │  │ state.js     │ │ sessions.js    │ │
+   │  │ .html   │ └───────────────┘  │ + /api/events│ │ + acp-         │ │
+   │  │ .css/js │                    │   (SSE)      │ │   sessions/*   │ │
+   │  │ .png    │                    └──────────────┘ └────────────────┘ │
+   │  └─────────┘                                                       │
+   │  ┌─ /api/send    ┐ ┌─ /api/usage  ┐ ┌─ /api/workspace  ┐             │
+   │  │ chat.js      │ │ usage.js     │ │ workspace.js      │             │
+   │  │ + /stop /cmd │ │ + -real      │ │ + /workspace/    │             │
+   │  │              │ │ + /refresh   │ │   browse          │             │
+   │  └──────────────┘ └──────────────┘ └──────────────────┘             │
+   │  ┌─ /api/upload ┐ ┌─ /api/settings  ┐ ┌─ /api/models    ┐            │
+   │  │ upload.js    │ │ settings.js     │ │ model.js         │            │
+   │  └──────────────┘ └─────────────────┘ │ + /set-model     │            │
+   │                                        │ + /permissions   │            │
+   │                                        │ + /answer        │            │
+   │                                        └──────────────────┘            │
+   │  ┌─ /api/protocol/*  ┐ ┌─ /api/debug/*  ┐                            │
+   │  │ protocol.js       │ │ debug.js       │                            │
+   │  │ /set-mode         │ │ /inject (gated)│                            │
+   │  │ /set-config-option│ │ /state         │                            │
+   │  │ /cancel           │ └────────────────┘                            │
+   │  │ /load-session …   │                                              │
+   │  │ /capabilities     │                                              │
+   │  └───────────────────┘                                              │
+   └──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+   ┌──────────────────────────────────────────────────────────────────────┐
+   │  server/lib/ — pure modules (one concern each)                      │
+   │                                                                      │
+   │  config · lan · models · db · sessions                              │
+   │  state-bus · acp-client · mcode-rpc · mcode-acp · mcode-exec        │
+   │  mavis-usage · usage · settings · upload · workspace · slash        │
+   └──────────────────────────────────────────────────────────────────────┘
+                                  │                          ▲
+                                  ▼                          │  JSON-RPC over stdio
+   ┌──────────────────────────────────────┐   ┌─────────────────────────────┐
+   │  mcode exec subprocess                │   │  mcode acp subprocess        │
+   │  (legacy single-turn, fallback)      │   │  (default multi-turn)        │
+   │  stdio: line-delimited stream-json    │   │  stdio: newline-delimited    │
+   │                                      │   │  JSON-RPC 2.0                │
+   └──────────────────────────────────────┘   └─────────────────────────────┘
 ```
 
-## Backend topology
+## 2. Request lifecycle
 
-`server.js` is the bootstrap only — installs global error handlers,
-checks preflight (`mcode.cmd` exists, `upload/` writable), starts a
-`setInterval` for cleanup, then `http.createServer(handleRequest)` and
-`listen`. All routing and logic live in `server/`.
+A user clicks **Send**. The events that follow:
 
-### `server/lib/` — pure modules
+```
+browser           server/router.js           server/lib/*                mcode
+   │ POST /api/send {content,…}    │                              │
+   │ ──────────────────────────────►│                              │
+   │                                │ chat.js: validate,           │
+   │                                │   cs = getClient(cid)         │
+   │                                │   cid → state-bus             │
+   │                                │ ─────────────────►           │
+   │                                │                              │ mcode-acp.js / mcode-exec.js
+   │                                │                              │ ─── spawn / pipe stdin ───►
+   │                                │                              │
+   │                                │ state-bus: pushStateFor(cid) │
+   │   ◄──────────── SSE event ────│   {type:'state', running:…}  │
+   │   {type:'chat', lines:[…]}    │                              │
+   │   ◄──────────── SSE event ────│   ◄── line  ◄─── stdout  ────│
+   │   {type:'delta', text:'…'}    │                              │
+   │   …                            │                              │
+   │   ◄──────────── SSE event ────│   ◄── exec.result  ──────────│
+   │   {type:'exec', status:'ok'}   │                              │
+   │   ◄──────────── SSE event ────│                              │
+   │   {type:'state', running:false}│                              │
+   │   …                            │                              │
+   │ connection closes / kept open   │                              │
+```
 
-Each lib file owns one concern and exports named functions. No HTTP, no
-side effects beyond what's documented.
+Key invariants:
 
-| File | Responsibility | Key exports |
-|---|---|---|
-| `config.js` | Constants (PORT, MCODE_ROOT, MCODE_CMD, paths, defaults). Reads `process.env.*` once. Also installs `uncaughtException` / `unhandledRejection` handlers and writes to `.server.err`. | `PORT`, `HOST`, `MCODE_ROOT`, `MCODE_CMD`, `DEFAULT_MODEL`, `DEFAULT_WORKSPACE`, `DEFAULT_TIMEOUT`, `MCODE_RUNTIME_DB`, `MAVIS_DB_PATH`, `installGlobalErrorHandlers()`, `detectTuiCwd()` |
-| `lan.js` | LAN IP detection + local request check. | `detectLanIp()`, `LAN_IP`, `isLocalRequest(req)` |
-| `models.js` | Extract builtin model list from `mcode/cli.js` bundle (no hardcoded list). Cache lookup for model context limits. | `getBuiltinModelsFromMcode()`, `getMcodeModelLimit(name)` |
-| `db.js` | Lazy require mcode's `better-sqlite3`. Delete a mcode session row + all related FTS5/lock/projection tables in one transaction. | `getMcodeBetterSqlite3()`, `deleteMcodeSessionFromDb(sid)`, `MCODE_SESSION_DELETE_TABLES` |
-| `sessions.js` | JSON file persistence for webui sessions (`~/.webui-sessions.json`). Also exports chat-line helpers `resetContext`, `persistCurrentChat`, `streamUpdateLine`, and the startup `cleanupEmptyDefaultSessions`. | `loadSessions()`, `saveSessions(s)`, `resetContext(cs)`, `persistCurrentChat(cs)`, `streamUpdateLine(chat, prefix, text)`, `cleanupEmptyDefaultSessions()` |
-| `acp-client.js` | Wraps `acp.mjs` with singleton lifecycle + caches for sessions and commands. The `McodeAcpClient` from `acp.mjs` is the JSON-RPC transport; this lib adds reuse, retry, and shutdown hooks. | `getMcodeAcpClient()`, `shutdownMcodeAcpSingleton()`, `getMcodeSessionsForWorkspace(ws)`, `listAllMcodeSessions()`, `getMcodeSessionTitle(sid)`, `invalidateMcodeSessionsCache()`, `ensureMcodeCommands()`, `getCachedMcodeCommands()`, `WEBUI_LOCAL_COMMANDS` |
-| `state-bus.js` | Per-cid state (`clients` Map), SSE channel registry (`sseByCid` Map), and the active-child tracker (`activeChildByCid` Map). All mutation goes through this module; routes never touch the Maps directly. | `clients`, `sseByCid`, `activeChildByCid`, `makeClientState()`, `getClient(cid)`, `getCidFromReq(req)`, `pushStateFor(cid, opts)`, `pushOnlineCount(lanBroadcast)`, `setActiveChild(cid, child)`, `getActiveChild(cid)`, `clearActiveChild(cid)`, `setSseClient(cid, res)`, `getSseClient(cid)`, `endSseClient(cid, res)`, `SSE_HEADERS` |
-| `mcode-exec.js` | Spawns `cmd.exe /c mcode.cmd exec --input - --output-format stream-json`, parses line-delimited JSON, drives stream markers into `cs.chat`. | `runMcodeExec(prompt, opts)`, `collectExecResult(childPromise)` |
-| `mcode-acp.js` | Spawns `mcode acp` via `McodeAcpClient`, streams `agent_message_chunk` / `agent_thought_chunk` / `tool_call` / `tool_update` / `plan_update` / `goal_update` events into `cs.chat`. After completion, fires a 400ms delayed mavis db query to replace estimated token counts with real values. | `runMcodeAcp(content, opts)` (internal `streamAcpPrompt`) |
-| `mavis-usage.js` | Reads `~/.minimax/v2/sqlite/runtime-state.sqlite` via `sqlite3.exe` CLI (zero native deps). Returns per-turn cache hit rate + cumulative input/output/cache_read/cache_write. | `getMavisTokenUsage(mvsSessionId)`, `getMavisTokenUsageModel(mvsSessionId)`, `applyMavisUsageToCs(cs, mvsSessionId, opts)` |
-| `usage.js` | Wraps `mmx quota show --output json` (no AI involved). Per-cid usage state. | `mmxQuotaShow()`, `runUsageQuery(cs, cid)` |
-| `settings.js` | Runtime toggle for LAN broadcast. Reject page + JSON response when off and request is non-local. `/api/settings` is exempt (so users can re-enable LAN from a phone). | `getLanBroadcast()`, `setLanBroadcast(v)`, `rejectLan(res, pathname, remoteIp)`, `getSettingsSnapshot()` |
-| `upload.js` | Zero-dep multipart/form-data parser. Saves uploaded file with a `<timestamp>-<md5-6>.<ext>` filename into `UPLOAD_DIR`. | `saveMultipartUpload(req)` |
-| `workspace.js` | Per-cid workspace state mutation (set / useTui / reset / detect actions) + directory browsing (with Windows drive-letter enumeration when no path given). | `handleWorkspaceChange(cs, cid, payload)`, `browseWorkspace(rawPath)` |
-| `slash.js` | Webui-level slash command handlers (`/goal`, `/goal-done`, `/goal-blocked`, `/clear`, `/new`, `/status`, `/usage`, `/help`) that don't need a mcode exec. Returns `{handled, continueMcode, rewriteContent}` for the route layer to decide. | `matchSlash(content)`, `handleLocalSlash(content, cs, cid)`, `handleCmdCommand(cmd, cs, cid)` |
-| `static.js` | Static asset serving. MIME map for js/css/json/png/svg/ico/jpg/jpeg/gif/webp. Cache-Control: public, max-age=3600 on all responses. | `serveStatic(pathname, res)`, `serveIndex(res)`, `PUBLIC_DIR` |
+- **One `mcode` subprocess per active webui tab** (keyed by `cid` =
+  client id, a UUID stored in `localStorage.webui_cid`). A new tab gets a new
+  subprocess; a closed tab kills its subprocess. State is per-cid, not
+  per-connection.
+- **The SSE channel is the only source of state updates** for the client.
+  REST endpoints mutate server state but do not push to the client. The
+  client treats SSE as truth.
+- **`pushStateFor(cid, opts)` is the only function that mutates per-cid
+  state on the server.** Everything else is read-only. This is why
+  `state-bus.js` is the size it is — it's the single chokepoint.
 
-### `server/routes/` — URL → handler
+## 3. Module contracts
 
-Each route file exports `handle*` functions. The router matches on
-method + pathname prefix. Body parsing helpers are duplicated
-(`readJson`) where needed; this is intentional — no shared request
-parsing util to keep contracts local.
+Each `server/lib/*.js` file exports a small set of named functions. No
+file reaches into another's internals. The notable contracts:
 
-| File | Routes |
+### `config.js`
+- Exports frozen-ish constants: `PORT`, `HOST`, `MCODE_ROOT`, `MCODE_CMD`,
+  `DEFAULT_MODEL`, `DEFAULT_WORKSPACE`, `DEFAULT_TIMEOUT`,
+  `MCODE_RUNTIME_DB`, `MAVIS_DB_PATH`.
+- Reads `process.env.*` exactly once at module load. No per-request
+  re-reading.
+- `installGlobalErrorHandlers()` writes uncaught exceptions to
+  `.server.err` so they survive a process restart.
+
+### `state-bus.js`
+The chokepoint. Exports:
+
+| Function | Purpose |
 |---|---|
-| `health.js` | `GET /api/health` |
-| `state.js` | `GET /api/state`, `GET /api/events` (SSE) |
-| `sessions.js` | `GET/POST /api/sessions`, `POST /api/sessions/switch`, `DELETE /api/sessions/:id`, `POST /api/sessions/cleanup-orphans`, `GET /api/acp-sessions`, `GET /api/acp-session-title` |
-| `chat.js` | `POST /api/send`, `POST /api/stop`, `POST /api/cmd` |
-| `usage.js` | `POST /api/usage`, `POST /api/usage-trigger`, `GET /api/usage-real`, `POST /api/refresh` |
-| `workspace.js` | `POST /api/workspace`, `GET /api/workspace/browse` |
-| `settings.js` | `GET/POST /api/settings` |
-| `upload.js` | `POST /api/upload` |
-| `model.js` | `GET /api/models`, `POST /api/set-model`, `POST /api/permissions`, `POST /api/answer` (legacy no-op) |
-| `debug.js` | `POST /api/debug/inject`, `GET /api/debug/state` (gated by `DEBUG_INJECT=1`) |
+| `getClient(cid)` | Returns the `clientState` object: `state`, `sse`, `activeChild`, `chatHistory`, `requestSeq`. Lazily creates on first call. |
+| `pushStateFor(cid, opts)` | Build a normalized `state` object and write it to `clientState.state`. Broadcasts to the SSE channel unless `opts.silent`. |
+| `pushEvent(cid, event)` | Append an arbitrary event to the SSE channel (`{type, …}`). |
+| `pushOnlineCount(lanBroadcast)` | Count `sseByCid.size` and broadcast to all clients. Called on connect/disconnect. |
+| `SSE_HEADERS` | Standard headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`. |
 
-### `server/router.js`
+The `state` payload is documented in § 5 below. The `clientState.state`
+object is the **only** thing the rest of the codebase reads from.
 
-URL → handler dispatcher. Order of checks:
+### `acp-client.js`
+Wraps mcode's JSON-RPC-over-stdio protocol. Exports:
 
-1. CORS headers (all paths).
-2. LAN reject (skipped if request is local OR `/api/settings`).
-3. Static files (`serveStatic` for any path with a `.` — handles
-   `/lib/marked.min.js`, `/brand-logo.png`, `/app/main.js`, etc.).
-4. `ROUTES` table — first match wins.
+- `McodeAcpClient` class — `start()`, `request(method, params)`,
+  `notify(method, params)`, `stop()`, `events` EventEmitter.
+- `getMcodeAcpClient()` — process-wide singleton. Init is
+  `pInitPromise` de-duplicated so concurrent `start()` callers share a
+  single subprocess.
+- Cache: `mcodeCommandsCache` and `mcodeSessionsCache` avoid
+  repeated JSON-RPC round-trips for `session/list` and
+  `session/commands`.
 
-Errors are caught per route and return 500 JSON. The router also
-enforces the SSE channel ownership boundary: routes call `setSseClient`
-/ `endSseClient` rather than touching `sseByCid` directly.
+### `mcode-rpc.js`
+The shim for methods mcode 0.1.5 does not implement:
 
-### `server/cleanup.js`
-
-Background timer hooks:
-- `runStartupCleanup()` — runs `cleanupEmptyDefaultSessions()` on boot.
-- `setTimeout(ensureMcodeCommands, 5000)` — warms the mcode command
-  cache 5s after startup so `/help` responds instantly later.
-
-## Frontend topology
-
-```
-[public/index.html]
-   <link rel="stylesheet" href="/styles/main.css?v=2">
-   <script src="/lib/marked.min.js"></script>
-   <script type="module" src="/app/main.js?v=2"></script>
-   <body>
-     <div class="app"> ... full Kimi-style markup ... </div>
-   </body>
+```js
+const UNSUPPORTED = new Set([
+  'session/set_mode',
+  'session/set_config_option',
+  'session/cancel',
+  'session/activate', 'session/fork', 'session/resume', 'session/delete',
+  'session/request_permission', 'session/subscribe',
+])
 ```
 
-`public/index.html` is 527 lines: pure markup + the three link/script
-tags. No inline `<style>`, no inline `<script>`. The `data-i18n` /
-`data-i18n-placeholder` / `data-i18n-title` attributes on every user-
-visible string are populated by `applyI18n()` in main.js.
+`callRpc(method, params)` returns
+`{ok:false, code:'unsupported', error:'…'}` synchronously when the
+method is unsupported. The caller decides what to do — usually a toast
+on the client.
 
-`public/app/main.js` is 4294 lines: one ES module containing all
-frontend code. Top-level `let`/`const`/`function` declarations live in
-module scope (not exposed to `window` — that's correct ES module
-behavior, not a regression). The `?v=2` cache-bust query is bumped on
-every deploy that changes the file.
+### `mcode-acp.js` vs `mcode-exec.js`
+Two transports with a shared shape. The transport layer is selected
+by `mcode-rpc.js` based on `mcode version >= 0.1.4` and the per-request
+`/exec` opt-in.
 
-`public/styles/main.css` is 2774 lines: all CSS variables, reset, and
-component styles. Verified byte-for-byte against the pre-Stage-3 inline
-`<style>` block.
+Both expose:
+- `runMcode(content, opts)` → `AsyncGenerator<NormalizedEvent>`
+- `stopExec()` → `void`
+- `isRunning()` → `boolean`
 
-## Backend ↔ Frontend contract
+`NormalizedEvent` is a tagged union (`{type, …}`) with these types:
+`state`, `chat`, `delta`, `tool`, `permission`, `plan`, `ask`,
+`exec`, `usage`. See § 5.
 
-### SSE event payload
+## 4. The `clientState.state` payload
 
-Every SSE event from `/api/events` carries a `data: <json>\n\n` line
-where `<json>` is a snapshot of the entire per-cid state:
+This is the shape every SSE `state` event contains. The webui mirrors
+it 1:1 into the `state` JS variable.
 
-```jsonc
+```ts
 {
-  "version": "0.1.3",
-  "workspace": { "dir": "...", "branch": null, "tree": null },
-  "model": { "name": "minimax_api/MiniMax-M3", "thinking": "On", "ctx": "512k" },
-  "sessionId": "...uuid...",        // webui randomUUID
-  "mcodeSessionId": "mvs_...",        // mcode's own session id (mvs_xxx)
-  "sessionTitle": "...",
-  "context": {
-    "tokens": 0, "used": 0, "percent": 0, "limit": 512000,
-    "tps": 0, "thinkingStatus": "Idle",
-    "estimated": false, "usageSource": "mavis-db" | "mcode-rusage" | "estimate"
-  },
-  "usage": {
-    "plan": null, "expires": null, "credits": null,
-    "fiveHourPercent": 78, "weekly": "100%",
-    "sessionInput": 42305, "sessionOutput": 139, "sessionTotal": 42444,
-    "sessionCacheRead": 220000, "sessionCacheWrite": 0,
-    "sessionReasoning": 0, "sessionCacheHitRate": 0.84,
-    "mavisModel": "MiniMax-M3",
-    "fetchedAt": 1787211441394,
-    "raw": "{...mmx json...}",
-    "error": null
-  },
-  "permissions": "Full access",
-  "chat": ["› user prompt", "● assistant response", "▲ thinking", "→ tool", ...],
-  "sessions": [...webui session entries...],
-  "mcodeSessions": [...filtered mcode acp session entries...],
-  "availableCommands": { "mcode": [...], "webui": [...], "fetchedAt": ..., "source": "..." },
-  "goal": { "active": false, "text": null, "status": null, "duration": null },
-  "todo": [],
-  "ask": { "active": false, "total": 0, "answered": 0, "currentIdx": 0, "question": "", "options": [] },
-  "plan": { "active": false, "title": null, "summary": "", "options": [] },
-  "running": { "active": false, "prompt": null, "pid": null, "startedAt": null, "model": null, "sessionId": null, "lastDeltaAt": null, "tps": 0 },
-  "onlineCount": 1,
-  "lanBroadcast": true
+  version: string,                 // webui version (from package.json)
+  running: { active: boolean,
+             sessionId?: string,    // mcode acp session id (if any)
+             cid: string,           // webui tab id
+             startTime?: number,    // ms epoch
+             pendingPermission?: object,
+             pendingPlan?: object,
+             pendingAsk?: object },
+  workspace: { dir: string,         // absolute path, "" if unset
+               branch?: string,     // git branch (best-effort, "" on error)
+               treeState?: 'clean'|'dirty'|'unknown' },
+  model: { name: string,            // e.g. "minimax_api/MiniMax-M3"
+           ctx: string,            // e.g. "512k"
+           thinking: 'On'|'Off'|string },
+  permissions: string,             // mcode-side: 'ask'|'auto'|'full'|'plan'|...
+  commands: Array<{                // mcode slash commands
+    cmd: string, zh: string, en: string,
+    description_zh?: string, description_en?: string,
+    hint?: string,
+    input_hint?: string,
+    destructive?: boolean }>,
+  sessions: Array<{                // webui-side session list (merged w/ mcode)
+    id: string,
+    title: string,
+    workspace: string,
+    mcodeSessionId?: string,        // linked mcode session id
+    updatedAt: number }>,
+  mcodeSessions: Array<{            // mcode-side session list (raw)
+    sessionId: string,
+    title: string,
+    cwd: string,
+    updatedAt: number }>,
+  mcodeSessionId?: string,         // currently-active mcode session
+  context?: {                       // updated by SSE delta accumulation
+    used: number,                   // tokens used (per-turn)
+    percent: number,                // 0..100
+    cacheRead: number,              // per-turn cache reads
+    tps: number,                    // current tok/s
+    source: 'mavis'|'mmx' },        // which backend provided the data
+  usage?: {                         // from /api/usage
+    remaining: number,              // percent
+    resetAt: number,                // ms epoch
+    weeklyResetAt: number,
+    fetchedAt: number },
+  plan?: { active: boolean, title: string, summary: string,
+           options: Array<{label:string}>, totalLines: number,
+           summaryLines: number },
+  enterPlanMode?: { active: boolean },
+  permissionChoice?: { active: boolean, current: string,
+                        options: Array<{label:string}> },
+  askUser?: { active: boolean, questions: Array<…> },
+  goal?: { active: boolean, text: string, status: 'running'|'done'|'blocked',
+           duration?: number },
+  todo?: Array<{ content: string, status: 'pending'|'in_progress'|'done' }>,
+  lanBroadcast: boolean,           // mirrors /api/settings
+  onlineCount: number               // from pushOnlineCount
 }
 ```
 
-The frontend preserves `state.askUserAnswers` across SSE pushes (it's
-client-only state, never sent to the server).
+The webui **does not** hold additional state outside this object. Any UI
+panel that needs data reads it from `state` and reacts to `state`
+changes via `render()`.
 
-### HTTP API surface
+## 5. SSE event schema
 
-| Verb | URL | Purpose |
+```
+event: state
+data: {"version":"0.1.3","running":{"active":true,…},…}
+
+event: chat
+data: {"lines":[{"role":"user","content":"…"}]}
+
+event: delta
+data: {"sessionId":"mvs_…","text":"hello","isPartial":true}
+
+event: tool
+data: {"name":"Bash","input":{…},"output":"…","status":"ok"|"err"|"running"}
+
+event: permission
+data: {"id":"perm_…","tool":"Bash","input":{…},"options":["ask","auto","full"]}
+
+event: plan
+data: {"title":"…","summary":"…","options":[…],"totalLines":N,"summaryLines":N}
+
+event: ask
+data: {"questions":[{"header":"…","question":"…","options":[…], "multiSelect":false}]}
+
+event: exec
+data: {"status":"ok"|"err"|"aborted","durationMs":N,"errorMessage"?:string}
+
+event: usage
+data: {"remaining":N,"resetAt":N,…}
+
+event: online
+data: {"count":N,"lanBroadcast":true}
+```
+
+The webui treats each event as an idempotent update; replaying the
+same event is safe. The server uses an at-most-once delivery model
+(SSE drops on disconnect → no retry), which the client handles by
+fetching `/api/state` on reconnect.
+
+## 6. Frontend topology
+
+```
+public/index.html         (markup only, no inline <script> or <style>)
+public/app/main.js        (single ES module, ~4200 lines)
+public/styles/main.css    (single stylesheet)
+public/lib/marked.min.js  (third-party markdown)
+```
+
+`main.js` is intentionally monolithic. The codebase chose a single
+file over a build step because:
+- No bundler → zero build time, zero source maps, zero config
+- Easier to grep (one file = one search)
+- Cache-bust via `?v=N` query string on `<script src>`
+
+Internal structure (top to bottom):
+1. **Config** — env, `CID`, `TOKEN`, `API_SUFFIX`
+2. **I18N tables** — `zh`, `en` objects; `t(key)` lookup; `applyI18n()` walk
+3. **DOM cache** — `els = {...}` populated on `init()`
+4. **Render functions** — `render()`, `renderChat()`, `renderSessions()`, `renderUsage()`, `renderRight()`, `renderGoal()`, `renderTodo()`, `renderContext()`
+5. **State synchronization** — `connect()` (SSE), `pushStateFor` mirror
+6. **Event handlers** — `attachEvents()` (delegation + per-element), `attachModalEvents()`
+7. **Action functions** — `send()`, `stopExec()`, `setMode()`, `setModel()`, `submitWorkspaceChange()`, `cancelConfirm()`, `refreshSessions()`, `refreshUsage()`
+8. **Helpers** — `parseChatLines()`, `parseMarkdown()`, `renderMessage()`, `escapeHtml()`
+9. **Init** — try { init(); attachModalEvents() } catch { show red error }
+
+## 7. Why zero npm dependencies
+
+The webui is intentionally dependency-free. Reasons:
+
+- `mcode.cmd` is already a toolchain that pulls its own deps
+- A webui that needs `npm install` to start is one more thing that can break
+- All required functionality (HTTP server, EventSource, JSON, multipart
+  parsing) is in Node stdlib
+
+The `package.json` exists for the `name`/`version`/`scripts` fields and
+for editor tooling (Node type detection). `npm start` is a one-liner
+that just runs `node server.js`.
+
+If a future change needs a new dep, the rule is: add it, document why,
+keep the dep optional where possible (try/catch + fallback).
+
+## 8. Failure modes
+
+| Failure | Detection | Recovery |
 |---|---|---|
-| GET | `/` | HTML |
-| GET | `/styles/main.css?v=N` | CSS |
-| GET | `/app/main.js?v=N` | JS module |
-| GET | `/lib/marked.min.js` | Markdown lib |
-| GET | `/brand-logo.png` | Branding |
-| GET | `/api/health` | Server status |
-| GET | `/api/state` | Full state snapshot |
-| GET | `/api/events` | SSE stream (per-cid, see cid query) |
-| GET | `/api/sessions` | List webui sessions |
-| POST | `/api/sessions` | Create webui session (`{workspace?}`) |
-| POST | `/api/sessions/switch` | Switch active session (`{id}` — accepts webui uuid or `mvs_xxx`) |
-| DELETE | `/api/sessions/:id` | Delete session (also deletes mcode session row if linked) |
-| POST | `/api/sessions/cleanup-orphans` | Clean orphan mcode sessions (`?scope=orphans|all`) |
-| GET | `/api/acp-sessions?cwd=...` | List mcode sessions for workspace |
-| GET | `/api/acp-session-title?sessionId=...` | Title lookup |
-| POST | `/api/send` | Submit prompt (`{content, isAskAnswer?}`) — fire-and-forget; output via SSE |
-| POST | `/api/stop` | Kill current cid's mcode subprocess |
-| POST | `/api/cmd` | Webui button command (`{cmd: '/new|/status|/clear|/sessions|/help|/usage|/stop'}`) |
-| POST | `/api/upload` | Multipart file upload |
-| GET | `/api/workspace/browse?path=...` | List directory subdirs |
-| POST | `/api/workspace` | Set/reset/useTui workspace (`{action, dir?, syncTui?}`) |
-| GET | `/api/usage` | (alias: `/api/usage-trigger`) Trigger mmx quota pull |
-| GET | `/api/usage-real` | Raw mavis db usage dump |
-| POST | `/api/refresh` | Push current state to client |
-| GET | `/api/models` | Builtin model list |
-| POST | `/api/set-model` | Set `cs.model.name` (`{model}`) |
-| POST | `/api/permissions` | Set permission mode (`{mode: ask|auto|read|full}`) |
-| POST | `/api/answer` | Legacy no-op for old ask/plan/perm modals |
-| GET | `/api/settings` | Server settings snapshot |
-| POST | `/api/settings` | Update settings (`{lanBroadcast?}`) |
-| POST | `/api/debug/inject` | Mock state (DEBUG_INJECT=1 only) |
-| GET | `/api/debug/state` | Inspect state (DEBUG_INJECT=1 only) |
+| mcode acp subprocess crashes | `child.on('exit')` listener | pushStateFor with `running.active=false`; client shows "agent stopped" toast |
+| mcode acp returns "Method not found" | `mcode-rpc.js` whitelist | returns `{ok:false, code:'unsupported'}` synchronously; route handler returns 501 Not Implemented; client shows toast |
+| SSE connection drops | `EventSource.onerror` | auto-reconnect with backoff; on reconnect, fetch `/api/state` and resync |
+| LAN request from a non-whitelisted IP | `router.js` L120 | 403 + friendly HTML page (or JSON for /api/*) |
+| Server out of file descriptors | `installGlobalErrorHandlers` EMFILE sink | written to `.server.err`; user sees an empty page; reload usually fixes it |
+| mcode exec encoding is GBK (Windows) | Node defaults to UTF-8 in `spawn`; no fix needed | documented in README as a pitfall for future Python ports |
 
-All `/api/*` URLs take a `?cid=<uuid>` query (auto-generated by the
-frontend, persisted in `localStorage.webui_cid`). Multiple webui tabs
-each have their own cid → independent SSE channel + state.
+## 9. Adding a new endpoint
 
-## Per-cid state model
+The pattern (see `docs/DEVELOPMENT.md` for the full walk-through):
 
-Each webui tab (cid) owns:
-- `cs` — server-side state object (see SSE payload above)
-- `sseByCid[cid]` — the SSE response stream for that tab
-- `activeChildByCid[cid]` — the running mcode subprocess (exec child or
-  acp client). `/api/stop` kills this; the SSE push after death
-  contains `running.active = false`.
+1. Create `server/routes/foo.js`, export `async function handleFoo(req, res, ctx, pathname)`
+2. Import in `server/router.js`
+3. Add to the routes table:
+   ```js
+   { method: 'POST', match: (p) => p === '/api/foo', handler: fooRoute.handleFoo }
+   ```
+4. If the new endpoint mutates state, call `pushStateFor(cid, {...})` from
+   the handler. Never write to `clientState.state` directly.
+5. If the endpoint is invoked by the webui, add it to the fetch helper
+   in `public/app/main.js` (`API_SUFFIX` is automatically appended).
 
-Mutations to `cs` always go through one of:
-- `pushStateFor(cid, opts)` — write full snapshot to that cid's SSE
-  channel
-- `pushOnlineCount(lanBroadcast)` — broadcast to all channels
-  (used by SSE open/close to keep `onlineCount` accurate)
-- `pushStateFor('__broadcast__', opts)` — broadcast snapshot to all
-  channels (used by `ensureMcodeCommands` after cache refresh)
+## 10. Future directions
 
-Routes never mutate `clients` / `sseByCid` / `activeChildByCid`
-directly — they call the helpers in `state-bus.js`.
-
-## Known sharp edges
-
-These are bugs/limitations preserved from the original monolithic
-server.js. They are NOT introduced by Stage 1-4. Filing them for a
-later cleanup stage.
-
-1. **Duplicate `sendPlanAnswer` (resolved in Stage 2).** The original
-   inline script had two `async function sendPlanAnswer(text)`
-   declarations. Non-strict script mode let the second one (line 4108,
-   `/api/answer` flow) silently overwrite the first (line 1850,
-   `/api/send` flow). Stage 2 removed the dead first declaration. The
-   inline plan-block flow still calls the modal version (which goes
-   to `/api/answer` instead of `/api/send`) — this is the pre-existing
-   behavior, preserved intentionally. Fixing the inline plan-block
-   flow to call `/api/send` directly is a one-line change but changes
-   user-visible behavior, deferred.
-
-2. **LAN broadcast exempts `/api/settings`.** When `lanBroadcast =
-   false` and the request is non-local, every `/api/*` returns 403
-   JSON except `/api/settings` (which lets a phone-user toggle LAN back
-   on). This is deliberate — the same endpoint is how the user
-   re-enables LAN. Documented in `lib/settings.js`.
-
-3. **`MCODE_USE_ACP=0` env to fall back to `mcode exec` from ACP.**
-   Set on the server. Otherwise all `/api/send` calls use the mcode
-   acp protocol (`mcode acp`). Both code paths exist; the acp path is
-   the default since v0.5.ah.
-
-4. **Auto-refresh ping.** The frontend `connect()` (in main.js) pings
-   `/api/refresh` every 60s. Stage 1 refactored nothing here — this is
-   to prevent the right panel from going stale ("—" / "Loading...")
-   when no other SSE event has fired.
-
-5. **Cache policy.** All static assets served with
-   `Cache-Control: public, max-age=3600`. Bumping the `?v=N` query on
-   `/app/main.js` and `/styles/main.css` is the only cache-bust
-   mechanism. Stage 2 added `?v=2`; Stage 3 matched it on CSS. Future
-   deploys that change either file must bump the version.
-
-## Testing approach
-
-Per-stage review by independent Explore agent:
-- Stage 1 (backend): route coverage check + body/state/env regression
-  scan + module-boundary contract verification.
-- Stage 2 (frontend): verbatim diff check + ES module strict-mode
-  trap scan + cache-bust verification.
-- Stage 3 (CSS): verbatim diff + visual regression screenshot via
-  Playwright.
-
-End-to-end smoke test (manual, after every Stage):
-1. `node server.js` (default port 7890)
-2. Browser `http://127.0.0.1:7890/`
-3. Send a prompt — confirm mcode acp stream + token counter + sidebar
-4. Switch sessions — confirm SSE delivery + title rendering
-5. Toggle LAN — confirm 403 from another IP
-
-## Related documents
-
-- [README.md](../README.md) — operational guide (start/stop, port,
-  env vars, mcode exec command template)
-- [acp-goal-plan-status.md](acp-goal-plan-status.md) — design doc for
-  the goal/plan/ask_user modal flow
+- **mcode `acp` capability parity**: once mcode implements the missing
+  methods (`set_mode`, `cancel`, etc.), the `UNSUPPORTED` set in
+  `mcode-rpc.js` shrinks; the corresponding `/api/protocol/*` endpoints
+  become functional. The `protocol/capabilities` endpoint already
+  advertises this.
+- **WebSocket transport**: SSE is fine for unidirectional push. If
+  bidirectional low-latency control becomes a need (e.g. live
+  cursor tracking in a shared session), replace the EventSource
+  with a WebSocket and keep the same message schema.
+- **Multi-user session sharing**: per-cid state can be replaced with
+  per-session state and a session-id routing key. The architecture
+  already separates per-cid state from per-session data; the
+  migration is renaming, not restructuring.
