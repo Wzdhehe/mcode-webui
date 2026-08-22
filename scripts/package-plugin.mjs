@@ -16,7 +16,9 @@
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
+  readdirSync,
   readlinkSync,
   rmSync,
   statSync,
@@ -42,34 +44,59 @@ const SKIP = new Set([
   ".server.err.log",
 ]);
 
-function isJunctionOrSymlink(p) {
+// Return the symlink/junction target if `p` is one; null otherwise.
+//   On Windows, `lstat` does NOT report isSymbolicLink() for junctions in
+//   older Node, but `readlinkSync` works for both. Try lstat first; if
+//   that fails OR the path is a symlink, return readlinkSync() result.
+function readJunctionTarget(p) {
   try {
-    return statSync(p).isSymbolicLink();
+    const lst = lstatSync(p);
+    if (lst.isSymbolicLink()) return readlinkSync(p);
+    // Windows junctions: lstat reports isDirectory() === true for the
+    // junction (because Windows reparse points confuse stat), but
+    // readlinkSync still returns the target. Try it regardless of lstat.
+    if (process.platform === "win32") {
+      try {
+        return readlinkSync(p);
+      } catch {
+        return null;
+      }
+    }
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-// Recursive copy with junction/symlink resolution
-function copyRecursive(src, dest) {
-  const st = statSync(src); // follows symlinks/junctions, returns target info
+// Recursive copy that resolves junctions/symlinks. For each entry:
+//   - If it's a junction/symlink: recurse into the resolved target
+//   - If it's a real dir: recurse
+//   - If it's a real file: copy
+function copyRecursive(src, dest, stats) {
+  const st = stats || statSync(src);
   if (st.isDirectory()) {
     mkdirSync(dest, { recursive: true });
-    for (const child of readdirSyncSafe(src)) {
+    for (const child of readdirSync(src)) {
       if (SKIP.has(child)) continue;
-      copyRecursive(join(src, child), join(dest, child));
+      const childSrc = join(src, child);
+      const childDest = join(dest, child);
+      const childTarget = readJunctionTarget(childSrc);
+      if (childTarget) {
+        // Junction / symlink — recurse into the resolved target.
+        // childTarget may be relative; resolve against src dir.
+        const resolved =
+          childTarget.startsWith("/") || /^[A-Z]:[\\/]/i.test(childTarget)
+            ? childTarget
+            : join(dirname(childSrc), childTarget);
+        copyRecursive(resolved, childDest);
+      } else {
+        copyRecursive(childSrc, childDest);
+      }
     }
   } else if (st.isFile()) {
-    copyFileSync(src, dest);
-  } else {
-    // Skip other types (sockets, devices, etc.)
+    cpSync(src, dest);
   }
-}
-
-// Local imports (avoid pulling in 'node:fs' at top for these)
-import { copyFileSync, readdirSync } from "node:fs";
-function readdirSyncSafe(p) {
-  try { return readdirSync(p); } catch { return []; }
+  // else: skip sockets/devices/etc.
 }
 
 if (!existsSync(SRC)) {
@@ -82,36 +109,71 @@ if (existsSync(DEST)) {
   rmSync(DEST, { recursive: true, force: true });
 }
 mkdirSync(DEST_PARENT, { recursive: true });
-console.log(`Copying ${SRC} -> ${DEST} (expanding symlinks/junctions)`);
+console.log(`Copying ${SRC} -> ${DEST} (expanding junctions/symlinks)`);
+copyRecursive(SRC, DEST);
 
-// Use cpSync with `verbatim: false, followSymlinks: true` (Node 22+)
-cpSync(SRC, DEST, {
-  recursive: true,
-  verbatim: false,
-  followSymlinks: true,
-  filter: (src) => {
-    const base = basename(src);
-    return !SKIP.has(base);
-  },
-});
-
-// Verify no symlinks/junctions remain
+// Verify: walk dist, ensure no entry is a symlink/junction.
 const violations = [];
-function walkAndCheck(p) {
-  const st = statSync(p);
-  if (st.isDirectory()) {
-    for (const child of readdirSyncSafe(p)) walkAndCheck(join(p, child));
+function walkAndCheck(p, rel = "") {
+  let lst;
+  try {
+    lst = lstatSync(p);
+  } catch {
+    return;
+  }
+  if (lst.isSymbolicLink()) {
+    violations.push(join(rel, basename(p)));
+    return;
+  }
+  // Also check Windows junctions via readlinkSync
+  if (process.platform === "win32") {
+    try {
+      readlinkSync(p);
+      violations.push(join(rel, basename(p)) + " (junction)");
+      return;
+    } catch { /* not a junction */ }
+  }
+  if (lst.isDirectory()) {
+    for (const child of readdirSync(p)) walkAndCheck(join(p, child), join(rel, child));
   }
 }
-try { walkAndCheck(DEST); } catch (e) { console.warn(`walk error: ${e.message}`); }
+walkAndCheck(DEST);
+
 if (violations.length) {
   console.error(`FAIL: ${violations.length} symlinks/junctions remain in dist`);
   for (const v of violations) console.error(`  ${v}`);
   process.exit(1);
 }
-console.log("OK: no symlinks/junctions in dist");
+console.log(`OK: no symlinks/junctions in dist`);
 
-// Zip
+// Quick file count + size summary
+let fileCount = 0;
+let totalSize = 0;
+function walkCount(p) {
+  const lst = lstatSync(p);
+  if (lst.isFile()) {
+    fileCount++;
+    totalSize += lst.size;
+  } else if (lst.isDirectory()) {
+    for (const child of readdirSync(p)) walkCount(join(p, child));
+  }
+}
+walkCount(DEST);
+console.log(`Stats: ${fileCount} files, ${(totalSize / 1024).toFixed(1)} KB`);
+
+// Write a manifest summary
+const manifest = {
+  generatedAt: new Date().toISOString(),
+  source: relative(ROOT, SRC),
+  dest: relative(ROOT, DEST),
+  fileCount,
+  totalSizeBytes: totalSize,
+};
+writeFileSync(join(DEST, "PACKAGE-MANIFEST.json"), JSON.stringify(manifest, null, 2));
+console.log(`Wrote PACKAGE-MANIFEST.json`);
+
+// Zip via PowerShell Compress-Archive (Windows built-in; cross-platform
+// would need a Node zip lib — but contract says zero npm deps)
 const zipPath = `${DEST}.zip`;
 if (existsSync(zipPath)) rmSync(zipPath);
 console.log(`Zipping ${DEST} -> ${zipPath}`);
@@ -124,4 +186,7 @@ if (r.status !== 0) {
   console.error(`zip failed (exit ${r.status})`);
   process.exit(1);
 }
-console.log(`DONE: ${zipPath}`);
+
+// Verify zip file
+const zipStat = statSync(zipPath);
+console.log(`DONE: ${zipPath} (${(zipStat.size / 1024).toFixed(1)} KB)`);
