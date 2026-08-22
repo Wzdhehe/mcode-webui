@@ -40,7 +40,7 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/Wzdhehe/Mcode-webui.git
+git clone https://github.com/Wzdhehe/mcode-webui.git
 cd Mcode-webui
 node server.js                 # Mcode CLI 自动探测
 # → http://127.0.0.1:8080/     (局域网：http://<局域网IP>:8080/)
@@ -82,16 +82,16 @@ webui 在 `mcode-rpc.js` 把这些列白名单 + 优雅降级（toast + 兜底�
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发环境、新增路由 / 命令 / 面板 |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | 常见报错 + 验证过的修法 |
 | [CHANGELOG.md](CHANGELOG.md) | 发布历史 |
-| [SECURITY-NOTES](plugins/Wzdhehe/Mcode-webui/references/SECURITY-NOTES.md) | 安全披露（权威源） |
+| [SECURITY-NOTES](plugins/Wzdhehe/mcode-webui/references/SECURITY-NOTES.md) | 安全披露（权威源） |
 
 ## 插件打包
 
-`plugins/Wzdhehe/Mcode-webui/` 是 Agent Plugins 1.0 规范的产物，
+`plugins/Wzdhehe/mcode-webui/` 是 Agent Plugins 1.0 规范的产物，
 会提交到[官方插件社区](https://github.com/MiniMax-AI/MiniMax-Code-Plugins)。
 
 ```bash
 npm run validate:plugin   # 契约检查（跟官方门禁镜像）
-npm run package:plugin    # dist/Wzdhehe/Mcode-webui/ + .zip
+npm run package:plugin    # dist/Wzdhehe/mcode-webui/ + .zip
 ```
 
 ## 贡献
@@ -102,7 +102,7 @@ npm run package:plugin    # dist/Wzdhehe/Mcode-webui/ + .zip
 
 ## 开源协议
 
-MIT —— 见 [LICENSE](plugins/Wzdhehe/Mcode-webui/LICENSE)。
+MIT —— 见 [LICENSE](plugins/Wzdhehe/mcode-webui/LICENSE)。
 
 ## 命名说明
 

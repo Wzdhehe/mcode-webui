@@ -30,8 +30,8 @@ landed on the development branch but are not yet cut into a release.
 
 ### Changed
 
-- **`SKILL.md` moved** from `plugins/Wzdhehe/Mcode-webui/SKILL.md`
-  to `plugins/Wzdhehe/Mcode-webui/skills/Mcode-webui/SKILL.md` to
+- **`SKILL.md` moved** from `plugins/Wzdhehe/mcode-webui/SKILL.md`
+  to `plugins/Wzdhehe/mcode-webui/skills/mcode-webui/SKILL.md` to
   match the official Agent Plugins 1.0 `skills/` layout (the local
   `validate-plugin` mirror flagged this; the official registry
   gate is the same check).

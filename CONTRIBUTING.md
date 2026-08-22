@@ -3,7 +3,7 @@
 Thanks for your interest in Mcode Web UI! This document covers
 the day-to-day contribution workflow. For the bigger picture (plugin
 packaging, release process), see [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
-and [`plugins/Wzdhehe/Mcode-webui/README.md`](plugins/Wzdhehe/Mcode-webui/README.md).
+and [`plugins/Wzdhehe/mcode-webui/README.md`](plugins/Wzdhehe/mcode-webui/README.md).
 
 ## Code of conduct
 
@@ -22,7 +22,7 @@ Requirements:
 Clone and run:
 
 ```bash
-git clone https://github.com/Wzdhehe/Mcode-webui.git
+git clone https://github.com/Wzdhehe/mcode-webui.git
 cd Mcode-webui
 npm install               # only devDeps (eslint, prettier, c8)
 npm test                  # 302 unit tests
@@ -43,12 +43,12 @@ Mcode-webui/                          # ← the development tree (root)
 ├── docs/                            # ARCHITECTURE, API, CAPABILITIES, …
 ├── acp.mjs, server.js, package.json
 │
-└── plugins/Wzdhehe/Mcode-webui/     # ← the plugin artifact
+└── plugins/Wzdhehe/mcode-webui/     # ← the plugin artifact
     ├── server/  public/  test/      # ↑ real copies, not symlinks
     ├── docs/  references/  skills/
     ├── plugin.json  package.json  LICENSE
     ├── README.md  PR_DESCRIPTION.md
-    └── SKILL.md                    # lives at skills/Mcode-webui/SKILL.md
+    └── SKILL.md                    # lives at skills/mcode-webui/SKILL.md
 ```
 
 **Why two copies?** The community plugin registry takes the
@@ -63,7 +63,7 @@ create junctions; the trees have been expanded since).
 
 1. **Edit at the repo root** (`server/`, `public/`, `test/`).
 2. **Mirror the change to the plugin tree** — copy the changed files
-   from `<root>/server/...` to `plugins/Wzdhehe/Mcode-webui/server/...`,
+   from `<root>/server/...` to `plugins/Wzdhehe/mcode-webui/server/...`,
    and the same for `public/`, `test/`, `docs/`.
    (The `package:plugin` script does this for you, but a
    per-PR manual sync is fine for small changes.)
@@ -157,11 +157,11 @@ short version:
 1. Bump `version` in `package.json` (root + plugin copy).
 2. Move "Unreleased" section in `CHANGELOG.md` to a dated
    versioned section.
-3. `npm run package:plugin` — produces `dist/Wzdhehe/Mcode-webui/`
+3. `npm run package:plugin` — produces `dist/Wzdhehe/mcode-webui/`
    + `dist/Wzdhehe/Mcode-webui.zip`.
 4. Open a PR to the community registry
    [`MiniMax-AI/MiniMax-Code-Plugins`](https://github.com/MiniMax-AI/MiniMax-Code-Plugins)
-   adding only the `plugins/Wzdhehe/Mcode-webui/` tree (per the
+   adding only the `plugins/Wzdhehe/mcode-webui/` tree (per the
    "one folder = one plugin" model — see the official README).
 5. Tag the release: `git tag v1.X.Y && git push --tags`.
 

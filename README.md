@@ -40,7 +40,7 @@ Zero npm dependencies at runtime (Node 22+ stdlib only).
 ## Quick start
 
 ```bash
-git clone https://github.com/Wzdhehe/Mcode-webui.git
+git clone https://github.com/Wzdhehe/mcode-webui.git
 cd Mcode-webui
 node server.js                 # Mcode CLI auto-detected
 # → http://127.0.0.1:8080/     (LAN: http://<lan-ip>:8080/)
@@ -82,17 +82,17 @@ fallback) — no fake UI buttons. Full matrix:
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Dev setup, adding routes / commands / panels |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common errors + verified fixes |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [SECURITY-NOTES](plugins/Wzdhehe/Mcode-webui/references/SECURITY-NOTES.md) | Canonical security disclosure |
+| [SECURITY-NOTES](plugins/Wzdhehe/mcode-webui/references/SECURITY-NOTES.md) | Canonical security disclosure |
 
 ## Plugin packaging
 
-`plugins/Wzdhehe/Mcode-webui/` holds the Agent Plugins 1.0 packaging
+`plugins/Wzdhehe/mcode-webui/` holds the Agent Plugins 1.0 packaging
 (skills layout, security notes, validator) — submitted to the
 [community registry](https://github.com/MiniMax-AI/MiniMax-Code-Plugins).
 
 ```bash
 npm run validate-plugin   # contract checks (mirrors the registry gate)
-npm run package:plugin    # dist/Wzdhehe/Mcode-webui/ + .zip
+npm run package:plugin    # dist/Wzdhehe/mcode-webui/ + .zip
 ```
 
 ## Contributing
@@ -102,4 +102,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). `npm test` (302 tests) and
 
 ## License
 
-MIT — see [LICENSE](plugins/Wzdhehe/Mcode-webui/LICENSE).
+MIT — see [LICENSE](plugins/Wzdhehe/mcode-webui/LICENSE).
