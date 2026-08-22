@@ -141,6 +141,12 @@ a { color: var(--accent); text-decoration: none; }
   width: 24px; height: 24px;
   display: block;
   flex-shrink: 0;
+  cursor: pointer;  /* v0.5.bx-15: 双击可重置 ask_user 弹窗 */
+  border-radius: 6px;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.topbar-logo:hover { opacity: 0.85; }
+.topbar-logo:active { transform: scale(0.95); }
   border-radius: 6px;
   overflow: hidden;
 }
@@ -428,6 +434,24 @@ body.is-remote .btn-lan-toggle { display: none; }
   transition: all 0.15s;
 }
 .btn-new:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
+/* v0.5.bx-19: 清理孤儿按钮 — 紧凑的小图标按钮, 跟 btn-new 同位置但次要 */
+.btn-cleanup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-cleanup:hover { color: var(--text); border-color: var(--text-tertiary); background: var(--bg-hover); }
 .search-box {
   position: relative;
   margin-top: 8px;
@@ -1696,6 +1720,160 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .ask-other-input:focus { outline: none; border-color: var(--accent); }
 
+/* v0.5.bx-15 (改 #3): ask_user 弹窗 — 顶替输入框位置 (仿 mcode TUI), 没遮罩, 没全屏 */
+/*   弹窗在 chat 区域底部, 跟 .input-area 同位置, 弹窗出现时 input-area 隐藏 */
+/*   sidebar 220px / right-panel 280px (跟实际 layout 对齐) */
+.ask-modal {
+  position: fixed; left: 220px; right: 280px; bottom: 0; z-index: 50;
+  display: flex; justify-content: center; align-items: flex-end;
+  padding: 0 24px 16px;
+  pointer-events: none;
+}
+.ask-modal-backdrop {
+  display: none;  /* v0.5.bx-15 (改): 不要全屏半透明遮罩, Ponkan 明确不要 */
+}
+.ask-modal-content {
+  position: relative;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 820px;
+  max-height: 65vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.12), 0 1px 0 var(--border);
+  pointer-events: auto;  /* 内容自己接收点击 */
+  animation: ask-modal-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes ask-modal-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+/* v0.5.bx-15 (改 #3): 移动端 — 弹窗全宽 (sidebar 折叠) */
+@media (max-width: 800px) {
+  .ask-modal { left: 0; right: 0; }
+}
+.ask-modal-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.ask-modal-icon { font-size: 18px; }
+.ask-modal-title {
+  flex: 1; font-size: 14px; font-weight: 600;
+  color: var(--accent);
+}
+.ask-modal-close {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-secondary); font-size: 22px; line-height: 1;
+  padding: 0 4px;
+}
+.ask-modal-close:hover { color: var(--text); }
+.ask-modal-body {
+  padding: 18px 20px; overflow: auto; flex: 1;
+}
+.ask-modal-step-counter {
+  font-size: 11px; color: var(--text-tertiary);
+  margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+  min-height: 14px;
+}
+.ask-modal-question {
+  font-size: 15px; line-height: 1.6; color: var(--text);
+  margin-bottom: 16px;
+}
+.ask-modal-options {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 14px;
+}
+.ask-modal-opt {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  cursor: pointer;
+  text-align: left;
+  font: inherit; color: inherit;
+  transition: all 0.12s;
+  width: 100%;
+}
+.ask-modal-opt:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+}
+.ask-modal-opt.clicked {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-card));
+}
+.ask-modal-opt-letter {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-weight: 600; font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-main);
+  flex-shrink: 0;
+}
+.ask-modal-opt.clicked .ask-modal-opt-letter {
+  background: var(--accent); color: white; border-color: var(--accent);
+}
+.ask-modal-opt-label { flex: 1; font-size: 13.5px; }
+.ask-modal-no-options {
+  font-size: 12px; color: var(--text-tertiary);
+  padding: 8px 0; text-align: center;
+}
+.ask-modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center;
+}
+.ask-modal-other {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-main);
+  color: var(--text);
+  font: inherit;
+}
+.ask-modal-other:focus { outline: none; border-color: var(--accent); }
+.ask-modal-btn-primary, .ask-modal-btn-secondary {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+.ask-modal-btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.ask-modal-btn-primary:disabled {
+  opacity: 0.4; cursor: not-allowed;
+}
+.ask-modal-btn-secondary:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.05));
+}
+
+/* v0.5.bx-13: chat 里 ask_user 工具的紧凑标记 (替代内嵌 questionnaire) */
+.msg-ask-indicator {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 4px 0;
+}
+.msg-ask-indicator-icon { opacity: 0.7; }
+.msg-ask-indicator-status { color: var(--accent); font-weight: 500; }
+
 @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
 
 .thinking-indicator {
@@ -2022,6 +2200,47 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .context-bar-fill.high { background: var(--warning); }
 .context-bar-fill.danger { background: var(--danger); }
+/* v0.5.bx-10: 上下文数据源 badge (估算 / mavis db / mcode) */
+.kv-usage-source {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  font-size: 9.5px;
+  font-weight: 600;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+  cursor: help;
+}
+.kv-usage-source.estimate { background: rgba(255, 184, 0, 0.15); color: #b88a00; border: 1px solid rgba(255, 184, 0, 0.3); }
+.kv-usage-source.real { background: rgba(40, 200, 100, 0.15); color: #2d8a4e; border: 1px solid rgba(40, 200, 100, 0.3); }
+.kv-usage-source.mcode { background: rgba(100, 150, 255, 0.15); color: #2a4ea0; border: 1px solid rgba(100, 150, 255, 0.3); }
+/* v0.5.bx-10: mavis 记录的 model 名 (拿不到就隐藏) */
+.kv-mavis-model {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  font-size: 9.5px;
+  font-weight: 500;
+  border-radius: 3px;
+  background: rgba(120, 120, 120, 0.1);
+  color: var(--text-secondary);
+  border: 1px solid rgba(120, 120, 120, 0.2);
+  vertical-align: middle;
+  cursor: help;
+}
+/* v0.5.bx-10: cache read/write chip (从 mavis db)
+   v0.5.bx-20 (改): 改成纯文本样式 — 去掉 box (background/border/padding/border-radius 都去掉)
+   Ponkan 反馈 "这个不需要做成框框, 纯文本就行" — 跟 Used 数字同字号同色, 看着不打架 */
+.kv-cache-read {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  vertical-align: middle;
+  cursor: help;
+}
 .tps-display {
   display: flex;
   align-items: center;
@@ -2144,6 +2363,13 @@ body.is-remote .btn-lan-toggle { display: none; }
 .mode-popover-item.active .mode-popover-item-desc { color: var(--accent-text); }
 .mode-popover-item.warn { color: var(--warning); }
 .mode-popover-item.warn .icon { color: var(--warning); }
+/* v0.5.bx-9: Plan 模式分割线 (把权限模式 和 Plan 模式 分开) */
+.mode-popover-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 4px 0;
+}
+.btn-mode.active-plan { color: var(--accent); }
 
 /* ============================================================
    Settings menu
@@ -2566,7 +2792,7 @@ body.is-remote .btn-lan-toggle { display: none; }
       <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="topbar-brand">
-      <img class="topbar-logo" src="/brand-logo.png" alt="mcode" />
+      <img class="topbar-logo" id="topbar-logo" src="/brand-logo.png" alt="mcode" title="双击重置 ask_user 弹窗（如果之前被 dismiss 了）" />
       <span data-i18n="title">mcode Web UI</span>
       <span class="topbar-version" id="version">v0.1.2</span>
     </div>
@@ -2604,6 +2830,11 @@ body.is-remote .btn-lan-toggle { display: none; }
         <button class="btn-new" id="btn-new-chat">
           <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span data-i18n="new_chat">新建会话</span>
+        </button>
+        <!-- v0.5.bx-19: 一键清理 mcode 孤儿 session (mvs_xxx 但 webui 没关联) -->
+        <button class="btn-cleanup" id="btn-cleanup-orphans" title="清理 sidebar 上 'Mcode session' 类型空状态卡片（webui 没 chat 历史的 mcode session）">
+          <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          <span>清理孤儿</span>
         </button>
         <div class="search-box">
           <svg class="icon search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -2752,6 +2983,15 @@ body.is-remote .btn-lan-toggle { display: none; }
                 <span data-i18n="mode_full">完全 访问</span>
                 <span class="mode-popover-item-desc" data-i18n="mode_full_desc">无需确认</span>
               </button>
+              <!-- v0.5.bx-9: Plan 模式 — mcode 0.1.4 LLM 不能自己进 plan mode (没有 /plan slash command 也没有 plan tool)
+                   webui workaround: 选 Plan 后自动给 prompt 加 plan 模板前缀, 强制 mcode 按 Plan: 标题 / Plan complete. 格式输出
+                   webui parseChatLines 解析 + 渲染 plan 块 + 弹 plan 弹窗 (老 Ask/Plan 渲染本来就 OK) -->
+              <div class="mode-popover-divider"></div>
+              <button class="mode-popover-item" data-mode="plan" id="mode-plan-btn">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span data-i18n="mode_plan">Plan 模式</span>
+                <span class="mode-popover-item-desc" data-i18n="mode_plan_desc">强制 mcode 按 Plan: 格式输出</span>
+              </button>
             </div>
             <!-- v0.5.ak: model picker popover（btn-model 点击弹出） -->
             <!-- v0.5.bi: 列表来自 /api/models（基于 mcode TUI 已配置的 provider 映射） -->
@@ -2862,8 +3102,10 @@ body.is-remote .btn-lan-toggle { display: none; }
 
       <!-- CONTEXT (real-time usage + TPS) -->
       <div class="right-section">
-        <div class="right-section-title" data-i18n="section_context">CONTEXT</div>
-        <div class="kv-row"><span class="kv-label" data-i18n="r_used">已用</span><span class="kv-value muted" id="r-used">—</span></div>
+        <!-- v0.5.bx-20 (改): mavis db badge 从 Used 行挪到 CONTEXT 标题后面 (同行, 右上)
+             Ponkan 反馈 "把数据来源挪到这里后面" — 跟 section title 同一行, 不挤在 used 数字旁 -->
+        <div class="right-section-title" data-i18n="section_context">CONTEXT<span class="kv-usage-source" id="r-usage-source" style="display:none"></span></div>
+        <div class="kv-row"><span class="kv-label" data-i18n="r_used">已用</span><span class="kv-value" id="r-used">—</span> <span class="kv-mavis-model" id="r-mavis-model" style="display:none"></span> <span class="kv-cache-read" id="r-cache-read" style="display:none"></span></div>
         <div class="context-bar"><div class="context-bar-fill" id="r-context-bar" style="width:0%"></div></div>
         <div class="kv-row"><span class="kv-label" data-i18n="r_percent">占比</span><span class="kv-value muted" id="r-percent">—</span></div>
         <div class="tps-display">
@@ -2903,29 +3145,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 
     <!-- v0.5.aq: 旧 settings menu 元素已删除（chip-lan 自带开关） -->
 
-  <!-- ============================ Ask Modal (v0.4.0 新增) ============================ -->
-  <div class="modal-backdrop" id="ask-modal">
-    <div class="modal" role="dialog" aria-labelledby="ask-modal-title">
-      <div class="modal-header">
-        <span class="modal-title" id="ask-modal-title">Ask</span>
-        <span class="modal-counter" id="ask-counter">0/0 answered</span>
-        <button class="modal-close" id="ask-close" title="Esc 取消">
-          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="ask-tabs" id="ask-tabs"></div>
-        <div class="ask-question" id="ask-question">—</div>
-        <div class="ask-options" id="ask-options"></div>
-      </div>
-      <div class="modal-footer">
-        <span><kbd>↑↓</kbd> 移动</span>
-        <span><kbd>1-9</kbd> 选择</span>
-        <span><kbd>Tab/←/→</kbd> 切换题目</span>
-        <span><kbd>Esc</kbd> 取消</span>
-      </div>
-    </div>
-  </div>
+  <!-- v0.5.bx-14: 旧 Ask Modal (v0.4.0) 已删除, 用 #ask-modal v0.5.bx-13 真弹窗替代 -->
 
   <!-- ============================ Plan Review Modal (v0.4.0 新增) ============================ -->
   <div class="modal-backdrop" id="plan-modal">
@@ -3036,6 +3256,28 @@ body.is-remote .btn-lan-toggle { display: none; }
 
 </div>
 
+<!-- v0.5.bx-13: ask_user 弹窗 (替代内嵌问卷) — modal 居中浮在 chat 上, chat 不再显示 Q/A 行 -->
+<div id="ask-modal" class="ask-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="ask-modal-title">
+  <div class="ask-modal-backdrop" id="ask-modal-backdrop"></div>
+  <div class="ask-modal-content">
+    <div class="ask-modal-header">
+      <div class="ask-modal-icon">❓</div>
+      <div class="ask-modal-title" id="ask-modal-title">需要你回答</div>
+      <button class="ask-modal-close" id="ask-modal-close" title="全部跳过 (Esc 同效)">×</button>
+    </div>
+    <div class="ask-modal-body">
+      <div id="ask-modal-step-counter" class="ask-modal-step-counter"></div>
+      <div id="ask-modal-question" class="ask-modal-question"></div>
+      <div id="ask-modal-options" class="ask-modal-options"></div>
+    </div>
+    <div class="ask-modal-footer">
+      <input type="text" id="ask-modal-other" class="ask-modal-other" placeholder="其他 (回车发送)..." />
+      <button class="ask-modal-btn-secondary" id="ask-modal-skip">跳过</button>
+      <button class="ask-modal-btn-primary" id="ask-modal-send">发送</button>
+    </div>
+  </div>
+</div>
+
 <!-- v0.5.ab: MD 渲染 + 代码高亮（本地化） -->
 <!-- v0.5.bn: 删掉 hl/core.min.js 等 4 个 script —— 是 CommonJS bundle (`module.exports=...`)，浏览器跑报错
      marked 配置的 highlight() 函数有 window.hljs 判空 fallback（见下），没 hljs 就返回纯文本 code blocks，不影响聊天 -->
@@ -3124,7 +3366,7 @@ const I18N = {
     plan_review: '计划预览',
     plan_view_btn: '查看完整计划',
     r_title: '标题', r_dir: '目录', r_branch: '分支', r_tree: '状态',
-    r_used: '已用', r_percent: '占比', r_tps: '速度',
+    r_used: '已用', r_percent: '占比', r_tps: '速度', r_cache: '缓存',
     status_idle: '空闲',
     status_offline: '离线',
     status_thinking: '思考中',
@@ -3142,6 +3384,8 @@ const I18N = {
     mode_ask: '询问', mode_ask_desc: '敏感操作确认',
     mode_auto: '自动', mode_auto_desc: '仅高风险询问',
     mode_full: '完全 访问', mode_full_desc: '无需确认',
+    // v0.5.bx-9: Plan 模式 — webui 端 toggle, 给 prompt 加 plan 模板前缀, 强制 mcode 按 Plan: 格式输出
+    mode_plan: 'Plan 模式', mode_plan_desc: '强制 mcode 按 Plan: 格式输出',
     drop_hint: '松开上传文件',
     toggle_theme: '切换主题',
     toggle_lang: '中 / English',
@@ -3250,7 +3494,7 @@ const I18N = {
     plan_review: 'Plan Review',
     plan_view_btn: 'View full plan',
     r_title: 'Title', r_dir: 'Directory', r_branch: 'Branch', r_tree: 'Status',
-    r_used: 'Used', r_percent: 'Percent', r_tps: 'Speed',
+    r_used: 'Used', r_percent: 'Percent', r_tps: 'Speed', r_cache: 'cache',
     status_idle: 'Idle',
     status_offline: 'Offline',
     status_thinking: 'Thinking',
@@ -3268,6 +3512,8 @@ const I18N = {
     mode_ask: 'Ask', mode_ask_desc: 'Confirm sensitive',
     mode_auto: 'Auto', mode_auto_desc: 'Only high-risk',
     mode_full: 'Full Access', mode_full_desc: 'No confirm',
+    // v0.5.bx-9: Plan 模式
+    mode_plan: 'Plan Mode', mode_plan_desc: 'Force mcode to output Plan: format',
     drop_hint: 'Drop file to upload',
     toggle_theme: 'Toggle theme',
     toggle_lang: '中 / English',
@@ -3404,40 +3650,41 @@ let lastTpsTime = null
 let spentSinceLastUsage = 0
 let sessionSearchQuery = ''   // v0.5.x: 侧边栏会话搜索词
 
-// Modal state (v0.4.0 新增)
-let askOpen = false
-let askSelectedIdx = 0
-let askSending = false
+// Modal state (v0.5.bx-14: askOpen/askSelectedIdx/askSending/lastShownAskKey 已删, 用 #ask-modal ASK_MODAL_STATE)
 let planOpen = false
 let planSending = false
 let planModeOpen = false
 let permOpen = false
-let lastShownAskKey = null  // 防重复弹出
 let lastShownPlanKey = null
 let lastShownPermKey = null
 let lastShownPlanModeKey = null
 
 // ============================================================
-// Slash commands (built-in to mcode)
+// Slash commands
+// v0.5.bx-23: 删掉 11 个 mcode 0.1.5 acp 不识别的"假命令"
+//   之前列的 17 个里: /sessions /plan /permission /plugins /provider /feedback /steer /init /logout /quit
+//   mcode 0.1.5 acp 都不识别 (availableCommands 只有 10 个, mcode 0.1.5 acp 也不暴露 goal/plan)
+//   删掉避免 user 输完发现啥也没发生
+// 保留: mcode 真支持 5 个 (help/new/model/status/usage) + webui 自己处理 4 个 (goal/goal-done/goal-blocked/clear)
+//   + 加 mcode 真的但 webui 漏的 4 个 (doctor/skills/mcp/compact) — 让 user 知道这些命令可用
 // ============================================================
 const SLASH_COMMANDS = [
+  // --- mcode 0.1.5 acp 真支持 ---
   { cmd: '/help', zh: '显示可用命令', en: 'Show available commands' },
   { cmd: '/new', zh: '开启新会话', en: 'Start a fresh session' },
-  { cmd: '/sessions', zh: '会话列表', en: 'Search/resume sessions' },
-  { cmd: '/goal', zh: '设定/管理目标', en: 'Manage session goal' },
-  { cmd: '/plan', zh: 'Plan 模式', en: 'Switch Plan Mode' },
-  { cmd: '/status', zh: '账户与模型状态', en: 'Account/model status' },
-  { cmd: '/permission', zh: '权限模式', en: 'Runtime permission mode' },
   { cmd: '/model', zh: '选择模型', en: 'Choose model' },
-  { cmd: '/usage', zh: '会话用量', en: 'Show session usage' },
-  { cmd: '/plugins', zh: '插件管理', en: 'Manage plugins' },
-  { cmd: '/provider', zh: '模型 provider', en: 'Manage providers' },
   { cmd: '/context', zh: '只读上下文', en: 'Read-only context' },
-  { cmd: '/feedback', zh: '提交反馈', en: 'Send feedback' },
-  { cmd: '/steer', zh: '引导当前回复', en: 'Steer current response' },
-  { cmd: '/init', zh: '初始化当前仓库', en: 'Teach MCode this repo' },
-  { cmd: '/logout', zh: '退出登录', en: 'Sign out' },
-  { cmd: '/quit', zh: '退出 mcode', en: 'Quit mcode' },
+  { cmd: '/doctor', zh: '诊断 mcode 健康度', en: 'Diagnose mcode health' },
+  { cmd: '/skills', zh: '管理 skills', en: 'Manage skills' },
+  { cmd: '/mcp', zh: 'MCP servers', en: 'MCP servers' },
+  { cmd: '/usage', zh: '会话用量', en: 'Show session usage' },
+  { cmd: '/compact', zh: '压缩上下文', en: 'Compact context' },
+  // --- webui 自己处理 (不走 mcode) ---
+  { cmd: '/status', zh: '当前 session 状态 (webui)', en: 'Show current session status (webui)' },
+  { cmd: '/goal', zh: '设定目标 (webui 改写消息, 单轮执行)', en: 'Set goal (webui rewrites msg, single-turn)' },
+  { cmd: '/goal-done', zh: '标记目标完成 (webui)', en: 'Mark goal done (webui)' },
+  { cmd: '/goal-blocked', zh: '标记目标阻塞 (webui)', en: 'Mark goal blocked (webui)' },
+  { cmd: '/clear', zh: '清空当前对话 (webui)', en: 'Clear current chat (webui)' },
 ]
 
 const SLASH_SKILLS = [
@@ -3499,7 +3746,6 @@ function render() {
   const chipLanLink = document.getElementById('chip-lan-link')
   if (chipLanLink) {
     chipLanLink.hidden = !lanBroadcast
-    console.log('[lan] render: state.lanBroadcast=', state.lanBroadcast, '→ chipLanLink.hidden=', chipLanLink.hidden)
   } else {
     console.warn('[lan] render: chip-lan-link element NOT found in DOM')
   }
@@ -3633,9 +3879,13 @@ function renderRight() {
     el.classList.toggle('active',
       (mode === 'full' && /完全|full/.test(perm)) ||
       (mode === 'ask' && /ask|询问/.test(perm)) ||
-      (mode === 'auto' && /auto|自动/.test(perm))
+      (mode === 'auto' && /auto|自动/.test(perm)) ||
+      (mode === 'plan' && !!state?.planMode)  // v0.5.bx-9: Plan 模式 webui 本地 toggle
     )
   })
+  // v0.5.bx-9: Plan 模式激活时, btn-mode 顶栏按钮加 active 视觉提示
+  const btnMode = document.getElementById('btn-mode')
+  if (btnMode) btnMode.classList.toggle('active-plan', !!state?.planMode)
 }
 
 function renderContext() {
@@ -3643,15 +3893,103 @@ function renderContext() {
   const spent = ctx.spent || ctx.tokens || 0
   const limit = parseInt(ctx.limit || state?.model?.ctx || 0, 10) || 0
   const percent = ctx.percent || (limit > 0 ? Math.min(100, (spent / limit) * 100) : 0)
-
-  document.getElementById('r-used').textContent = formatNumber(spent)
-  document.getElementById('r-percent').textContent = limit > 0 ? `${percent.toFixed(1)}%` : '—'
+  // v0.5.bx-9: mcode 0.1.4 acp 不发 usage_update, server 端用 thinking+answer 长度估算 (粗略)
+  //   显示数字 + `~` 前缀, tooltip 说明是估算; 0.1.5+ 返 usage 时 ctx.estimated = false, 自动去掉 ~
+  // v0.5.bx-10: mavis desktop db 也存了真实 token usage (local_runtime_token_usage 表)
+  //   server 端在 streamAcpPrompt finalize 后 400ms 自动查 mavis db, 拿到真值会覆盖估算
+  //   数据源: ctx.usageSource ('mavis-db' | 'mcode-rusage' | 'estimate')
+  const isEstimated = ctx.estimated === true
+  const usageSource = ctx.usageSource || (isEstimated ? 'estimate' : 'mcode-rusage')
+  const hasData = spent > 0
+  // v0.5.bx-20: used 显示 "264.9k/512k" 格式 (used / limit) — Ponkan 反馈
+  //   之前只显示 used 数字 + 下面 progress bar + percent
+  //   现在把限额拼到数字后面, 一眼看到 used 占 limit 的比例
+  //   没有 limit (model 未识别) 时降级为只用数字
+  const usedText = hasData
+    ? `${isEstimated ? '≈' : ''}${formatNumber(spent)}${limit > 0 ? '/' + formatNumber(limit) : ''}`
+    : '—'
+  document.getElementById('r-used').textContent = usedText
+  document.getElementById('r-used').title = hasData
+    ? (isEstimated
+        ? '估算值 (mcode 0.1.4 不返 usage, 基于输出文本长度 / 3 估算 token; 0.1.5+ 自动用真值)'
+        : (usageSource === 'mavis-db'
+            ? '真实用量 (来自 mavis 桌面端 sqlite: local_runtime_token_usage 表, mcode 调 LLM 时自动记录)'
+            : '真实用量 (mcode 0.1.5+ 返 usage)'))
+    : '暂无数据 (还没跑过任务)'
+  // v0.5.bx-10: 数据源 badge — 显示 "估算" / "mavis db" / "mcode" 帮用户知道真假
+  const srcEl = document.getElementById('r-usage-source')
+  if (srcEl) {
+    if (hasData) {
+      srcEl.style.display = ''
+      srcEl.textContent = usageSource === 'mavis-db' ? 'mavis db' : (isEstimated ? '估算' : 'mcode')
+      srcEl.title = usageSource === 'mavis-db'
+        ? '数据源: mavis 桌面端 sqlite db (C:\\Users\\mjc39\\.minimax\\v2\\sqlite\\runtime-state.sqlite)'
+        : (isEstimated
+            ? '估算: mcode 0.1.4 不返 usage, 临时估算'
+            : '数据源: mcode 0.1.5+ 直接返回的 usage')
+      srcEl.className = 'kv-usage-source ' + (usageSource === 'mavis-db' ? 'real' : (isEstimated ? 'estimate' : 'mcode'))
+    } else {
+      srcEl.style.display = 'none'
+    }
+  }
+  // v0.5.bx-10: mavis model — 拿不到就隐藏
+  const mdlEl = document.getElementById('r-mavis-model')
+  if (mdlEl) {
+    const m = state?.usage?.mavisModel
+    if (hasData && m) {
+      mdlEl.style.display = ''
+      mdlEl.textContent = m
+      mdlEl.title = `mavis db 记录的真实 model (mavis db model 字段)`
+    } else {
+      mdlEl.style.display = 'none'
+    }
+  }
+  // v0.5.bx-10: cache chip — 显示多少 token 是从 cache 来的 (input 的子集, 不算 context)
+  // v0.5.bx-20: 主显示改 "cache 89%" 命中率, hover 显示详细数字 — Ponkan 反馈
+  //   mavis db schema: input_tokens = "新" input, cache_read_tokens = 从 cache 读, 真实 total = 两者之和
+  //   真实命中率 = cache_read / (input + cache_read) — server 算好塞 cs.usage.sessionCacheHitRate
+  const cacheEl = document.getElementById('r-cache-read')
+  if (cacheEl) {
+    const cr = state?.usage?.sessionCacheRead
+    const cw = state?.usage?.sessionCacheWrite
+    const hitRate = state?.usage?.sessionCacheHitRate
+    if (hasData && (cr > 0 || cw > 0)) {
+      cacheEl.style.display = ''
+      // 主显示: 命中率 (重点) + 数字 ↓
+      // v0.5.bx-20 (改): 用 i18n key r_cache 跟其他 label 走 — zh="缓存 70%", en="cache 70%"
+      //   命中率有值就显示 "缓存 70%", 没有就降级显示原 "缓存 ↓609.9k"
+      const cacheLabel = t('r_cache') || 'cache'
+      if (typeof hitRate === 'number' && hitRate > 0) {
+        const pct = Math.round(hitRate * 100)
+        cacheEl.textContent = `${cacheLabel} ${pct}%`
+      } else {
+        let parts = []
+        if (cr > 0) parts.push(`↓${formatNumber(cr)}`)
+        if (cw > 0) parts.push(`↑${formatNumber(cw)}`)
+        cacheEl.textContent = `${cacheLabel} ${parts.join('/')}`
+      }
+      // hover: 显示详细 — 命中率公式 + 数字
+      let titleParts = []
+      if (typeof hitRate === 'number' && hitRate > 0) {
+        titleParts.push(`真实 cache 命中率 (累计): ${(hitRate * 100).toFixed(1)}% = cache_read / (input + cache_read)`)
+      }
+      if (cr > 0) titleParts.push(`↓ ${formatNumber(cr)} tokens 从 cache 读 (input 子集, 不计入 context)`)
+      if (cw > 0) titleParts.push(`↑ ${formatNumber(cw)} tokens 写入 cache`)
+      cacheEl.title = titleParts.join('\n')
+    } else {
+      cacheEl.style.display = 'none'
+    }
+  }
+  document.getElementById('r-percent').textContent = hasData
+    ? (limit > 0 ? `${percent.toFixed(1)}%` : '—')
+    : '—'
   const bar = document.getElementById('r-context-bar')
   if (bar) {
-    bar.style.width = `${Math.min(100, percent)}%`
-    bar.classList.remove('high', 'danger')
-    if (percent > 80) bar.classList.add('danger')
-    else if (percent > 50) bar.classList.add('high')
+    bar.style.width = hasData ? `${Math.min(100, percent)}%` : '0%'
+    bar.classList.remove('high', 'danger', 'estimated')
+    if (hasData && percent > 80) bar.classList.add('danger')
+    else if (hasData && percent > 50) bar.classList.add('high')
+    if (hasData && isEstimated) bar.classList.add('estimated')
   }
 
   document.getElementById('r-tps').textContent = ctx.tps || '—'
@@ -3711,6 +4049,7 @@ function wsShortName(ws) {
 }
 
 function renderSessions() {
+  console.log('[webui] renderSessions: state.sessions=' + (state?.sessions?.length || 0) + ' mcodeSessions=' + (state?.mcodeSessions?.length || 0))
   const list = document.getElementById('sessions-list')
   // v0.5.bv: 优先显示 mcode 真实 sessions（mvs_xxx id + mcode 自动 title）
   // 合并：mcode sessions (按 cwd 过滤) + webui 自己的 sessions (还没跟 mcode 关联的)
@@ -3790,8 +4129,10 @@ function renderSessions() {
       const active = s.id === activeId ? ' active' : ''
       // mcode session id (mvs_xxx) 跟 webui randomUUID 一视同仁 — 都显示 12 字符 + 后缀
       const idLabel = escapeHtml(s.id.substring(0, 12) + '…')
-      // v0.5.bv: mcode session 不显示删除按钮（webui 删不了 mcode session；走 mcode TUI）
-      const deleteBtn = s.kind === 'mcode' ? '' : `<button class="session-delete" data-id="${escapeHtml(s.id)}" title="${t('session_delete')}">×</button>`
+      // v0.5.bx-24 (改): mcode session 也显示 X 按钮 — server DELETE 端点 v0.5.bx-5/bx-19 已支持 mvs_xxx 直接 SQL 删 mcode db
+      //   之前 v0.5.bv 写死不显示是因为 webui 没能力删 mcode session; 现在能了
+      //   删 mcode session 走 server DELETE → SQL 删 mcode db (8 张表事务), 不依赖 mcode TUI
+      const deleteBtn = `<button class="session-delete" data-id="${escapeHtml(s.id)}" title="${t('session_delete')}">×</button>`
       return `<div class="session-item${active}" data-id="${escapeHtml(s.id)}" data-kind="${s.kind}" title="${escapeHtml(title)}">
         <div class="session-dot"></div>
         <div class="session-info">
@@ -3907,16 +4248,13 @@ function cancelConfirm(item) {
 
 async function deleteSession(sessionId) {
   if (!sessionId) return
-  console.log(`[delete.client] click id=${sessionId.substring(0, 12)}… isMcode=${/^mvs_[a-f0-9]{32}$/.test(sessionId)}`)
   try {
     const r = await fetch('/api/sessions/' + encodeURIComponent(sessionId) + API_SUFFIX, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
     })
-    console.log(`[delete.client] response status=${r.status} ok=${r.ok}`)
     if (r.ok) {
       const data = await r.json().catch(() => ({}))
-      console.log(`[delete.client] data.ok=${data.ok} matchKind=${data.matchKind || 'n/a'} remaining=${data.remaining}`)
       // v0.5.bx-5: 同时按 webui id 和 mcodeSessionId 过滤（孤儿 webui-mcode session 的 id 是 mvs_xxx）
       state.sessions = (state.sessions || []).filter(s => s.id !== sessionId && s.mcodeSessionId !== sessionId)
       renderSessions()
@@ -3930,33 +4268,68 @@ async function deleteSession(sessionId) {
 
 async function switchSession(sessionId) {
   if (!sessionId) return
-  // v0.5.bx: 加详细日志排查"切不过去"bug
-  const isMcode = /^mvs_[a-f0-9]{32}$/.test(sessionId)
-  console.log(`[switch.client] click id=${sessionId.substring(0, 12)}… isMcode=${isMcode} prev.sessionId=${state?.sessionId ? state.sessionId.substring(0, 8) : 'null'}… prev.mcodeSid=${state?.mcodeSessionId ? state.mcodeSessionId.substring(0, 12) : 'null'}…`)
   try {
     const r = await fetch('/api/sessions/switch' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ id: sessionId }),
     })
-    console.log(`[switch.client] response status=${r.status} ok=${r.ok}`)
     if (r.ok) {
       const data = await r.json()
-      console.log(`[switch.client] data.ok=${data.ok} data.error=${data.error || 'none'} data.session.id=${data.session ? data.session.id.substring(0, 8) : 'null'}… mcodeSid=${data.session && data.session.mcodeSessionId ? data.session.mcodeSessionId.substring(0, 12) : 'null'}… chatLen=${data.session && Array.isArray(data.session.chat) ? data.session.chat.length : 0} title="${data.session ? (data.session.title || '').substring(0, 30) : ''}"`)
       if (data.ok) {
         // 直接用 server 返回的 session 数据更新本地 state（避免 SSE race condition）
         state.sessionId = data.session.id
         state.sessionTitle = data.session.title
+        // v0.5.bx-20 (改): 切 session 不再关闭 ask_user 弹窗 — Ponkan 反馈
+        //   "切换对话再切回来也保留弹窗" → 弹窗绑 module-level, 切走不清
+        //   v0.5.bx-15 改 #4 移除 (之前是切 session 关弹窗, 行为反了)
+        // v0.5.bx-25 (改): 切 session 关掉旧 session 的弹窗 — Ponkan 反馈
+        //   "触发问题弹窗后, 切到其他对话, 弹窗还在" — 弹窗应属于触发它的 session, 切走就关
+        //   跟 v0.5.bx-20 "保留弹窗" 立场相反, 但 v0.5.bx-20 时 Ponkan 没表达"切走也要保留", 是 v0.5.bx-15 改 #4 那次的原话误读
+        //   现在按 "弹窗属于触发它的 session" 理解: 切走关, 切回不自动重弹 (主动点 inline ask indicator 才重开)
+        if (typeof closeAskModal === 'function') {
+          closeAskModal()
+        }
+        // v0.5.bx-24 (改): 触发 2s suppress, 避免新 session 立即 re-render 历史 ask_user 块时弹窗
+        //   "明明历史对话最新的没有提问, 为什么还会弹" — 切到历史 session, 历史 ask_user 块被 parseChatLines
+        //   解析为 latestAskIdx, openAskModal 弹窗. suppress 2s 让 user 先看 chat, 2s 后再弹 (如果 mcode 真在等 answer)
+        if (typeof suppressAskModal === 'function') {
+          suppressAskModal()
+        }
         // v0.5.bx: 也同步 mcodeSessionId（之前没同步，sidebar 切后 state.mcodeSessionId 还是旧的）
         if (data.session.mcodeSessionId !== undefined) {
           state.mcodeSessionId = data.session.mcodeSessionId || null
         }
         // 关键：从 db 加载该 session 的历史 chat
         state.chat = Array.isArray(data.session.chat) ? data.session.chat : []
-        console.log(`[switch.client] state updated sessionId=${state.sessionId.substring(0, 8)}… mcodeSid=${state.mcodeSessionId ? state.mcodeSessionId.substring(0, 12) : 'null'}… chatLen=${state.chat.length} chatFirstLine="${state.chat[0] ? state.chat[0].substring(0, 40) : 'EMPTY'}"`)
+        // v0.5.bx-26: 把新 session chat history 里的 ask_user 块标"已答 (skipped)"
+        //   切 session 后, renderChat 重新跑会调 openAskModal (source='render')
+        //   如果新 session chat 里有 ask_user 块, 又会弹窗
+        //   提前给 state.askUserAnswers 设占位, openAskModal allAnswered 检查会跳过
+        //   不持久化 (saveAskUserAnswers 不调) — 只在内存里, 跨 session 共享
+        //   click 来源 (user 主动点 inline ask indicator) 跳过此检查, 仍能打开
+        if (Array.isArray(state.chat)) {
+          if (!state.askUserAnswers) state.askUserAnswers = {}
+          for (const line of state.chat) {
+            if (typeof line !== 'string' || !line.includes('→ ask_user')) continue
+            // chat 行格式: "→ ask_user  {\"mode\":\"questionnaire\",\"title\":\"...\",\"steps\":[{...}]}"
+            // 提取 question 文本 — 支持单/多 step
+            const stepMatches = line.match(/"question"\s*:\s*"([^"]+)"/g) || []
+            for (const m of stepMatches) {
+              const qm = m.match(/"question"\s*:\s*"([^"]+)"/)
+              if (qm && qm[1] && !state.askUserAnswers[qm[1]]) {
+                state.askUserAnswers[qm[1]] = { answer: '未回答', mode: 'skipped' }
+              }
+            }
+          }
+        }
         renderSessions()
         render()
+      } else {
+        console.error('switchSession data error', data.error)
       }
+    } else {
+      console.error('switchSession failed', r.status)
     }
   } catch (e) { console.error('switchSession', e) }
 }
@@ -4055,7 +4428,17 @@ function renderChat() {
 
   // Parse chat lines into messages
   const messages = parseChatLines(lines)
-  inner.innerHTML = messages.map(renderMessage).join('')
+  // v0.5.bx-20: 找"最新"包含 ask_user tool 的 message index — 只有它能弹窗
+  //   旧 chat history 里的 ask_user 全部不弹, 避免 mcode LLM 死循环反复弹同一题
+  let latestAskIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i] && messages[i].role === 'tool' && messages[i].name === 'ask_user') {
+      latestAskIdx = i
+      break
+    }
+  }
+  // 渲染时把 isLatestAsk 透传给 renderMessage
+  inner.innerHTML = messages.map((m, i) => renderMessage(m, { isLatestAsk: i === latestAskIdx })).join('')
   // v0.5.ab: 绑定 Ask/Plan 块的点击事件（事件委托）
   attachStructuredBlockHandlers(inner)
   // v0.5.ae: 把 chat 内的 todo block 实时同步到 state.todo（right panel 用）
@@ -4084,6 +4467,31 @@ function renderChat() {
 // v0.5.ab: 事件委托 — Ask 选项点击发送 / Plan 选项点击发送 / "查看完整计划" 打开弹窗
 function attachStructuredBlockHandlers(root) {
   if (!root) return
+  // v0.5.bx-13: click inline ask indicator → 重新打开弹窗
+  root.querySelectorAll('.msg-ask-indicator').forEach(el => {
+    el.addEventListener('click', () => {
+      // 找最近的 tool 块 (data-ask-tool 属性保存了 first question)
+      const q = el.getAttribute('data-ask-tool') || ''
+      if (!q) return
+      // 从 state.askUserAnswers 反查 pq
+      // 简单做法: 找当前 chat 里最新的同 question 的 tool
+      if (state?.chat) {
+        // 暂时重新解析整个 chat 找 pq
+        const lines = state.chat
+        for (let i = lines.length - 1; i >= 0; i--) {
+          if (lines[i] && lines[i].includes('→ ask_user')) {
+            // 用 parseChatLines 太重, 这里只重新打开 — 弹窗里的答案会从 state.askUserAnswers 读
+            // openAskModal 内部会用 state.askUserAnswers 状态判断是否已答
+            // 构造一个最小的 pq
+            // v0.5.bx-20: source:'click' 不受 isLatestAsk 限制 — 主动点历史 ask indicator 应能重新打开
+            const fakePq = { steps: [{ question: q, options: [] }], mode: 'single' }
+            openAskModal(fakePq, { source: 'click' })
+            return
+          }
+        }
+      }
+    })
+  })
   // Ask 选项
   root.querySelectorAll('.ask-option').forEach(el => {
     el.addEventListener('click', () => {
@@ -4168,11 +4576,9 @@ function attachStructuredBlockHandlers(root) {
               body: JSON.stringify({ content: prompt, command: 'prompt' })
             })
             if (!r.ok) console.warn('[ask-opt] send failed', r.status)
-            console.log(`[ask-opt] sent: q="${q.slice(0, 30)}" → a="${label}"`)
           } catch (e) { console.error('[ask-opt] send error', e) }
         } else {
           // 多 step: 只 highlight, 不发
-          console.log(`[ask-opt] highlight: q="${q.slice(0, 30)}" → a="${label}" (点发送才发)`)
         }
         renderAskUserToolIfChanged()
       })
@@ -4200,7 +4606,6 @@ function attachStructuredBlockHandlers(root) {
               body: JSON.stringify({ content: prompt, command: 'prompt' })
             })
             if (!r.ok) console.warn('[ask-skip] send failed', r.status)
-            console.log(`[ask-skip] sent: q="${q.slice(0, 30)}" → a="未回答"`)
           } catch (e) { console.error('[ask-skip] send error', e) }
           renderAskUserToolIfChanged()
         })
@@ -4256,7 +4661,6 @@ function attachStructuredBlockHandlers(root) {
               body: JSON.stringify({ content: prompt, command: 'prompt' })
             }).then(r => {
               if (!r.ok) console.warn('[ask-other] send failed', r.status)
-              console.log(`[ask-other] sent: q="${q.slice(0, 30)}" → a="${text}"`)
             }).catch(e => console.error('[ask-other] send error', e))
             renderAskUserToolIfChanged()
           }
@@ -4307,7 +4711,6 @@ function attachStructuredBlockHandlers(root) {
               body: JSON.stringify({ content: prompt, command: 'prompt' })
             })
             if (!r.ok) console.warn('[ask-submit] send failed', r.status)
-            console.log(`[ask-submit] sent: ${blocks.length} blocks, ${prompt.length} chars`)
           } catch (e) { console.error('[ask-submit] send error', e) }
           renderAskUserToolIfChanged()
         })
@@ -4318,13 +4721,335 @@ function attachStructuredBlockHandlers(root) {
 
 async function sendAskAnswer(text) {
   // 走 /api/send 通路（跟正常发消息一致）
+  // v0.5.bx-13: isAskAnswer:true 告诉 server 不要把 Q/A 当 user message 加到 chat
   const r = await fetch('/api/send' + API_SUFFIX, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...HEADERS },
-    body: JSON.stringify({ content: text, command: 'prompt' })
+    body: JSON.stringify({ content: text, command: 'prompt', isAskAnswer: true })
   })
   if (!r.ok) console.warn('sendAskAnswer failed', r.status)
 }
+
+// ============================================================
+// v0.5.bx-13: ask_user 真弹窗 (替代内嵌 questionnaire)
+// - 弹窗打开后, chat 里只显示紧凑 "ask_user · 待答/已答" 标记
+// - 选项 / 其他 / 跳过 / 关闭 全部在弹窗里操作
+// - 提交后 sendAskAnswer(isAskAnswer:true), server 不把 Q/A 加到 chat
+// - 答完自动关弹窗, 重新进来不重复弹
+// v0.5.bx-14: 加 presentedKeys 集合 — 同一 ask (pq key) 只弹一次, 进历史 session / re-render 不重弹
+// v0.5.bx-15 (改 #3): 加 DISMISSED_QUESTIONS 集合 — 按 question 文本去重 (跨 pq key / 跨 session)
+// ============================================================
+const ASK_MODAL_STATE = {
+  open: false,            // 弹窗当前是否显示
+  pqKey: null,            // 当前弹窗对应的 pq 指纹 (steps[0].question 拼接), 用于去重
+  pq: null,               // parsedQuestionnaire
+  currentStep: 0,         // 多 step 模式下的当前题 index
+  answers: {},            // 当前弹窗的临时 answers (question -> {answer, mode})
+  presentedKeys: new Set(),  // v0.5.bx-14: 已经"展示过" (弹过/跳过/答过) 的 pq key, 同 key 不重弹
+  suppressUntilTs: 0,        // v0.5.bx-24: 切 session 后 2s 内不弹窗 (避免重复弹历史 ask_user)
+}
+// v0.5.bx-15 (改 #3): module-level "已答过/已 dismiss" 的 question 集合
+//   切到任何 mcode session, 该 question 都不会再弹 (即使 pq key 不同)
+//   init() 时从 localStorage.askUserAnswers 恢复
+const DISMISSED_QUESTIONS = new Set()
+
+function askModalPqKey(pq) {
+  if (!pq || !Array.isArray(pq.steps) || pq.steps.length === 0) return null
+  return pq.steps.map(s => s.question).join('||')
+}
+
+function openAskModal(pq, opts) {
+  if (!pq || !Array.isArray(pq.steps) || pq.steps.length === 0) return
+  // v0.5.bx-24: 切 session 后 2s 内不弹窗 (suppressUntilTs)
+  //   解决"切到历史 session, 历史 ask_user 块立即弹窗"问题
+  //   2s 后再弹 (如果 mcode 端真在等 answer, user 切回来看几眼确认是历史 ask 后, 弹窗会自己出)
+  if (Date.now() < (ASK_MODAL_STATE.suppressUntilTs || 0)) {
+    return
+  }
+  // v0.5.bx-20: 守卫 — 只有"最新一条 agent 回复"里的 ask_user 才弹窗
+  //   旧 chat history 里的 ask 不弹, 避免 mcode LLM 死循环时反复弹同一题
+  //   opts = { isLatestAsk: true/false, source: 'render' | 'click' }
+  //   'click' 来源 (点 inline ask indicator 重新打开) 不受 isLatestAsk 限制
+  const source = (opts && opts.source) || 'render'
+  if (source === 'render' && opts && opts.isLatestAsk === false) {
+    return  // 历史 ask 不弹窗
+  }
+  const key = askModalPqKey(pq)
+  if (!key) return
+  // v0.5.bx-15 (改 #3): 按 question 文本去重 — 切到任何 mcode session, 该 question 都不再弹
+  //   即使 mcode 重发不同 pq key 但相同 question 文本, 也视为已 dismiss
+  //   (DISMISSED_QUESTIONS 在 init() 从 localStorage 恢复, 在 setAskUserAnswer 加)
+  if (pq.steps.every(s => DISMISSED_QUESTIONS.has(s.question))) {
+    ASK_MODAL_STATE.presentedKeys.add(key)
+    return
+  }
+  // v0.5.bx-14: 已经"展示过" (弹过/答过/跳过) 的 ask 不再弹 — 解决历史 session / re-render 重复弹窗
+  //   同一个 pq key 在整个 session 生命周期只弹一次
+  //   想要重新答, 点 chat 里的 inline ask indicator 即可
+  if (ASK_MODAL_STATE.presentedKeys.has(key)) {
+    // 已经展示过, 什么都不做 (不刷内容, 不重开)
+    return
+  }
+  // v0.5.bx-26: chat history 里的 ask_user 块被切 session 时标"已答 (skipped)" —
+  //   render 来源 (source='render') 命中 allAnswered=true 跳过; click 来源跳过此检查
+  //   避免 "切到历史 session, 弹窗又开" 的 race
+  const allAnswered = pq.steps.every(s => state?.askUserAnswers?.[s.question])
+  if (allAnswered && source !== 'click') {
+    ASK_MODAL_STATE.presentedKeys.add(key)
+    return
+  }
+  // v0.5.bx-15 (改 #3): 按 question 文本去重 — 切到任何 mcode session, 该 question 都不再弹
+  //   即使 mcode 重发不同 pq key 但相同 question 文本, 也视为已 dismiss
+  //   (DISMISSED_QUESTIONS 在 init() 从 localStorage 恢复, 在 setAskUserAnswer 加)
+  if (pq.steps.every(s => DISMISSED_QUESTIONS.has(s.question))) {
+    ASK_MODAL_STATE.presentedKeys.add(key)
+    return
+  }
+  // v0.5.bx-14: 已经"展示过" (弹过/答过/跳过) 的 ask 不再弹 — 解决历史 session / re-render 重复弹窗
+  //   同一个 pq key 在整个 session 生命周期只弹一次
+  //   想要重新答, 点 chat 里的 inline ask indicator 即可
+  if (ASK_MODAL_STATE.presentedKeys.has(key)) {
+    // 已经展示过, 什么都不做 (不刷内容, 不重开)
+    return
+  }
+  // 第一次见这个 ask → 标记 + 弹窗
+  ASK_MODAL_STATE.presentedKeys.add(key)
+  ASK_MODAL_STATE.open = true
+  ASK_MODAL_STATE.pqKey = key
+  ASK_MODAL_STATE.pq = pq
+  ASK_MODAL_STATE.currentStep = 0
+  ASK_MODAL_STATE.answers = {}
+  const modal = document.getElementById('ask-modal')
+  if (modal) modal.style.display = 'flex'
+  // v0.5.bx-15 (改 #3): 顶替输入框 — 弹窗出现时 input 区域隐藏
+  const inputArea = document.querySelector('.input-area')
+  if (inputArea) inputArea.style.display = 'none'
+  renderAskModalContent()
+}
+
+function closeAskModal() {
+  ASK_MODAL_STATE.open = false
+  ASK_MODAL_STATE.pq = null
+  ASK_MODAL_STATE.pqKey = null
+  ASK_MODAL_STATE.currentStep = 0
+  ASK_MODAL_STATE.answers = {}
+  const modal = document.getElementById('ask-modal')
+  if (modal) modal.style.display = 'none'
+  // v0.5.bx-15 (改 #3): 恢复输入框
+  const inputArea = document.querySelector('.input-area')
+  if (inputArea) inputArea.style.display = ''
+  // 清空 other input
+  const other = document.getElementById('ask-modal-other')
+  if (other) other.value = ''
+}
+
+// v0.5.bx-14: 清掉"已展示"记录 (调试/重置用, 切 session 时也调, 让历史 ask 重新可答)
+// v0.5.bx-24: 加 suppressUntilTs — 切 session 时设 = now + 2s, openAskModal 检查后早 return
+//   解决"切 session 立即重弹 ask_user 弹窗"问题 — 切到历史 session, 历史里的 ask_user 块被新 session 解析又弹一次
+function clearAskPresentedKeys() {
+  ASK_MODAL_STATE.presentedKeys.clear()
+}
+// v0.5.bx-24: 切 session 后 2s 内不弹 ask_user 弹窗 (给 user 时间看 chat 内容, 不被弹窗打断)
+function suppressAskModal() {
+  ASK_MODAL_STATE.suppressUntilTs = Date.now() + 2000
+}
+
+function renderAskModalContent() {
+  const pq = ASK_MODAL_STATE.pq
+  if (!pq) return
+  const stepIdx = Math.min(ASK_MODAL_STATE.currentStep, pq.steps.length - 1)
+  const step = pq.steps[stepIdx]
+  if (!step) return
+  const isMulti = pq.steps.length > 1
+  const counter = document.getElementById('ask-modal-step-counter')
+  const qEl = document.getElementById('ask-modal-question')
+  const optsEl = document.getElementById('ask-modal-options')
+  const sendBtn = document.getElementById('ask-modal-send')
+  const other = document.getElementById('ask-modal-other')
+  if (counter) counter.textContent = isMulti ? `第 ${stepIdx + 1} / ${pq.steps.length} 题` : ''
+  if (qEl) qEl.textContent = step.question
+  // 选项
+  if (optsEl) {
+    if (!Array.isArray(step.options) || step.options.length === 0) {
+      optsEl.innerHTML = '<div class="ask-modal-no-options">无预设选项 — 在下方"其他"输入回答后按回车或点"发送"</div>'
+    } else {
+      const cur = ASK_MODAL_STATE.answers[step.question]
+      optsEl.innerHTML = step.options.map((o, oi) => {
+        const letter = String.fromCharCode(65 + oi)
+        const isPicked = cur && cur.mode === 'answered' && cur.answer === o.label
+        return `<button class="ask-modal-opt${isPicked ? ' clicked' : ''}" data-opt-idx="${oi}" data-opt-label="${escapeHtml(o.label)}">
+          <span class="ask-modal-opt-letter">${letter}</span>
+          <span class="ask-modal-opt-label">${escapeHtml(o.label)}</span>
+        </button>`
+      }).join('')
+    }
+  }
+  // 恢复 other input (answered-other 模式)
+  if (other) {
+    const cur = ASK_MODAL_STATE.answers[step.question]
+    other.value = (cur && cur.mode === 'answered-other') ? cur.answer : ''
+  }
+  // 发送按钮文案
+  if (sendBtn) {
+    if (isMulti) {
+      const allDone = pq.steps.every(s => ASK_MODAL_STATE.answers[s.question] || state?.askUserAnswers?.[s.question])
+      sendBtn.textContent = allDone ? '已答完 (点重发)' : `发送 (${pq.steps.length} 题)`
+    } else {
+      sendBtn.textContent = '发送'
+    }
+  }
+}
+
+// 弹窗内选项 click
+function onAskModalOptClick(btn) {
+  const pq = ASK_MODAL_STATE.pq
+  if (!pq) return
+  const step = pq.steps[ASK_MODAL_STATE.currentStep]
+  if (!step) return
+  const label = btn.getAttribute('data-opt-label') || ''
+  if (!label) return
+  // 设 answer (answered 模式)
+  ASK_MODAL_STATE.answers[step.question] = { answer: label, mode: 'answered' }
+  // 同步到全局 state.askUserAnswers (持久化)
+  if (!state.askUserAnswers) state.askUserAnswers = {}
+  setAskUserAnswer(step.question, { answer: label, mode: 'answered' })
+  // 单 step: 选项 click 后自动 send
+  if (pq.steps.length === 1) {
+    submitAskModal()
+  } else {
+    // 多 step: 高亮 + 不发, 让用户能继续选下一题
+    renderAskModalContent()
+  }
+}
+
+// 弹窗 "其他" input 输入时
+function onAskModalOtherInput() {
+  const pq = ASK_MODAL_STATE.pq
+  if (!pq) return
+  const step = pq.steps[ASK_MODAL_STATE.currentStep]
+  if (!step) return
+  const other = document.getElementById('ask-modal-other')
+  if (!other) return
+  const text = other.value.trim()
+  if (text) {
+    ASK_MODAL_STATE.answers[step.question] = { answer: text, mode: 'answered-other' }
+    if (!state.askUserAnswers) state.askUserAnswers = {}
+    setAskUserAnswer(step.question, { answer: text, mode: 'answered-other' })
+  } else {
+    delete ASK_MODAL_STATE.answers[step.question]
+    if (state.askUserAnswers && state.askUserAnswers[step.question]?.mode === 'answered-other') {
+      setAskUserAnswer(step.question, null)
+    }
+  }
+}
+
+// 弹窗 "发送" / 跳到下一题
+function askModalNextOrSend() {
+  const pq = ASK_MODAL_STATE.pq
+  if (!pq) return
+  const step = pq.steps[ASK_MODAL_STATE.currentStep]
+  // 先把 other input 同步进来
+  onAskModalOtherInput()
+  // 多 step: 还没到最后一题 → 切下一题
+  if (pq.steps.length > 1 && ASK_MODAL_STATE.currentStep < pq.steps.length - 1) {
+    ASK_MODAL_STATE.currentStep += 1
+    renderAskModalContent()
+    return
+  }
+  // 单 step / 多 step 最后一题 → 提交
+  submitAskModal()
+}
+
+// 弹窗 "跳过" — 整个 questionnaire 跳过 (提交所有未答题为 "未回答" 给 mcode)
+// v0.5.bx-15 (改): 之前是 "跳当前题 + 进下一题", 用户反馈 "问题弹窗关不掉" — 改成整个跳过
+// v0.5.bx-20 (改): 关闭弹窗不持久化 dismiss — Ponkan 反馈
+//   "如果跳过, 点叉号关掉, 回复未回答就可以" → 关闭即关, 下次 mcode 发新 ask_user 仍要弹窗
+//   v0.5.bx-15 改 #3 (state.askUserDismissed + saveAskDismissed 持久化) 移除
+function askModalSkip() {
+  const pq = ASK_MODAL_STATE.pq
+  if (!pq) return
+  if (!state.askUserAnswers) state.askUserAnswers = {}
+  // 所有 step 都标 skipped
+  for (const step of pq.steps) {
+    ASK_MODAL_STATE.answers[step.question] = { answer: '未回答', mode: 'skipped' }
+    setAskUserAnswer(step.question, { answer: '未回答', mode: 'skipped' })
+  }
+  // 清 other input
+  const other = document.getElementById('ask-modal-other')
+  if (other) other.value = ''
+  // 整个 questionnaire 提交
+  submitAskModal()
+}
+
+// 提交弹窗答案 — 模板化 Q/A → sendAskAnswer → 关弹窗 → re-render
+function submitAskModal() {
+  const pq = ASK_MODAL_STATE.pq
+  if (!pq) return
+  // 收集所有 step 的最终 answer
+  const blocks = []
+  for (const step of pq.steps) {
+    // 优先用弹窗临时答案, fallback 到全局 state.askUserAnswers
+    const fromModal = ASK_MODAL_STATE.answers[step.question]
+    const fromState = state?.askUserAnswers?.[step.question]
+    const entry = fromModal || fromState
+    const ans = entry ? entry.answer : '未回答'
+    blocks.push(`Q: ${step.question}\nA: ${ans}`)
+    // 持久化到全局 (用 final answer 兜底)
+    if (!state.askUserAnswers) state.askUserAnswers = {}
+    setAskUserAnswer(step.question, { answer: ans, mode: entry?.mode || 'skipped' })
+  }
+  if (blocks.length === 0) return
+  const prompt = blocks.join('\n')
+  // 清 pending (老 send() 入口检测用, 现在 modal 提交不走 send(), 但还是清一下)
+  if (state?.pendingAskUser) state.pendingAskUser = null
+  // 发给 mcode (isAskAnswer:true, server 不把 Q/A 加到 chat)
+  sendAskAnswer(prompt)
+  // 关弹窗
+  closeAskModal()
+  // re-render chat (让 inline 指示从"待答"变成"已答")
+  renderAskUserToolIfChanged()
+}
+
+// 弹窗事件绑定 (一次性, 在 DOM ready 时)
+function bindAskModal() {
+  const modal = document.getElementById('ask-modal')
+  if (!modal) return
+  const close = document.getElementById('ask-modal-close')
+  const skip = document.getElementById('ask-modal-skip')
+  const send = document.getElementById('ask-modal-send')
+  const other = document.getElementById('ask-modal-other')
+  const backdrop = document.getElementById('ask-modal-backdrop')
+  const opts = document.getElementById('ask-modal-options')
+  if (close) close.addEventListener('click', askModalSkip)  // × 视作跳过当前题
+  if (skip) skip.addEventListener('click', askModalSkip)
+  if (send) send.addEventListener('click', askModalNextOrSend)
+  if (other) {
+    other.addEventListener('input', onAskModalOtherInput)
+    other.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        askModalNextOrSend()
+      }
+    })
+  }
+  if (backdrop) backdrop.addEventListener('click', askModalSkip)  // 点背景 = 跳过
+  if (opts) {
+    opts.addEventListener('click', (e) => {
+      const btn = e.target.closest('.ask-modal-opt')
+      if (!btn) return
+      onAskModalOptClick(btn)
+    })
+  }
+  // Esc 关闭
+  document.addEventListener('keydown', (e) => {
+    if (ASK_MODAL_STATE.open && e.key === 'Escape') {
+      e.preventDefault()
+      askModalSkip()
+    }
+  })
+}
+// v0.5.bx-13: 立即绑定弹窗 (modal HTML 已在 script 之前, 直接能 getElementById)
+bindAskModal()
 
 // ============================================================
 // Ask User Tool (v0.5.bx-8: mcode 0.1.4 ask_user 工具 — 内嵌选项 + 跳过)
@@ -4369,15 +5094,43 @@ function saveAskUserAnswers(answers) {
 }
 // 包装函数: 设 state.askUserAnswers[q] = entry 时同步写 localStorage
 //   注意: 不会覆盖整个 state.askUserAnswers, 只 set/delete 单个 key
+//   额外 (v0.5.bx-15 改 #3): 把 question 加到 module-level DISMISSED_QUESTIONS set
+//     这样切到任何 mcode session, 该 question 都不会再弹 (即使 pq key 不同)
 function setAskUserAnswer(question, entry) {
   if (!state) return
-  if (!state.askUserAnswers) state.askUserAnswers = loadAskUserAnswers()
+  if (!state.askUserAnswers) state.askUserAnswers = {}
   if (entry === null || entry === undefined) {
     delete state.askUserAnswers[question]
   } else {
     state.askUserAnswers[question] = entry
+    if (typeof DISMISSED_QUESTIONS !== 'undefined' && question) {
+      DISMISSED_QUESTIONS.add(question)
+    }
   }
   saveAskUserAnswers(state.askUserAnswers)
+}
+
+// v0.5.bx-15 (改): localStorage 持久化 "弹窗已 dismiss" 标志 — reload 后还能拦住
+//   per-CID 存, 不同浏览器 tab / 设备独立
+const ASK_DISMISSED_LS_KEY = `webui-askDismissed-${CID}`
+function loadAskDismissed() {
+  try {
+    return localStorage.getItem(ASK_DISMISSED_LS_KEY) === '1'
+  } catch (e) { return false }
+}
+function saveAskDismissed(v) {
+  try {
+    if (v) localStorage.setItem(ASK_DISMISSED_LS_KEY, '1')
+    else localStorage.removeItem(ASK_DISMISSED_LS_KEY)
+  } catch (e) {
+    console.warn('[ask-user] saveAskDismissed failed', e)
+  }
+}
+// 重置入口 (用户在 logo 上长按 3 秒触发) — 让用户能反悔重新看到弹窗
+function resetAskDismissed() {
+  saveAskDismissed(false)
+  if (state) state.askUserDismissed = false
+  ASK_MODAL_STATE.presentedKeys.clear()
 }
 
 async function sendPlanAnswer(text) {
@@ -4693,7 +5446,7 @@ function collectAskBlock(lines, startIdx) {
   return { raw: blockLines, endIdx: i }
 }
 
-function renderMessage(msg) {
+function renderMessage(msg, ctx) {
   if (msg.role === 'goal') {
     return `<div class="goal-block">
       <div class="goal-block-label">◎ ${t('section_goal')}</div>
@@ -4763,70 +5516,28 @@ function renderMessage(msg) {
       const allAnswered = isMulti
         ? pq.steps.every(s => state?.askUserAnswers?.[s.question])
         : !!state?.askUserAnswers?.[pq.steps[0].question]
-      // 字母 A/B/C/D 标识
-      const letter = i => String.fromCharCode(65 + i)  // 65='A'
-      // i18n helper — 用模板字面量支持 {n}/{answer} 占位符
-      const i18nFmt = (key, vars) => {
-        let s = t(key) || key
-        if (vars) for (const k in vars) s = s.replace(`{${k}}`, vars[k])
-        return s
-      }
 
-      questionnaireHtml = `<div class="ask-questionnaire" data-mode="${pq.mode}">` +
-        pq.steps.map((step, si) => {
-          const qText = step.question
-          const stepAns = state?.askUserAnswers?.[qText]
-          const isStepAnswered = !!stepAns
-          const isOtherPicked = isStepAnswered && stepAns.mode === 'answered-other'
-          // "其他"输入框当前 value (用户自己输入的回答)
-          const otherVal = isOtherPicked ? stepAns.answer : ''
-          // 学弹窗: 步数指示 (多 step 才显示)
-          const stepHead = isMulti
-            ? `<div class="ask-step-head">
-                <div class="ask-q">${escapeHtml(qText)}</div>
-                <div class="ask-step-counter">${si + 1} / ${escapeHtml(i18nFmt('ask_user_step_count', { n: pq.steps.length }))}</div>
-              </div>`
-            : `<div class="ask-q ask-q-single">${escapeHtml(qText)}</div>`
-          return `<div class="ask-step" data-step-idx="${si}">
-            ${stepHead}
-            <div class="ask-opts">
-              ${step.options.map((o, oi) => {
-                const isPicked = isStepAnswered && !isOtherPicked && stepAns.answer === o.label
-                // v0.5.bx-8: 已答后所有按钮 (含选中的) 都 disabled — 防止重复 click 触发
-                const optDisabled = isStepAnswered ? ' disabled' : ''
-                // 学弹窗: 字母方块 + 文字
-                return `<button class="ask-opt${isPicked ? ' clicked' : ''}" data-ask-q="${escapeHtml(qText)}" data-ask-label="${escapeHtml(o.label)}" data-ask-letter="${letter(oi)}"${optDisabled}>
-                  <span class="ask-opt-letter">${letter(oi)}</span>
-                  <span class="ask-opt-label">${escapeHtml(o.label)}</span>
-                </button>`
-              }).join('')}
-              ${isStepAnswered ? `<div class="ask-answered ${stepAns.mode === 'skipped' ? 'skipped' : ''}">
-                <span class="ask-answered-mark">${stepAns.mode === 'skipped' ? '–' : '✓'}</span>
-                ${stepAns.mode === 'skipped' ? escapeHtml(t('ask_user_skipped')) : escapeHtml(i18nFmt('ask_user_answered', { answer: stepAns.answer }))}
-              </div>` : ''}
-            </div>
-            <!-- v0.5.bx-8: "其他"输入框 + 跳过按钮 (单 step 模式) — 横排, 不被选项容器拉宽 -->
-            <div class="ask-step-actions">
-              <div class="ask-step-other">
-                <span class="ask-step-other-icon">✎</span>
-                <input type="text" class="ask-step-other-input" data-ask-q="${escapeHtml(qText)}" placeholder="${escapeHtml(t('ask_user_other_placeholder'))}" value="${escapeHtml(otherVal)}"${isStepAnswered ? ' disabled' : ''} />
-                <button class="ask-step-other-clear" title="${escapeHtml(t('ask_user_clear'))}">×</button>
-              </div>
-              ${isMulti ? '' : `<button class="ask-skip" data-ask-q="${escapeHtml(qText)}" data-ask-skip="1"${isStepAnswered ? ' disabled' : ''}>${escapeHtml(t('ask_user_skip'))}</button>`}
-            </div>
-          </div>`
-        }).join('') +
-        // 多 step 模式: 底部统一"发送"按钮 (收集所有 step 模板化发)
-        (isMulti ? `<div class="ask-step-foot">
-          <button class="ask-submit primary" data-submit-tool-idx="${msg.toolIdx ?? ''}"${allAnswered ? ' disabled' : ''}>
-            ${allAnswered
-              ? escapeHtml(i18nFmt('ask_user_resend_count', { n: pq.steps.length }))
-              : escapeHtml(i18nFmt('ask_user_send_count', { n: pq.steps.length }))}
-          </button>
-        </div>` : '') +
-        `</div>`
+      // v0.5.bx-13: 弹窗模式 — inline 只显示紧凑指示 (不再内嵌 questionnaire HTML)
+      //   实际交互走 #ask-modal 弹窗
+      const firstQ = pq.steps[0]?.question || ''
+      const statusText = allAnswered
+        ? (isMulti ? '已答完' : `已答: ${(state.askUserAnswers[firstQ] && state.askUserAnswers[firstQ].answer) || '—'}`)
+        : (isMulti ? `${pq.steps.length} 题待答` : '待答')
+      questionnaireHtml = `<div class="msg-ask-indicator" data-ask-tool="${escapeHtml(firstQ)}" title="${escapeHtml(firstQ)}">
+        <span class="msg-ask-indicator-icon">❓</span>
+        <span>ask_user</span>
+        <span class="msg-ask-indicator-status">· ${escapeHtml(statusText)}</span>
+        ${!allAnswered ? '<span style="color:var(--text-tertiary);font-size:11px">· 弹窗已弹出</span>' : ''}
+      </div>`
+      // v0.5.bx-13: 首次解析时自动打开弹窗 (去重: 同 key 的 ask 不重复弹)
+      // v0.5.bx-20: 只有"最新"包含 ask_user 的 message 才弹窗 (ctx.isLatestAsk)
+      //   旧 chat history 里的 ask 不弹, 避免 mcode LLM 死循环反复弹同一题
+      //   点 chat 里的 inline ask indicator 重新打开弹窗走 source:'click', 不受 isLatestAsk 限制 (见 attachStructuredBlockHandlers)
+      const isLatestAsk = !!(ctx && ctx.isLatestAsk)
+      openAskModal(pq, { isLatestAsk, source: 'render' })
+
       // v0.5.bx-8: 设 state.pendingAskUser (在没答过时, 让 send() 知道有 ask 在等)
-      //   多 step 时取第一题 (user 在 chat 输入框发消息时, 模板化成第一题的 Q/A)
+      //   现在 modal 提交不走 send(), 但仍作为兜底 (用户在 chat 框发消息时模板化)
       if (!allAnswered && state && (!state.pendingAskUser || state.pendingAskUser.firstQuestion !== pq.steps[0].question)) {
         state.pendingAskUser = {
           firstQuestion: pq.steps[0].question,
@@ -5129,6 +5840,17 @@ function toggleMode() {
 }
 function hideMode() { modeOpen = false; modePopover.hidden = true }
 async function setMode(mode) {
+  // v0.5.bx-9: Plan 模式是 webui 端本地 toggle, 不走 /api/permissions (那是 mcode 权限)
+  //   选了 plan 后, send() 给 prompt 加 plan 模板前缀, 强制 mcode 按 Plan: 格式输出
+  if (mode === 'plan') {
+    if (!state.planMode) {
+      state.planMode = true
+      // 给用户一个视觉提示 — btn-mode 加 active 高亮 (走 renderRight)
+      if (typeof renderRight === 'function') renderRight()
+    }
+    hideMode()
+    return
+  }
   hideMode()
   try {
     await fetch('/api/permissions' + API_SUFFIX, {
@@ -5136,6 +5858,10 @@ async function setMode(mode) {
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ mode })
     })
+    // 选正常 mode (ask/auto/full) 退出 plan 模式
+    if (state.planMode) {
+      state.planMode = false
+    }
   } catch (e) { console.error(e) }
 }
 
@@ -5457,6 +6183,31 @@ async function send() {
       const atPaths = attachedFiles.map(p => `@${p}`).join(' ')
       content = `${atPaths} ${content}`.trim()
     }
+    // v0.5.bx-9: Plan 模式 — mcode 0.1.4 LLM 不能自己进 plan mode, webui workaround
+    //   选 plan 后给 prompt 加 plan 模板前缀, 强制 mcode 按 Plan: 标题 / ## Summary / Plan complete. 格式输出
+    //   webui parseChatLines 解析 + 渲染 plan 块 + 弹 plan 弹窗 (老渲染本来就 OK)
+    if (state?.planMode && !state?.pendingAskUser) {
+      const planTpl = `[Plan 模式 — 请按以下 markdown 格式输出]\n` +
+        `Plan: <一句话标题>\n\n` +
+        `## Summary\n<2-3 句总览>\n\n` +
+        `## 目标\n- <目标 1>\n- <目标 2>\n- <...>\n\n` +
+        `## 非目标\n- <非目标 1>\n- <...>\n\n` +
+        `## 实施步骤\n1. <步骤 1>\n2. <步骤 2>\n3. <...>\n\n` +
+        `Plan complete.\n` +
+        `What would you like to do?\n` +
+        `1. Agree and start implementation\n` +
+        `2. Skip for now\n` +
+        `3. Revise with feedback\n\n` +
+        `---\n` +
+        `用户问题: ${content}\n` +
+        `---\n` +
+        `(重要: 必须严格按上面 Plan 格式输出, 不要加额外解释. webui 会自动解析你的输出并显示 plan 弹窗让用户选.)`
+      content = planTpl
+      // v0.5.bx-9: 用了就关掉 plan mode (一次性, 不持续)
+      //   user 想再来一次再点 plan chip
+      state.planMode = false
+      if (typeof renderRight === 'function') renderRight()
+    }
     // v0.5.bx-8: 如果有 pendingAskUser (mcode ask_user 工具在等回答), 把用户消息模板化成
     //   "Q: <question> A: <text>" — 让 mcode/LLM 知道这是 ask_user 工具的 result
     //   同时写 state.askUserAnswers 让下次 render 显示 ✓
@@ -5480,7 +6231,6 @@ async function send() {
       // 标记已答 + 清 pending
       pau.answered = { answer, mode: text ? 'answered' : 'skipped' }
       state.pendingAskUser = null
-      console.log(`[ask-user] send() template: "${content.replace(/\n/g, ' / ').slice(0, 80)}"`)
     }
     const r = await fetch('/api/send' + API_SUFFIX, {
       method: 'POST',
@@ -5530,11 +6280,22 @@ function autoResize() {
 // Init
 // ============================================================
 function init() {
+  console.log('[webui] init: applyTheme/I18n start')
   applyTheme()
   applyI18n()
+  console.log('[webui] init: applyTheme/I18n done')
   // v0.5.bx-8: 从 localStorage 恢复已答状态, 避免刷新后按钮重新可点
   if (!state) state = {}
   state.askUserAnswers = loadAskUserAnswers()
+  // v0.5.bx-15 (改 #3): 恢复 DISMISSED_QUESTIONS — 从 state.askUserAnswers 重建
+  //   切到任何 session, 这些 question 都不再弹
+  try {
+    for (const q of Object.keys(state.askUserAnswers || {})) {
+      if (q) DISMISSED_QUESTIONS.add(q)
+    }
+  } catch (e) {}
+  // v0.5.bx-20: 不再恢复 askUserDismissed 标志 — 关掉即关掉, reload 后弹窗默认能正常弹
+  //   v0.5.bx-15 改 #3 (loadAskDismissed) 移除 (保留函数定义兼容, 不再调用)
   // v0.5.bh: 标记当前是不是本机（仅本机显示 chip-lan，LAN 设备上隐藏）
   const host = location.hostname
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '' || host === '0.0.0.0'
@@ -5542,13 +6303,15 @@ function init() {
   connect()
   attachEvents()
   // Fetch initial state
+  console.log('[webui] init: fetch /api/state')
   fetch('/api/state' + API_SUFFIX, { headers: HEADERS })
     .then(r => r.json())
-    .then(s => { state = s; render() })
-    .catch(e => console.error('initial state', e))
+    .then(s => { state = s; console.log('[webui] init: state loaded, sessions=' + (s.sessions ? s.sessions.length : 'null')); render() })
+    .catch(e => { console.error('[webui] init: /api/state FAIL', e); document.title = '⚠ /api/state FAIL' })
   // v0.4.1: 启动后自动拉一次 sessions 列表（mavis CLI 路径，不走 mcode）
   // v0.5.x: 改成立即拉，不延时轮询（避免刷新图标一直转的视觉噪音）
   refreshSessions()
+  console.log('[webui] init: refreshSessions called')
   // v0.5.z: 启动后自动拉一次 quota（mmx quota show 直拉，按钮 value 用）
   refreshUsage()
   // v0.5.z: 定时刷新 popover 的本机时间倒计时（30s 一次，避免分钟级过期）
@@ -5567,7 +6330,10 @@ function attachEvents() {
     autoResize()
     // Slash command detection
     const v = textarea.value
-    if (v === '/' || v.startsWith('/')) {
+    // v0.5.bx-21: 含空格的输入不再开 slash overlay — 允许 "/goal 帮我" 这种 命令+参数 格式
+    //   之前 v.startsWith('/') 永远 true, 导致 "/goal 帮我" 还显示 "No matching commands" 干扰 user
+    //   修后: 只有 / 开头且无空格才开 slash (完整命令后空格 = 命令已选, 进入自然语言补充)
+    if (v === '/' || (v.startsWith('/') && !v.includes(' '))) {
       slashQuery = v.slice(1)
       if (!slashOpen) showSlash()
       else filterSlash()
@@ -6151,8 +6917,6 @@ function attachEvents() {
     try {
       const r = await fetch('/api/settings' + API_SUFFIX, { headers: HEADERS })
       const d = await r.json()
-      console.log('[lan] loadLanInfo response:', JSON.stringify(d).slice(0, 300))
-      console.log('[lan] chipLanLink element exists:', !!chipLanLink, 'chipLanLinkText exists:', !!chipLanLinkText)
       if (!d.ok) return
       if (lanUrlLocal) lanUrlLocal.textContent = d.localUrl || '—'
       if (lanUrlLan) lanUrlLan.textContent = d.lanUrl || '—'
@@ -6164,7 +6928,6 @@ function attachEvents() {
           const u = (d.lanUrl || '').replace(/^https?:\/\//, '')
           chipLanLinkText.textContent = u || '—'
         }
-        console.log('[lan] chipLanLink updated: data-lan-url=', chipLanLink.getAttribute('data-lan-url'), 'text=', chipLanLinkText?.textContent, 'hidden=', chipLanLink.hidden)
       } else {
         console.warn('[lan] chipLanLink NOT found in DOM — element missing?')
       }
@@ -6193,7 +6956,6 @@ function attachEvents() {
     e.stopPropagation()
     const wasOn = chipLan.getAttribute('data-lan') === 'on'
     const enabled = !wasOn
-    console.log('[lan] click chip-lan: wasOn=', wasOn, '→ enabled=', enabled)
     try {
       const r = await fetch('/api/settings' + API_SUFFIX, {
         method: 'POST',
@@ -6201,7 +6963,6 @@ function attachEvents() {
         body: JSON.stringify({ lanBroadcast: enabled }),
       })
       const d = await r.json()
-      console.log('[lan] toggle response:', JSON.stringify(d).slice(0, 300))
       if (!d.ok) { alert('切换失败: ' + (d.error || '未知错误')); return }
       if (state) state.lanBroadcast = enabled
       render()
@@ -6355,6 +7116,37 @@ function attachEvents() {
     clearCurrentSession()
   })
 
+  // v0.5.bx-19: 一键清理 mcode 孤儿 session — webui session db 没关联 + chatLen=0 的 mvs_xxx
+  document.getElementById('btn-cleanup-orphans').addEventListener('click', async (e) => {
+    e.stopPropagation()
+    if (state && state.running && state.running.active) {
+      alert('AI 还在回复中，请先等回复完成。')
+      return
+    }
+    if (!confirm('清理 sidebar 上 "Mcode session" 类型的空状态卡片?\n\n(只删 webui 没 chat 历史的 mcode session, 保留你创建的对话)')) return
+    const btn = document.getElementById('btn-cleanup-orphans')
+    const origText = btn.textContent
+    btn.disabled = true
+    btn.textContent = '清理中...'
+    try {
+      const r = await fetch('/api/sessions/cleanup-orphans' + API_SUFFIX, { method: 'POST', headers: HEADERS })
+      const data = await r.json()
+      if (data.ok) {
+        const msg = `已清理 ${data.deleted} 个孤儿 session${data.failed ? ` (${data.failed} 失败)` : ''}`
+        if (typeof showToast === 'function') showToast(msg, data.failed ? 'warn' : 'success')
+        else alert(msg)
+        // server 已经 pushStateFor(cid), sidebar 自动刷新
+      } else {
+        alert('清理失败: ' + (data.error || 'unknown'))
+      }
+    } catch (err) {
+      alert('清理失败: ' + err.message)
+    } finally {
+      btn.disabled = false
+      btn.textContent = origText
+    }
+  })
+
   // v0.5.ax: 清空当前 session，回到 welcome 页（不创建新 session，等用户发消息时再创建）
   function clearCurrentSession() {
     if (state) {
@@ -6434,6 +7226,20 @@ function attachEvents() {
       selectSlash()
     }
   })
+  // v0.5.bx-21: 鼠标 hover slash item 切 active idx (跟键盘 ArrowUp/Down 一致)
+  //   之前只有 click → 直接 selectSlash, 没切换高亮. Ponkan 反馈 "鼠标点别的, 只会选中help"
+  //   修: mouseenter 切 slashActiveIdx + 重新渲染 active class
+  //   注意: 不绑 mouseleave, 否则用户键盘移到 /new 后鼠标移走又跳回 /help
+  slashResults.addEventListener('mouseover', (e) => {
+    const item = e.target.closest('.slash-item')
+    if (!item || !item.getAttribute('data-cmd')) return
+    const idx = parseInt(item.getAttribute('data-idx') || '-1', 10)
+    if (idx < 0 || idx === slashActiveIdx) return
+    slashActiveIdx = idx
+    slashResults.querySelectorAll('.slash-item').forEach((el, i) => {
+      el.classList.toggle('active', i === slashActiveIdx)
+    })
+  })
   slashInput.addEventListener('input', (e) => {
     slashQuery = e.target.value
     filterSlash()
@@ -6463,45 +7269,7 @@ function attachEvents() {
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     // Modal shortcuts 优先
-    if (askOpen) {
-      const a = state?.ask
-      const cur = a?.questions?.[a?.currentIdx]
-      if (cur) {
-        if (e.key >= '1' && e.key <= '9') {
-          const idx = parseInt(e.key, 10) - 1
-          if (idx < cur.options.length) {
-            e.preventDefault()
-            if (cur.options[idx].isOther) {
-              const input = document.getElementById('ask-other-input')
-              if (input) { input.hidden = false; input.focus() }
-            } else {
-              sendAskAnswer(idx, null)
-            }
-            return
-          }
-        } else if (e.key === 'Tab' || e.key === 'ArrowRight') {
-          e.preventDefault()
-          // 切到下一题（如果 mcode 支持）
-          // 大多数 mcode Ask 是单题一次性，tab 切题不实际发送任何
-          // 这里留给用户鼠标切换
-          return
-        } else if (e.key === 'Enter') {
-          e.preventDefault()
-          const idx = askSelectedIdx
-          if (cur.options[idx]?.isOther) {
-            const input = document.getElementById('ask-other-input')
-            if (input && !input.hidden) { sendAskAnswer(idx, input.value.trim()); return }
-          }
-          if (cur.options[idx]) sendAskAnswer(idx, null)
-          return
-        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          askSelectedIdx = (askSelectedIdx + (e.key === 'ArrowDown' ? 1 : -1) + cur.options.length) % cur.options.length
-          renderAsk()
-          return
-        }
-      }
-    }
+    // v0.5.bx-14: 旧 askOpen keydown 块已删, ask_user 弹窗自己有 keydown 监听 (bindAskModal)
     if (planOpen) {
       if (e.key >= '1' && e.key <= '3') {
         e.preventDefault()
@@ -6568,108 +7336,10 @@ function toggleLang() {
 }
 
 // ============================================================
-// Ask Modal (v0.4.0)
+// v0.5.bx-14: 旧 Ask Modal (v0.4.0) 已删除 — showAsk/hideAsk/renderAsk/sendAskAnswer
+//   旧代码用 /api/answer endpoint (server 没实现, 一直 404)
+//   新 ask_user 弹窗用 v0.5.bx-13 的 #ask-modal + /api/send (isAskAnswer:true)
 // ============================================================
-function showAsk() {
-  if (!state?.ask?.active) return
-  askOpen = true
-  document.getElementById('ask-modal').classList.add('show')
-  renderAsk()
-}
-function hideAsk() {
-  askOpen = false
-  document.getElementById('ask-modal').classList.remove('show')
-}
-function renderAsk() {
-  const a = state?.ask
-  if (!a || !a.active) { hideAsk(); return }
-  const total = a.total || (a.questions?.length || 0)
-  const answered = a.answered ?? (a.currentIdx || 0)
-  document.getElementById('ask-counter').textContent = `${answered}/${total} answered`
-  // tabs
-  const tabsEl = document.getElementById('ask-tabs')
-  tabsEl.innerHTML = ''
-  const qLen = a.questions?.length || 0
-  for (let i = 0; i < Math.max(total, qLen); i++) {
-    const q = a.questions?.[i]
-    const title = q?.title || `题目 ${i + 1}`
-    const isActive = i === a.currentIdx
-    const isDone = i < (a.answered || 0)
-    const tab = document.createElement('div')
-    tab.className = 'ask-tab' + (isActive ? ' active' : '') + (isDone ? ' done' : '')
-    tab.textContent = title
-    tabsEl.appendChild(tab)
-  }
-  // question + options
-  const cur = a.questions?.[a.currentIdx]
-  document.getElementById('ask-question').textContent = cur?.title || '—'
-  const optsEl = document.getElementById('ask-options')
-  if (cur?.options?.length > 0) {
-    optsEl.innerHTML = cur.options.map((o, i) => `
-      <button class="ask-option ${i === askSelectedIdx ? 'selected' : ''}" data-opt="${i}">
-        <span class="ask-option-num">${i + 1}</span>
-        <span class="ask-option-text">
-          <span class="ask-option-label">${escapeHtml(o.label)}${o.isOther ? '…' : ''}</span>
-          ${o.desc ? `<span class="ask-option-desc">${escapeHtml(o.desc)}</span>` : ''}
-        </span>
-      </button>
-    `).join('')
-  } else {
-    optsEl.innerHTML = '<div class="ask-sending"><div class="ask-sending-spinner"></div> 等待 mcode 解析选项...</div>'
-  }
-  // attach option click handlers
-  optsEl.querySelectorAll('.ask-option').forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = parseInt(el.getAttribute('data-opt'), 10)
-      askSelectedIdx = idx
-      if (cur.options[idx].isOther) {
-        // 显示输入框
-        let input = document.getElementById('ask-other-input')
-        if (!input) {
-          input = document.createElement('input')
-          input.className = 'ask-other-input'
-          input.id = 'ask-other-input'
-          input.placeholder = '输入自定义答案...'
-          optsEl.appendChild(input)
-        }
-        input.hidden = false
-        input.value = ''
-        input.focus()
-        input.onkeydown = (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            sendAskAnswer(idx, input.value.trim())
-          } else if (e.key === 'Escape') {
-            e.preventDefault()
-            input.hidden = true
-          }
-        }
-      } else {
-        sendAskAnswer(idx, null)
-      }
-    })
-  })
-}
-async function sendAskAnswer(optIdx, customText) {
-  if (askSending) return
-  askSending = true
-  const isOther = customText != null
-  try {
-    await fetch('/api/answer' + API_SUFFIX, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...HEADERS },
-      body: JSON.stringify({ type: 'ask', option: isOther ? 'other' : (optIdx + 1), text: customText || '' })
-    })
-    // 显示发送状态
-    const optsEl = document.getElementById('ask-options')
-    optsEl.innerHTML = `<div class="ask-sending"><div class="ask-sending-spinner"></div> 已发送，等待下一题...</div>`
-    askSelectedIdx = 0
-  } catch (e) {
-    console.error('ask answer', e)
-  } finally {
-    askSending = false
-  }
-}
 
 // ============================================================
 // Plan Review Modal (v0.4.0)
@@ -6796,15 +7466,7 @@ async function sendPermAnswer(choice) {
 // 弹窗触发（render 时自动检测）
 // ============================================================
 function checkModals() {
-  // Ask
-  const a = state?.ask
-  if (a?.active) {
-    const key = `a-${a.total}-${a.answered}-${a.currentIdx}-${a.questions?.[a.currentIdx]?.title || ''}`
-    if (key !== lastShownAskKey) { lastShownAskKey = key; showAsk() }
-  } else {
-    lastShownAskKey = null
-    if (askOpen) hideAsk()
-  }
+  // v0.5.bx-14: 旧 Ask 分支已删 (旧 modal 删了, 用 v0.5.bx-13 的 #ask-modal 替代, 由 openAskModal 触发)
   // Plan
   const p = state?.plan
   if (p?.active) {
@@ -6837,10 +7499,14 @@ function checkModals() {
 // Modal 事件绑定
 // ============================================================
 function attachModalEvents() {
-  // Ask
-  document.getElementById('ask-close').addEventListener('click', () => {
-    // Ask 不允许 Esc 跳过答案 — 但用户可以手动关（等同于 Esc）
-    // 我们发送 Esc 码
+  // v0.5.bx-27: 所有 getElementById 加 null check — 老 modal 元素 (ask-close/plan-modal 等) v0.5.bx-14 已删,
+  //   但 attachModalEvents 还在引用 → null.addEventListener 报 TypeError → 整个 init 失败 → 页面没 JS
+  //   现在每个都检查, 元素不存在就跳过 — 单个缺失不影响整体
+  const $ = (id) => document.getElementById(id)
+  const on = (id, evt, fn) => { const e = $(id); if (e) e.addEventListener(evt, fn) }
+
+  // Ask (v0.5.bx-14: 旧 ask-close 元素已删, ask-modal 是新元素)
+  on('ask-close', 'click', () => {
     fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
@@ -6848,11 +7514,11 @@ function attachModalEvents() {
     }).catch(() => {})
     hideAsk()
   })
-  document.getElementById('ask-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'ask-modal') hideAsk()  // backdrop click
+  on('ask-modal', 'click', (e) => {
+    if (e.target.id === 'ask-modal') hideAsk()
   })
   // Plan
-  document.getElementById('plan-close').addEventListener('click', () => {
+  on('plan-close', 'click', () => {
     fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
@@ -6860,20 +7526,20 @@ function attachModalEvents() {
     }).catch(() => {})
     hidePlan()
   })
-  document.getElementById('plan-modal').addEventListener('click', (e) => {
+  on('plan-modal', 'click', (e) => {
     if (e.target.id === 'plan-modal') hidePlan()
   })
   // PlanMode
-  document.getElementById('planmode-close').addEventListener('click', () => sendPlanModeAnswer('deny'))
-  document.getElementById('planmode-modal').addEventListener('click', (e) => {
+  on('planmode-close', 'click', () => sendPlanModeAnswer('deny'))
+  on('planmode-modal', 'click', (e) => {
     if (e.target.id === 'planmode-modal') sendPlanModeAnswer('deny')
   })
   document.querySelectorAll('#planmode-options .choice-option').forEach(el => {
     el.addEventListener('click', () => sendPlanModeAnswer(el.getAttribute('data-choice')))
   })
   // Permission
-  document.getElementById('perm-close').addEventListener('click', () => hidePerm())
-  document.getElementById('perm-modal').addEventListener('click', (e) => {
+  on('perm-close', 'click', () => hidePerm())
+  on('perm-modal', 'click', (e) => {
     if (e.target.id === 'perm-modal') hidePerm()
   })
   document.querySelectorAll('#perm-options .choice-option').forEach(el => {
@@ -6882,17 +7548,40 @@ function attachModalEvents() {
   // Esc 关弹窗
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (askOpen) { hideAsk() }
-      else if (planOpen) { hidePlan() }
+      if (planOpen) { hidePlan() }
       else if (planModeOpen) { hidePlanMode() }
       else if (permOpen) { hidePerm() }
     }
   })
+  // v0.5.bx-15 (改): 双击 logo 重置 ask_user 弹窗
+  const topbarLogo = $('topbar-logo')
+  if (topbarLogo) {
+    topbarLogo.addEventListener('dblclick', () => {
+      const hadKeys = ASK_MODAL_STATE.presentedKeys.size > 0
+      ASK_MODAL_STATE.presentedKeys.clear()
+      if (typeof showToast === 'function') {
+        showToast(hadKeys ? '✓ ask_user 弹窗已重新开启 (清空 presentedKeys)' : 'ask_user 弹窗未开启过 (无需重置)', 'info')
+      }
+    })
+  }
 }
 
 // Start
-init()
-attachModalEvents()
+// v0.5.bx-27: 启动日志 + JS 错误捕获 — 让 reload 后能立刻看到 fatal error
+console.log('[webui] init start, version=v0.5.bx-27, build=2026-08-20')
+window.addEventListener('error', (e) => {
+  console.error('[webui FATAL]', e.error?.stack || e.message, '@', e.filename + ':' + e.lineno + ':' + e.colno)
+  document.title = '⚠ JS ERR: ' + (e.error?.message || e.message).substring(0, 50)
+})
+try {
+  init()
+  attachModalEvents()
+  console.log('[webui] init done')
+} catch (e) {
+  console.error('[webui INIT FATAL]', e?.stack || e?.message || e)
+  document.body.innerHTML = '<pre style="color:red;padding:20px;font-size:14px;">⚠ webui JS 初始化失败:\n\n' + (e?.stack || e?.message || JSON.stringify(e)) + '\n\n请截图给开发</pre>'
+  throw e
+}
 </script>
 <!-- v0.5.bb: 全局 toast 通知（用量刷新等用） -->
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

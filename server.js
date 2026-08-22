@@ -30,7 +30,27 @@ import { dirname, join, resolve, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID, createHash } from 'node:crypto'
 import { homedir } from 'node:os'
+import { createRequire } from 'node:module'
 import { McodeAcpClient } from './acp.mjs'
+
+// v0.5.bx-19: 用 mcode 自带的 better-sqlite3 直接操作 mcode session db
+//   mcode 0.1.4 acp `session/delete` 返回 "Method not found" (协议层注册但没实现)
+//   真删 mcode session 只能 SQL 删 local_runtime_sessions 等关联表
+//   lazy init — MCODE_ROOT 还没定义, 等 helper 第一次调用时再 require
+const _webuiRequire = createRequire(import.meta.url)
+let _McodeBetterSqlite3 = null
+function getMcodeBetterSqlite3() {
+  if (_McodeBetterSqlite3 !== null) return _McodeBetterSqlite3
+  if (_McodeBetterSqlite3 === null && typeof MCODE_ROOT === 'string') {
+    try {
+      _McodeBetterSqlite3 = _webuiRequire(join(MCODE_ROOT, 'node_modules', '@minimax-ai', 'code', 'node_modules', 'better-sqlite3'))
+    } catch (e) {
+      console.warn('[webui] cannot load better-sqlite3 from mcode:', e.message)
+      _McodeBetterSqlite3 = false  // 标记失败, 避免重试
+    }
+  }
+  return _McodeBetterSqlite3 || null
+}
 
 // v0.5.bj: 启动时从 mcode 的 cli.js bundle 里提取 hardcoded 的 MiniMax-M* 模型列表
 // （用户 TUI 显示的 model 候选项就是这一份，mcode 内部硬编码 — 我们从 mcode 自己的 bundle 读，不在 webui 硬编码）
@@ -77,6 +97,13 @@ const HOST = process.env.HOST || '0.0.0.0'
 const MCODE_ROOT = resolve(__dirname, '..')
 const MCODE_CMD = join(MCODE_ROOT, 'mcode.cmd')
 const DEFAULT_MODEL = process.env.MCODE_MODEL || 'minimax_api/MiniMax-M3'
+// v0.5.bx-10: mavis 桌面端 sqlite db — local_runtime_token_usage 表存真实 token usage
+//   数据源：C:\Users\mjc39\.minimax\v2\sqlite\runtime-state.sqlite (Mavis desktop runtime)
+//   mavis 内部 hook 跟踪所有 mcode 调用 (不管 acp/exec/pi-agent 哪种方式)，写到这个表
+//   webui 可以直接按 cs.mcodeSessionId 过滤拿真实 usage，替代估算
+const MAVIS_DATA_DIR = process.env.MAVIS_DATA_DIR || join(homedir(), '.minimax')
+const MAVIS_DB_PATH = join(MAVIS_DATA_DIR, 'v2', 'sqlite', 'runtime-state.sqlite')
+const SQLITE3_BIN = process.env.SQLITE3_BIN || 'C:\\Users\\mjc39\\anaconda3\\Library\\bin\\sqlite3.exe'
 
 // v0.5.ap: 局域网访问设置 — 运行时可切换（per-server）
 // 状态从 /api/settings GET 获取；POST /api/settings {lanBroadcast: bool} 修改
@@ -134,6 +161,52 @@ const DEFAULT_WORKSPACE = (() => {
   return home
 })()
 const DEFAULT_TIMEOUT = process.env.MCODE_TIMEOUT || '120s'
+// v0.5.bx-19: mcode session 物理存储位置
+//   local_runtime_sessions 是 mcode 0.1.4 的 session 物理表
+//   webui "删除对话" 时同步从这张表删, 避免 reload 后 listMcodeSessions 又把孤儿 session 拉回来
+const MCODE_RUNTIME_DB = join(homedir(), '.minimax', 'v2', 'sqlite', 'runtime-state.sqlite')
+// 删 mcode session 涉及的所有关联表 (含 FTS5 external content + 各种 state 表)
+//   ON DELETE CASCADE 需要 PRAGMA foreign_keys=ON 才生效 (SQLite 默认 OFF), 这里不用 cascade, 全手动删
+const MCODE_SESSION_DELETE_TABLES = [
+  'local_runtime_sessions',
+  'local_runtime_sessions_fts',           // external content FTS5 (会话标题搜索)
+  'local_runtime_session_fts_keys',
+  'local_runtime_session_locks',
+  'local_runtime_session_projection_watermarks',
+  'local_runtime_session_asset_index_state',
+  'local_runtime_session_agent_state',
+  'local_runtime_workspace_indexing_sessions',
+  'local_runtime_session_assets',
+]
+function deleteMcodeSessionFromDb(sid) {
+  if (!/^mvs_[a-f0-9]{32}$/.test(sid)) return { ok: false, reason: 'not_mcode_sid' }
+  const Db = getMcodeBetterSqlite3()
+  if (!Db) return { ok: false, reason: 'better_sqlite3_not_loaded' }
+  if (!existsSync(MCODE_RUNTIME_DB)) return { ok: false, reason: 'mcode_db_not_found' }
+  let db
+  try {
+    db = new Db(MCODE_RUNTIME_DB, { readonly: false })
+    db.pragma('busy_timeout = 5000')  // mcode 端可能在写, 最多等 5s
+    const log = []
+    const tx = db.transaction((sid) => {
+      for (const t of MCODE_SESSION_DELETE_TABLES) {
+        try {
+          const r = db.prepare(`DELETE FROM ${t} WHERE session_id = ?`).run(sid)
+          if (r.changes > 0) log.push(`${t}:${r.changes}`)
+        } catch (e) {
+          // 表可能不存在 (mcode 不同版本 schema 略不同), 跳过
+        }
+      }
+    })
+    tx(sid)
+    db.close()
+    invalidateMcodeSessionsCache()
+    return { ok: true, log }
+  } catch (e) {
+    if (db) try { db.close() } catch {}
+    return { ok: false, error: e.message }
+  }
+}
 
 // v0.5.bl: 全局未捕获错误 handler — server 崩了不静默，至少打日志 + 写 .server.err
 process.on('uncaughtException', (err) => {
@@ -290,28 +363,59 @@ async function ensureMcodeCommands({ forceRefresh = false } = {}) {
 // 数据源：mcode TUI 自己的 session 存储（不是 webui 的 .webui-sessions.json）
 // 按 cwd 过滤（mcode 每个 session 都有 cwd 字段，匹配 cs.workspace.dir 才显示）
 let mcodeSessionsCache = { ws: null, sessions: [], fetchedAt: 0 }
+// v0.5.bx-19: mcode acp client 单例后台常驻 — 之前每次 getMcodeSessionsForWorkspace cache miss 都
+//   new McodeAcpClient + start + list + stop, 切 session 频繁触发, 2-3 个 mcode 子进程并发, CPU 高
+//   单例常驻后, 切 session 只走 30s cache hit, 0 spawn
+let _mcodeAcpSingleton = null
+let _mcodeAcpInitPromise = null  // 防止并发 init 同一个 client
+async function getMcodeAcpClient() {
+  if (_mcodeAcpSingleton && _mcodeAcpSingleton.alive) return _mcodeAcpSingleton
+  if (_mcodeAcpInitPromise) return _mcodeAcpInitPromise
+  _mcodeAcpInitPromise = (async () => {
+    const client = new McodeAcpClient({ debug: false })
+    try {
+      await client.start()
+      _mcodeAcpSingleton = client
+      console.log(`[acp] singleton client started pid=${client.pid || '?'}`)
+      return client
+    } catch (e) {
+      console.warn(`[acp] singleton start failed: ${e.message}`)
+      try { client.stop() } catch {}
+      return null
+    } finally {
+      _mcodeAcpInitPromise = null
+    }
+  })()
+  return _mcodeAcpInitPromise
+}
 async function getMcodeSessionsForWorkspace(workspace) {
   const STALE_MS = 30 * 1000  // 30s — 比 commands 的 5min 短，因为 prompt 后要立即刷新
   const now = Date.now()
   if (mcodeSessionsCache.ws === workspace && (now - mcodeSessionsCache.fetchedAt) < STALE_MS) {
     return mcodeSessionsCache.sessions
   }
-  const client = new McodeAcpClient({ debug: false })
+  const all = await listAllMcodeSessions()
+  // 按 cwd 过滤（normalize path — windows 大小写不敏感 + 去尾斜杠）
+  const norm = (p) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const target = norm(workspace)
+  const filtered = target ? all.filter(s => norm(s.cwd) === target) : all
+  mcodeSessionsCache = { ws: workspace, sessions: filtered, fetchedAt: now }
+  return filtered
+}
+
+// v0.5.bx-19 (改 #2): 列出所有 mcode session (跨 workspace), 不做 cwd 过滤
+//   之前 getMcodeSessionsForWorkspace 内部用同一个 cache, 但 cleanup 需要列所有
+//   这函数绕过 cwd 过滤, 走 mcode acp 直接拿 raw 列表
+async function listAllMcodeSessions() {
+  const client = await getMcodeAcpClient()
+  if (!client) return []
   try {
-    await client.start()
     const r = await client.listSessions()
-    const all = (r && Array.isArray(r.sessions)) ? r.sessions : []
-    // 按 cwd 过滤（normalize path — windows 大小写不敏感 + 去尾斜杠）
-    const norm = (p) => (p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
-    const target = norm(workspace)
-    const filtered = target ? all.filter(s => norm(s.cwd) === target) : all
-    mcodeSessionsCache = { ws: workspace, sessions: filtered, fetchedAt: now }
-    return filtered
+    return (r && Array.isArray(r.sessions)) ? r.sessions : []
   } catch (e) {
-    console.warn(`[acp] listSessions failed: ${e.message}`)
-    return mcodeSessionsCache.sessions || []
-  } finally {
-    try { client.stop() } catch {}
+    console.warn(`[acp] listAllMcodeSessions failed: ${e.message}`)
+    if (_mcodeAcpSingleton === client) _mcodeAcpSingleton = null
+    return []
   }
 }
 
@@ -320,24 +424,33 @@ async function getMcodeSessionsForWorkspace(workspace) {
 // 用途：替换 webui "New session" / 截断首句 → 用 mcode 自动生成的标题
 async function getMcodeSessionTitle(mcodeSessionId) {
   if (!mcodeSessionId) return null
-  const client = new McodeAcpClient({ debug: false })
+  const client = await getMcodeAcpClient()
+  if (!client) return null
   try {
-    await client.start()
     const r = await client.listSessions()
     const all = (r && Array.isArray(r.sessions)) ? r.sessions : []
     const hit = all.find(s => s.sessionId === mcodeSessionId)
     return hit && hit.title ? hit.title : null
   } catch (e) {
     console.warn(`[acp] getMcodeSessionTitle failed: ${e.message}`)
+    if (_mcodeAcpSingleton === client) _mcodeAcpSingleton = null
     return null
-  } finally {
-    try { client.stop() } catch {}
   }
 }
 
 function invalidateMcodeSessionsCache() {
-  mcodeSessionsCache = { ws: null, sessions: [], fetchedAt: 0 }
+  // v0.5.bx-19: 软失效 — 只让 TTL 立即过期, 保留 cached sessions (这样切 session 不阻塞)
+  mcodeSessionsCache = { ...mcodeSessionsCache, fetchedAt: 0 }
 }
+// v0.5.bx-19: 进程退出时关掉 singleton mcode acp (避免僵尸)
+function shutdownMcodeAcpSingleton() {
+  if (_mcodeAcpSingleton) {
+    try { _mcodeAcpSingleton.stop() } catch {}
+    _mcodeAcpSingleton = null
+  }
+}
+process.on('SIGINT', () => { shutdownMcodeAcpSingleton(); process.exit(0) })
+process.on('SIGTERM', () => { shutdownMcodeAcpSingleton(); process.exit(0) })
 
 // ============================================================
 // In-memory state (A2 per-client)
@@ -476,6 +589,115 @@ function mmxQuotaShow() {
   })
 }
 
+// v0.5.bx-10: 从 mavis 桌面端 sqlite 读 mcode acp session 的真实 token usage
+//   数据源：MAVIS_DB_PATH (=~/.minimax/v2/sqlite/runtime-state.sqlite) 的 local_runtime_token_usage 表
+//   mavis hook 自动写入所有 mcode 调用 (framework_type='pi-agent')
+//   返回 { totalInput, totalOutput, totalCacheRead, totalCacheWrite, count, byModel: {model: {input,output,...}} }
+//   失败（db 不存在 / 查不到 / 0 条）时返回 null，调用方 fallback 估算
+async function getMavisTokenUsage(mvsSessionId) {
+  if (!mvsSessionId || !existsSync(MAVIS_DB_PATH)) return null
+  // sql 注入防护：mvsSessionId 必须 mvs_ 前缀
+  if (!/^mvs_[a-f0-9]{16,}$/i.test(mvsSessionId)) return null
+  return await new Promise((resolve) => {
+    // v0.5.bx-20 (改): 用 per-turn 命中率 (最近一行的 cache_read / total input)
+    //   之前算的是累计 (SUM(cache_read) / SUM(input + cache_read)) — 但 context limit 只有 512k,
+    //   累计 cache_read 13 轮能到 6519.5k, 跟 "上下文一共最高才 512k" 矛盾 (Ponkan 反馈)
+    //   per-turn 反映"当前一轮 prompt" 的 cache 复用 — 这才是 user 关心的"当前 context 命中率"
+    //   稳态 session per-turn 95-100%, 早期/大 input session 低一些 (因为新加 input 多, cache miss 多)
+    const sql = `SELECT
+      COALESCE(SUM(input_tokens),0) AS total_input,
+      COALESCE(SUM(output_tokens),0) AS total_output,
+      COALESCE(SUM(cache_read_tokens),0) AS total_cache_read,
+      COALESCE(SUM(cache_write_tokens),0) AS total_cache_write,
+      COALESCE(SUM(reasoning_tokens),0) AS total_reasoning,
+      COUNT(*) AS rows,
+      COALESCE(MAX(ts),0) AS last_ts,
+      COALESCE(MIN(ts),0) AS first_ts,
+      (SELECT cache_read_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_cache_read,
+      (SELECT input_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_input,
+      (SELECT cache_write_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_cache_write
+    FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}'`
+    const child = spawn(SQLITE3_BIN, [MAVIS_DB_PATH, '-readonly', sql], { windowsHide: true })
+    let stdout = ''
+    let stderr = ''
+    const timer = setTimeout(() => { try { child.kill() } catch {} }, 5000)
+    child.stdout?.on('data', (d) => { stdout += d.toString('utf8') })
+    child.stderr?.on('data', (d) => { stderr += d.toString('utf8') })
+    child.on('error', () => { clearTimeout(timer); resolve(null) })
+    child.on('exit', (code) => {
+      clearTimeout(timer)
+      if (code !== 0) { resolve(null); return }
+      // 解析: "total_input|total_output|total_cache_read|total_cache_write|total_reasoning|rows|last_ts|first_ts|last_cache_read|last_input|last_cache_write"
+      const parts = stdout.trim().split('|').map(s => s.trim())
+      if (parts.length < 11) { resolve(null); return }
+      const [ti, to, tcr, tcw, tr, rows] = parts.map(Number)
+      if (rows === 0) { resolve(null); return }
+      // v0.5.bx-20: per-turn cache 命中率 — 基于最近一行的 input + cache_read + cache_write
+      //   这才是"当前 context 命中率", 反映最近一轮 prompt 的 cache 复用程度
+      //   公式: cache_read / (input + cache_read + cache_write)
+      const lastCr = Number(parts[8])
+      const lastIn = Number(parts[9])
+      const lastCw = Number(parts[10])
+      const lastTotal = lastIn + lastCr + lastCw
+      const cacheHitRate = lastTotal > 0 ? lastCr / lastTotal : 0
+      resolve({
+        rows,
+        totalInput: ti, totalOutput: to,
+        totalCacheRead: tcr, totalCacheWrite: tcw, totalReasoning: tr,
+        firstTs: Number(parts[6]), lastTs: Number(parts[7]),
+        cacheHitRate,
+        // v0.5.bx-20: 也带 per-turn 原始值 (调试/显示用)
+        lastTurnInput: lastIn,
+        lastTurnCacheRead: lastCr,
+        lastTurnCacheWrite: lastCw,
+      })
+    })
+  })
+}
+
+// v0.5.bx-10: 用 mavis db 拿最近一条 row 的 model 字段（拿不到 model id 就算了）
+async function getMavisTokenUsageModel(mvsSessionId) {
+  if (!mvsSessionId || !existsSync(MAVIS_DB_PATH)) return null
+  if (!/^mvs_[a-f0-9]{16,}$/i.test(mvsSessionId)) return null
+  return await new Promise((resolve) => {
+    const sql = `SELECT model, input_tokens, output_tokens, cache_read_tokens, ts FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' AND model IS NOT NULL AND model != '' ORDER BY ts DESC LIMIT 1`
+    const child = spawn(SQLITE3_BIN, [MAVIS_DB_PATH, '-readonly', sql], { windowsHide: true })
+    let stdout = ''
+    const timer = setTimeout(() => { try { child.kill() } catch {} }, 5000)
+    child.stdout?.on('data', (d) => { stdout += d.toString('utf8') })
+    child.on('error', () => { clearTimeout(timer); resolve(null) })
+    child.on('exit', (code) => {
+      clearTimeout(timer)
+      if (code !== 0) { resolve(null); return }
+      const parts = stdout.trim().split('|')
+      if (parts.length < 5) { resolve(null); return }
+      resolve({ model: parts[0], input: Number(parts[1]), output: Number(parts[2]), cacheRead: Number(parts[3]), ts: Number(parts[4]) })
+    })
+  })
+}
+
+// v0.5.bx-10: model 真实 context limit — 从 mcode cli.js bundle 硬编码提取
+//   数据源: cli.js h7i={"MiniMax-M3":{limit:{context:512e3,...}}, "MiniMax-M2.7":{limit:{context:2e5,...}}}
+//   mavis 不知道 model context, webui 必须自己查 (避免硬编码漂移)
+//   输入: 'minimax_api/MiniMax-M3' 或 'MiniMax-M3', 输出: 512000 / 200000 / 0(unknown)
+const MCODE_MODEL_LIMITS = {
+  'MiniMax-M3': 512000,
+  'MiniMax-M2.7': 200000,
+  'MiniMax-M2.7-highspeed': 200000,
+  // 兜底: 128k, 200k, 512k 几个常见值
+}
+function getMcodeModelLimit(modelFullName) {
+  if (!modelFullName) return 0
+  // 'minimax_api/MiniMax-M3' → 'MiniMax-M3'
+  const short = modelFullName.includes('/') ? modelFullName.split('/').pop() : modelFullName
+  if (MCODE_MODEL_LIMITS[short]) return MCODE_MODEL_LIMITS[short]
+  // 模糊匹配: MiniMax-M2.7-highspeed 应该匹配 M2.7 的 200k
+  for (const k of Object.keys(MCODE_MODEL_LIMITS)) {
+    if (short.startsWith(k) || k.startsWith(short)) return MCODE_MODEL_LIMITS[k]
+  }
+  return 0
+}
+
 // v0.5.ai: /usage 改成 per-cid — 每个 webui tab 自己的 usage
 async function runUsageQuery(cs, cid) {
   try {
@@ -543,12 +765,20 @@ function runMcodeExec(prompt, opts = {}) {
   const cs = opts.cs  // v0.5.ai: per-cid state
   const cid = opts.cid
 
+  // v0.5.bx-19: webui 端 permission 模式同步到 mcode — 之前硬编码 'full' 导致 "始终询问" 不生效
+  //   webui 'Ask' → mcode 'ask' / 'Auto' → 'auto' / 'Read' → 'read' / 'Full access' → 'full'
+  const webuiMode = (cs && cs.permissions) || 'Full access'
+  const mcodePermission = webuiMode === 'Ask' ? 'ask'
+    : webuiMode === 'Auto' ? 'auto'
+    : webuiMode === 'Read' ? 'read'
+    : 'full'
+
   const args = [
     '/c', MCODE_CMD, 'exec',
     '--input', '-',
     '--input-format', 'text',
     '--cwd', workspace,
-    '--permission', 'full',
+    '--permission', mcodePermission,
     '--timeout', timeout,
     '--output-format', 'stream-json',
     '--max-steps', String(maxSteps),
@@ -648,10 +878,34 @@ function collectExecResult(childPromise) {
         cs.context.tokens = (cs.context.tokens || 0) + (r.usage.totalTokens || 0)
         cs.context.used = cs.context.tokens
         cs.context.percent = cs.context.limit ? Math.round((cs.context.tokens / cs.context.limit) * 100) : 0
+        cs.context.estimated = false  // mcode 0.1.5+ 返真实值
         cs.context.lastUsageAt = Date.now()
         cs.usage.sessionInput = (cs.usage.sessionInput || 0) + (r.usage.inputTokens || 0)
         cs.usage.sessionOutput = (cs.usage.sessionOutput || 0) + (r.usage.outputTokens || 0)
         cs.usage.sessionTotal = cs.usage.sessionInput + cs.usage.sessionOutput
+      } else if (r.answer || r.thinking) {
+        // v0.5.bx-9: mcode 0.1.4 acp 不返 usage / 不发 usage_update, 用 thinking + answer 长度粗略估算 token
+        //   估算系数: ~3 字符/token (中英文混合经验值, GPT tokenizer ~4 字符/token, 中文偏密 ~1.5 字符/token)
+        //   注意: input 算 user prompt + 上文, 我们没访问 — 只能估 output (thinking+answer) + 累加 user input
+        //   mcode 0.1.5+ 暴露真值后, r.usage 分支会优先, 估算自动失效
+        const outText = (r.thinking || '') + (r.answer || '')
+        const estOutTokens = Math.ceil(outText.length / 3)
+        // 估算 user input 长度 — 我们能从 cs.chat 知道上一次 user prompt 长度
+        const lastUserLine = [...(cs.chat || [])].reverse().find(l => typeof l === 'string' && l.startsWith('› '))
+        const userLen = lastUserLine ? lastUserLine.length : 0
+        const estInTokens = Math.ceil(userLen / 3)
+        const estTotal = estOutTokens + estInTokens
+        cs.context.tokens = (cs.context.tokens || 0) + estTotal
+        cs.context.used = cs.context.tokens
+        cs.context.estimated = true  // 标记是估算的 (mcode 0.1.4 限制)
+        cs.context.percent = cs.context.limit ? Math.round((cs.context.tokens / cs.context.limit) * 100) : 0
+        cs.context.lastUsageAt = Date.now()
+        cs.usage.sessionInput = (cs.usage.sessionInput || 0) + estInTokens
+        cs.usage.sessionOutput = (cs.usage.sessionOutput || 0) + estOutTokens
+        cs.usage.sessionTotal = cs.usage.sessionInput + cs.usage.sessionOutput
+        if (process.env.MCODE_USAGE_DEBUG) {
+          console.log(`[usage.estimate] outLen=${outText.length} estOut=${estOutTokens} userLen=${userLen} estIn=${estInTokens} total=${estTotal} (mcode 0.1.4 不返 usage, 用估算)`)
+        }
       }
       if (r.sessionId) cs.mcodeSessionId = r.sessionId
       pushStateFor(cid)
@@ -672,12 +926,21 @@ function collectExecResult(childPromise) {
 // v0.5.ah: 走 mcode acp 协议 — 替代 mcode exec 的流式
 // v0.5.ai: per-cid — opts.cs/cs.cid
 // v0.5.al: 读 cs.workspace.dir（per-cid 可改）— 没有时 fallback DEFAULT_WORKSPACE
+// v0.5.bx-19: 如果 webui 端 permission 不是 'Full access', mcode acp 协议层没暴露 permission push,
+//   fallback 到 mcode exec (支持 --permission ask/full/auto/off 标志)
 async function runMcodeAcp(content, opts = {}) {
   const label = opts.label || 'prompt'
   const existingSid = opts.sessionId || null
   const cs = opts.cs
   const cid = opts.cid
   const workspace = (cs && cs.workspace && cs.workspace.dir) || DEFAULT_WORKSPACE
+  // v0.5.bx-19: 非 full permission fallback 到 exec (acp 协议不支持 permission push)
+  if (cs && cs.permissions && cs.permissions !== 'Full access') {
+    const modelToUse = (cs.model && cs.model.name) || DEFAULT_MODEL
+    return await collectExecResult(runMcodeExec(content, {
+      label: 'prompt', sessionId: existingSid, model: modelToUse, cs, cid
+    }))
+  }
   const client = new McodeAcpClient({ debug: false })
   let sid = existingSid
   try {
@@ -749,12 +1012,90 @@ function streamAcpPrompt(client, sid, content, label, cs, cid) {
         cs.usage.sessionInput = (cs.usage.sessionInput || 0) + (r.usage.inputTokens || 0)
         cs.usage.sessionOutput = (cs.usage.sessionOutput || 0) + (r.usage.outputTokens || 0)
         cs.usage.sessionTotal = cs.usage.sessionInput + cs.usage.sessionOutput
+        cs.context.estimated = false  // mcode 0.1.5+ 真实值
+      } else if (r.answer || r.thinking) {
+        // v0.5.bx-9: mcode 0.1.4 acp 不返 usage / 不发 usage_update, 用 thinking + answer 长度粗略估算 token
+        //   估算系数: ~3 字符/token (中英文混合经验值, GPT tokenizer ~4 字符/token, 中文偏密 ~1.5 字符/token)
+        //   注意: input 算 user prompt + 上文, 我们没访问 — 只能估 output (thinking+answer) + 累加 user input
+        //   mcode 0.1.5+ 暴露真值后, r.usage 分支会优先, 估算自动失效
+        const outText = (r.thinking || '') + (r.answer || '')
+        const estOutTokens = Math.ceil(outText.length / 3)
+        // v0.5.bx-9: user input 估算 — 从 cs.chat 找最近一条 `› ` 开头的 user line
+        const lastUserLine = [...(cs.chat || [])].reverse().find(l => typeof l === 'string' && l.startsWith('› '))
+        const userLen = lastUserLine ? lastUserLine.length : 0
+        const estInTokens = Math.ceil(userLen / 3)
+        const estTotal = estOutTokens + estInTokens
+        cs.context.tokens = (cs.context.tokens || 0) + estTotal
+        cs.context.used = cs.context.tokens
+        cs.context.percent = cs.context.limit ? Math.round((cs.context.tokens / cs.context.limit) * 100) : 0
+        cs.context.lastUsageAt = Date.now()
+        cs.usage.sessionInput = (cs.usage.sessionInput || 0) + estInTokens
+        cs.usage.sessionOutput = (cs.usage.sessionOutput || 0) + estOutTokens
+        cs.usage.sessionTotal = cs.usage.sessionInput + cs.usage.sessionOutput
+        cs.context.estimated = true  // 标记是估算的 (mcode 0.1.4 限制)
+        if (process.env.MCODE_USAGE_DEBUG) {
+          console.log(`[usage.estimate.acp] cid=${cid} outLen=${outText.length} estOut=${estOutTokens} userLen=${userLen} estIn=${estInTokens} total=${estTotal} (mcode 0.1.4 不返 usage, 用估算)`)
+        }
       }
       // v0.5.bx-7: debug — 看 mcode 0.1.4 实际给的 usage 数据
       if (process.env.MCODE_USAGE_DEBUG) {
         console.log(`[finalize.usage] cid=${cid} r.usage=${JSON.stringify(r.usage)} r.answerLen=${(r.answer || '').length} r.thinkingLen=${(r.thinking || '').length}`)
       }
       if (r.sessionId) cs.mcodeSessionId = r.sessionId
+      // v0.5.bx-10: fire-and-forget 从 mavis db 拿真值覆盖估算
+      //   mavis hook 在 mcode acp 完成后会写 local_runtime_token_usage row
+      //   等 400ms 让 mavis 落盘, 然后查 db 拿真值
+      //   如果 mavis db 没有数据 (rows=0), 保留估算 + 标 estimated=true
+      //   如果有真值, 用真值覆盖 (estimated=false)
+      if (r.sessionId) {
+        const mavisSid = r.sessionId
+        setTimeout(() => {
+          // 二次 query: 先看 mavis 写了没
+          getMavisTokenUsage(mavisSid).then((mavisUsage) => {
+            if (!mavisUsage || mavisUsage.rows === 0) {
+              if (process.env.MCODE_USAGE_DEBUG) console.log(`[usage.mavis] cid=${cid} sid=${mavisSid} no data in db, keep estimate`)
+              return
+            }
+            // 拿到 mavis 真值 — 用整个 session 的累加替换估算
+            // v0.5.bx-10 fix: cache_read / cache_write 是 input 的子集, 不应该加进 context
+            //   context_used = input + output + reasoning (input 已经包含 cache 部分)
+            //   之前加 cache 会让数字虚高 (input=42k + cacheRead=210k = 252k, 实际只用 42k)
+            const oldEstimated = cs.context.estimated
+            const newTokens = mavisUsage.totalInput + mavisUsage.totalOutput + mavisUsage.totalReasoning
+            cs.context.tokens = newTokens
+            cs.context.used = newTokens
+            // v0.5.bx-10: 按 model 查真实 context limit (mcode cli.js 硬编码: MiniMax-M3=512k, M2.7*=200k)
+            const modelName = cs.model && cs.model.name || DEFAULT_MODEL
+            const realLimit = getMcodeModelLimit(modelName)
+            if (realLimit) cs.context.limit = realLimit
+            cs.context.percent = cs.context.limit ? Math.round((newTokens / cs.context.limit) * 100) : 0
+            cs.context.estimated = false  // 真值
+            cs.context.usageSource = 'mavis-db'  // 标记数据源
+            cs.usage.sessionInput = mavisUsage.totalInput
+            cs.usage.sessionOutput = mavisUsage.totalOutput
+            cs.usage.sessionCacheRead = mavisUsage.totalCacheRead
+            cs.usage.sessionCacheWrite = mavisUsage.totalCacheWrite
+            cs.usage.sessionReasoning = mavisUsage.totalReasoning
+            cs.usage.sessionTotal = mavisUsage.totalInput + mavisUsage.totalOutput
+            // v0.5.bx-20: 真实 cache 命中率 — 累计 cache_read / (input + cache_read)
+            cs.usage.sessionCacheHitRate = mavisUsage.cacheHitRate || 0
+            cs.usage.lastMavisUpdate = Date.now()
+            // 拿 model 名
+            getMavisTokenUsageModel(mavisSid).then((m) => {
+              if (m && m.model) {
+                cs.usage.mavisModel = m.model
+                cs.usage.mavisModelAt = Date.now()
+              }
+              pushStateFor(cid)
+            }).catch(() => pushStateFor(cid))
+            if (process.env.MCODE_USAGE_DEBUG) {
+              console.log(`[usage.mavis] cid=${cid} sid=${mavisSid} rows=${mavisUsage.rows} in=${mavisUsage.totalInput} out=${mavisUsage.totalOutput} cacheRead=${mavisUsage.totalCacheRead} cacheWrite=${mavisUsage.totalCacheWrite} (覆盖估算 oldEstimated=${oldEstimated})`)
+            }
+          }).catch((e) => {
+            if (process.env.MCODE_USAGE_DEBUG) console.warn(`[usage.mavis] cid=${cid} error: ${e.message}`)
+          })
+        }, 400)
+      }
       // v0.5.bx: prompt 完成后用 mcodeSessionId 反查 mcode 真实 title
       // 数据源：mcode TUI 自动生成的标题（比 webui 截断首句更准）
       if (r.sessionId) {
@@ -1116,6 +1457,57 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
     return res.end(JSON.stringify({ ok: true, session: item }))
   }
 
+  // v0.5.bx-19: POST /api/sessions/cleanup-orphans — 一键清理 mcode session
+  //   ?scope=orphans (default) 只删 webui db 没关联的 mcode session
+  //   ?scope=all 删所有 mcode session (包括 webui 关联的, 同步清掉 webui entry)
+  //   两种都保护 active mcode session (cs.mcodeSessionId)
+  if (req.method === 'POST' && pathname === '/api/sessions/cleanup-orphans') {
+    const url = new URL(req.url, 'http://localhost')
+    // v0.5.bx-19 (改 #2): 不按 webui workspace 过滤, 列所有 mcode session (跨 workspace)
+    //   之前用 cs.workspace.dir 过滤, 看不到其他 workspace 的孤儿 session
+    const scope = url.searchParams.get('scope') || 'orphans'
+    const mcodeSessList = await listAllMcodeSessions()
+    const all = loadSessions()
+    const webuiLinkedMcodeSids = new Set(all.filter(s => s.mcodeSessionId).map(s => s.mcodeSessionId))
+    // 保护: 跳过 active session
+    const protectedSids = new Set()
+    if (cs && cs.mcodeSessionId) protectedSids.add(cs.mcodeSessionId)
+
+    let targets
+    if (scope === 'all') {
+      // 全清 — 跳过 protected (active session)
+      targets = mcodeSessList.filter(s => !protectedSids.has(s.sessionId))
+    } else {
+      // orphans — 跳过 webui 关联 + protected
+      targets = mcodeSessList.filter(s => !webuiLinkedMcodeSids.has(s.sessionId) && !protectedSids.has(s.sessionId))
+    }
+    const result = { scope, total: mcodeSessList.length, targets: targets.length, deleted: 0, deletedWebui: 0, failed: 0, log: [] }
+    console.log(`[cleanup-orphans] cid=${cid} scope=${scope} total=${result.total} targets=${result.targets} (linked=${webuiLinkedMcodeSids.size} protected=${protectedSids.size})`)
+    for (const o of targets) {
+      // scope=all 时同步删 webui session entry
+      if (scope === 'all') {
+        const webuiIdx = all.findIndex(s => s.mcodeSessionId === o.sessionId)
+        if (webuiIdx >= 0) {
+          all.splice(webuiIdx, 1)
+          result.deletedWebui++
+        }
+      }
+      const r = deleteMcodeSessionFromDb(o.sessionId)
+      if (r.ok) {
+        result.deleted++
+        result.log.push({ sid: o.sessionId, title: o.title, ok: true })
+      } else {
+        result.failed++
+        result.log.push({ sid: o.sessionId, title: o.title, ok: false, error: r.reason || r.error })
+      }
+    }
+    if (scope === 'all' && result.deletedWebui > 0) saveSessions(all)
+    invalidateMcodeSessionsCache()
+    pushStateFor(cid)
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify({ ok: true, ...result }))
+  }
+
   // POST /api/sessions/switch — 切换到指定 session（点击 sidebar item）
   // v0.5.bv: 接受 mcode session id 查找（mvs_xxx）— 优先按 mcodeSessionId 匹配，否则按 webui sessionId
   if (req.method === 'POST' && pathname === '/api/sessions/switch') {
@@ -1179,6 +1571,47 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
       cs.workspace = { dir: targetWs, branch: null, tree: null }
     }
     resetContext(cs)
+    // v0.5.bx-10: 切到历史 session 时立即从 mavis db 拉真实 token usage
+    //   之前要等用户发新 prompt 才触发 fire-and-forget, 现在切 session 就触发
+    //   不然右栏 context 一直显示 0/0% (用户反馈"切到历史对话不加载")
+    if (cs.mcodeSessionId) {
+      const switchedSid = cs.mcodeSessionId
+      getMavisTokenUsage(switchedSid).then((mavisUsage) => {
+        if (!mavisUsage || mavisUsage.rows === 0) {
+          if (process.env.MCODE_USAGE_DEBUG) console.log(`[switch.mavis] cid=${cid} sid=${switchedSid} no data, context stays empty`)
+          return
+        }
+        const newTokens = mavisUsage.totalInput + mavisUsage.totalOutput + mavisUsage.totalReasoning
+        cs.context.tokens = newTokens
+        cs.context.used = newTokens
+        const modelName = cs.model && cs.model.name || DEFAULT_MODEL
+        const realLimit = getMcodeModelLimit(modelName)
+        if (realLimit) cs.context.limit = realLimit
+        cs.context.percent = cs.context.limit ? Math.round((newTokens / cs.context.limit) * 100) : 0
+        cs.context.estimated = false
+        cs.context.usageSource = 'mavis-db'
+        cs.usage.sessionInput = mavisUsage.totalInput
+        cs.usage.sessionOutput = mavisUsage.totalOutput
+        cs.usage.sessionCacheRead = mavisUsage.totalCacheRead
+        cs.usage.sessionCacheWrite = mavisUsage.totalCacheWrite
+        cs.usage.sessionReasoning = mavisUsage.totalReasoning
+        cs.usage.sessionTotal = mavisUsage.totalInput + mavisUsage.totalOutput
+        // v0.5.bx-20: 真实 cache 命中率 — 累计 cache_read / (input + cache_read)
+        cs.usage.sessionCacheHitRate = mavisUsage.cacheHitRate || 0
+        cs.usage.lastMavisUpdate = Date.now()
+        // 拿 model 名 (mavis db 可能没记, 拿不到就算了)
+        getMavisTokenUsageModel(switchedSid).then((m) => {
+          if (m && m.model) {
+            cs.usage.mavisModel = m.model
+            cs.usage.mavisModelAt = Date.now()
+          }
+          pushStateFor(cid)
+        }).catch(() => pushStateFor(cid))
+        console.log(`[switch.mavis] cid=${cid} sid=${switchedSid} rows=${mavisUsage.rows} in=${mavisUsage.totalInput} out=${mavisUsage.totalOutput} (历史 session 加载真值)`)
+      }).catch((e) => {
+        if (process.env.MCODE_USAGE_DEBUG) console.warn(`[switch.mavis] cid=${cid} error: ${e.message}`)
+      })
+    }
     pushStateFor(cid)
     console.log(`[switch] cid=${cid} OK prev.sessionId=${prevSid ? prevSid.substring(0, 8) : 'null'}… → new.sessionId=${cs.sessionId.substring(0, 8)}… prev.mcodeSid=${prevMcodeSid ? prevMcodeSid.substring(0, 12) : 'null'}… → new.mcodeSid=${cs.mcodeSessionId ? cs.mcodeSessionId.substring(0, 12) : 'null'}… title="${cs.sessionTitle}" chatLen=${cs.chat.length}`)
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -1188,6 +1621,7 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
   // DELETE /api/sessions/:id — 删一个 session
   // v0.5.bx-5: 也接受 mcode session id (mvs_xxx) — 孤儿 webui-mcode session 的 X 按钮传的就是 mvs_xxx
   //   优先按 webui id 匹配；找不到再按 mcodeSessionId 匹配（兼容 sidebar kind='webui-mcode' 的孤儿条目）
+  // v0.5.bx-19: 找不到时, 如果 id 是 mvs_xxx, 当孤儿 mcode session 处理 — 直接 SQL 删 mcode db
   if (req.method === 'DELETE' && pathname.startsWith('/api/sessions/') && pathname.length > '/api/sessions/'.length) {
     const id = pathname.slice('/api/sessions/'.length)
     if (!id) {
@@ -1202,14 +1636,45 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
       idx = all.findIndex((s) => s.mcodeSessionId === id)
       if (idx >= 0) matchKind = 'mcodeSessionId'
     }
+    // v0.5.bx-19: 兜底 — webui session db 找不到, 但 id 是 mvs_xxx → 当孤儿 mcode session 直接 SQL 删
     if (idx < 0) {
-      console.log(`[delete] cid=${cid} 404 id=${id.substring(0, 12)}… not found (by webuiId or mcodeSessionId)`)
+      if (/^mvs_[a-f0-9]{32}$/.test(id)) {
+        const mcodeDbDel = deleteMcodeSessionFromDb(id)
+        console.log(`[delete] cid=${cid} ORPHAN mcode session sid=${id.substring(0, 12)}… ok=${mcodeDbDel.ok} ${mcodeDbDel.log || mcodeDbDel.reason || mcodeDbDel.error || ''}`)
+        if (mcodeDbDel.ok) {
+          // 孤儿 mcode session 删成功 — 也清掉 webui session db 里所有引用它的 webui entry
+          //   (如果存在, mcodeSessionId == id, 但前面 idx 没找到, 说明 webui db 里没这个 entry)
+          if (cs.mcodeSessionId === id) {
+            cs.mcodeSessionId = null
+            cs.sessionId = null
+            cs.sessionTitle = 'Untitled'
+            cs.chat = []
+            resetContext(cs)
+            pushStateFor(cid)
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+          return res.end(JSON.stringify({ ok: true, deleted: id, matchKind: 'orphan_mcode', mcodeDbDel }))
+        }
+        // mcode db 操作失败
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        return res.end(JSON.stringify({ ok: false, error: 'orphan mcode delete failed', mcodeDbDel }))
+      }
+      console.log(`[delete] cid=${cid} 404 id=${id.substring(0, 12)}… not found (by webuiId or mcodeSessionId or orphan_mcode)`)
       res.writeHead(404, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify({ ok: false, error: 'session not found' }))
     }
     const deletedItem = all[idx]
     all.splice(idx, 1)
     saveSessions(all)
+    // v0.5.bx-19: 同步删 mcode 端 session — mcode 0.1.4 acp `session/delete` 返回 "Method not found",
+    //   只能直接 SQL 删 local_runtime_sessions 等关联表
+    //   不这么做的话, reload 后 listMcodeSessions 又把孤儿 session 拉回来, 标题又出现
+    const mcodeSid = deletedItem.mcodeSessionId
+    let mcodeDbDel = null
+    if (mcodeSid) {
+      mcodeDbDel = deleteMcodeSessionFromDb(mcodeSid)
+      console.log(`[delete] cid=${cid} mcode db delete sid=${mcodeSid.substring(0, 12)}… ok=${mcodeDbDel.ok} ${mcodeDbDel.log || mcodeDbDel.reason || mcodeDbDel.error || ''}`)
+    }
     // v0.5.bx-5: 当前会话可能是被删的 webui session，也可能是它的 mcode sibling
     if (cs.sessionId === id || cs.mcodeSessionId === id) {
       cs.sessionId = null
@@ -1220,9 +1685,9 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
       resetContext(cs)
     }
     pushStateFor(cid)
-    console.log(`[delete] cid=${cid} OK match=${matchKind} deleted.webuiId=${deletedItem.id.substring(0, 8)}… deleted.mcodeSid=${deletedItem.mcodeSessionId ? deletedItem.mcodeSessionId.substring(0, 12) : 'null'}… title="${(deletedItem.title || '').substring(0, 30)}" remaining=${all.length}`)
+    console.log(`[delete] cid=${cid} OK match=${matchKind} deleted.webuiId=${deletedItem.id.substring(0, 8)}… deleted.mcodeSid=${mcodeSid ? mcodeSid.substring(0, 12) : 'null'}… title="${(deletedItem.title || '').substring(0, 30)}" remaining=${all.length}`)
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-    return res.end(JSON.stringify({ ok: true, deleted: id, matchKind, remaining: all.length }))
+    return res.end(JSON.stringify({ ok: true, deleted: id, matchKind, remaining: all.length, mcodeDbDel }))
   }
 
   // POST /api/upload — save file
@@ -1268,18 +1733,22 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
     for await (const chunk of req) body += chunk
     let payload
     try { payload = JSON.parse(body || '{}') } catch { payload = {} }
-    const content = (payload.content || '').trim()
+    let content = (payload.content || '').trim()
     if (!content) {
       res.writeHead(400, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify({ ok: false, error: 'content required' }))
     }
+    // v0.5.bx-13: ask_user 弹窗答案 — 不当 user message 加到 chat (避免 LLM 回显 Q/A)
+    const isAskAnswer = payload.isAskAnswer === true
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: true }))
 
-    // v0.5.ai: per-cid — 操作 cs
-    cs.chat = [...(cs.chat || []), `› ${content}`]
-    pushStateFor(cid)
-    persistCurrentChat(cs)
+    // v0.5.ai: per-cid — 操作 cs (ask 答案跳过, chat 保持干净)
+    if (!isAskAnswer) {
+      cs.chat = [...(cs.chat || []), `› ${content}`]
+      pushStateFor(cid)
+      persistCurrentChat(cs)
+    }
 
     // v0.5.ak: 发首条消息时如果 cs.sessionId 为空，先建一个 webui session entry
     //   之前 persistCurrentChat 在 sessionId==null 时 early return，session 永远不入库
@@ -1297,10 +1766,75 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
     // — 那边有 30s cache + mcode 自己的总结算法（"Ponkan 自我介绍" / "用 glob 统计 .js 文件数量" 等）
 
     // Detect slash commands that we can satisfy without spawning mcode
-    const slashMatch = content.match(/^\/(\w+)\b\s*(.*)/)
+    // v0.5.bx-15: cmd 接受字母数字 + 连字符 (支持 /goal-done, /goal-blocked)
+    const slashMatch = content.match(/^\/([a-zA-Z][\w-]*)\b\s*(.*)/)
     if (slashMatch) {
       const cmd = slashMatch[1]
       const rest = slashMatch[2] || ''
+      // v0.5.bx-15: /goal <text> — webui 端设 goal, 显示在右栏 "目标" section
+      //   mcode 0.1.4 LLM 没有 create_goal 工具, webui 直接设 cs.goal
+      //   之后用户发新 prompt, mcode 看到 cs.goal.text 知道目标, 完成用 update_goal 标 complete
+      // v0.5.bx-22 (改): 不要 return — 改写 content 为 goal text, 让 mcode 真正收到并开始执行
+      //   之前 return 导致 mcode 完全没收到 /goal 命令, user 看到 "已设目标" 就停, 实际 mcode 啥都没干
+      //   改后: webui 设 goal + 把 user 消息 (/goal xxx) 改写成 (xxx) 发给 mcode, mcode 当 user request 真开始干
+      //   chat history 也同步改: 把 pre-slash 的 '› /goal xxx' 替换成 '› xxx' (跟 mcode 收到的一致)
+      if (cmd === 'goal') {
+        const goalText = rest.trim()
+        if (!goalText) {
+          const t = `● 用法: /goal <目标内容> — 在右栏 "目标" 区设一个目标, 后续用 /goal-done 或 /goal-blocked 标记完成状态`
+          // pre-slash 已加 › /goal 行, 这里只加 system 响应
+          cs.chat = [...(cs.chat || []), t]
+          pushStateFor(cid)
+          persistCurrentChat(cs)
+          return
+        }
+        cs.goal = {
+          active: true,
+          text: goalText,
+          status: 'in_progress',
+          duration: null,
+          startTs: Date.now(),
+        }
+        // pre-slash 之前加了 '› /goal ${goalText}' 行 (line 1748), 这里替换成 '› ${goalText}' (跟 mcode 实际收到的对齐)
+        if (!isAskAnswer && Array.isArray(cs.chat) && cs.chat.length > 0) {
+          const last = cs.chat[cs.chat.length - 1]
+          if (last === `› /goal ${goalText}` || last === `› /goal ${rest}` || last === `› ${content}`) {
+            cs.chat = [...cs.chat.slice(0, -1), `› ${goalText}`]
+          }
+        }
+        // 加 system 响应
+        cs.chat = [...(cs.chat || []), `● 已设目标: ${goalText} — 转发给 mcode 触发执行, 完成后用 /goal-done 标记 ✅`]
+        pushStateFor(cid)
+        persistCurrentChat(cs)
+        if (process.env.MCODE_USAGE_DEBUG) console.log(`[goal.set] cid=${cid} text="${goalText}"`)
+        // v0.5.bx-22: 改写 content 为 goal text, 继续走 mcode 调用 (不 return!)
+        content = goalText
+        // 继续走 (不 return)
+      }
+      // v0.5.bx-15: /goal-done 或 /goal-blocked — 手动标 goal 状态
+      if (cmd === 'goal-done' || cmd === 'goal-blocked') {
+        if (!cs.goal || !cs.goal.active) {
+          const t = `● 当前没有 active 目标, 用 /goal <内容> 先设一个`
+          // pre-slash 已加 › /${cmd} 行
+          cs.chat = [...(cs.chat || []), t]
+          pushStateFor(cid)
+          persistCurrentChat(cs)
+          return
+        }
+        const newStatus = cmd === 'goal-done' ? 'complete' : 'blocked'
+        cs.goal = {
+          ...cs.goal,
+          active: false,
+          status: newStatus,
+          duration: cs.goal.startTs ? Date.now() - cs.goal.startTs : null,
+        }
+        // pre-slash 已加 › /${cmd} 行
+        cs.chat = [...(cs.chat || []), `● 目标已标 ${newStatus === 'complete' ? '完成 ✅' : '阻塞 ⛔'}: ${cs.goal.text || ''}`]
+        pushStateFor(cid)
+        persistCurrentChat(cs)
+        if (process.env.MCODE_USAGE_DEBUG) console.log(`[goal.${newStatus}] cid=${cid}`)
+        return
+      }
       if (cmd === 'clear' || cmd === 'new') {
         if (cmd === 'new') {
           const all = loadSessions()
@@ -1333,15 +1867,7 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
         pushStateFor(cid)
         return
       }
-      if (cmd === 'usage' || cmd === 'sessions' || cmd === 'help') {
-        if (cmd === 'sessions') {
-          const all = loadSessions()
-          const t = `● 最近 ${all.length} 个会话：\n` + all.slice(0, 8).map((s, i) => `  ${i+1}. ${s.title} (${s.id.substring(0, 8)}…)`).join('\n')
-          cs.chat = [...cs.chat, `› /sessions`, t]
-          pushStateFor(cid)
-          persistCurrentChat(cs)
-          return
-        }
+      if (cmd === 'usage' || cmd === 'help') {
         if (cmd === 'help') {
           // v0.5.ak: 真实命令（webui 本地 + mcode 真实支持），lazy init
           const cmds = await ensureMcodeCommands()
@@ -1422,6 +1948,56 @@ code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 14p
     res.end(JSON.stringify({ ok: true }))
     await runUsageQuery(cs, cid)
     return
+  }
+
+  // v0.5.bx-10: GET /api/usage-real — 手动从 mavis db 拉真实 token usage
+  //   按 cs.mcodeSessionId 过滤 local_runtime_token_usage
+  //   返回 { sid, rows, totalInput, totalOutput, totalCacheRead, totalCacheWrite, model, found }
+  //   sid 为空或 db 查不到 → found:false
+  if (req.method === 'GET' && pathname === '/api/usage-real') {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+    const sid = cs.mcodeSessionId || url.searchParams.get('sid') || null
+    if (!sid) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      return res.end(JSON.stringify({ ok: true, found: false, reason: 'no mcode session id yet' }))
+    }
+    const usage = await getMavisTokenUsage(sid)
+    const model = await getMavisTokenUsageModel(sid)
+    if (!usage) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      return res.end(JSON.stringify({ ok: true, found: false, sid, dbPath: MAVIS_DB_PATH, dbExists: existsSync(MAVIS_DB_PATH) }))
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify({
+      ok: true, found: true, sid,
+      rows: usage.rows,
+      totalInput: usage.totalInput,
+      totalOutput: usage.totalOutput,
+      totalCacheRead: usage.totalCacheRead,
+      totalCacheWrite: usage.totalCacheWrite,
+      totalReasoning: usage.totalReasoning,
+      // v0.5.bx-10 fix: context 实际是 input + output + reasoning (cache 是 input 子集)
+      contextUsed: usage.totalInput + usage.totalOutput + usage.totalReasoning,
+      model: model && model.model || null,
+      modelLimit: getMcodeModelLimit(cs.model && cs.model.name),
+      firstTs: usage.firstTs, lastTs: usage.lastTs,
+      dbPath: MAVIS_DB_PATH,
+    }))
+  }
+
+  // v0.5.bx-14: POST /api/answer — 老 ask/plan/perm 弹窗还在调 (旧 modal 删了但 plan/perm 还在用)
+  //   接受 {type: 'ask'|'plan'|'planmode'|'permission', option, text} → 200 OK 占位
+  //   老的 ask 已用 /api/send(isAskAnswer:true) 替代, 这里只兜底 plan/perm
+  if (req.method === 'POST' && pathname === '/api/answer') {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    let payload = {}
+    try { payload = JSON.parse(body || '{}') } catch {}
+    // 这里不真去 mcode, 旧 plan/perm 路径已经基本不用 (新 webui 走 /api/send)
+    // 返 200 OK 让 client 不报错
+    if (process.env.MCODE_USAGE_DEBUG) console.log(`[api.answer] type=${payload.type} option=${payload.option} (legacy, no-op)`)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    return res.end(JSON.stringify({ ok: true, deprecated: true, note: 'use /api/send for new flow' }))
   }
 
   // v0.5.bj: GET /api/models — 数据源：mcode 自带的 cli.js bundle（不是 webui 硬编码）
