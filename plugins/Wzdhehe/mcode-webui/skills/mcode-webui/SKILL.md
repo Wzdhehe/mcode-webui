@@ -1,6 +1,6 @@
 ---
 name: mcode-webui
-description: Browser-based chat frontend for the mcode agent runtime. Streams mcode acp / exec sessions with real-time tool events, plan review, ask-user prompts, context usage, and quota. Zero npm dependencies; runs on Node 22+. Trigger on: "open mcode webui", "start the mcode webui", "launch mcode browser", "mcode webui status", "show mcode webui url".
+description: 'Browser-based chat frontend for the mcode agent runtime. Streams mcode acp / exec sessions with real-time tool events, plan review, ask-user prompts, context usage, and quota. Zero npm dependencies; runs on Node 22+. Trigger on: "open mcode webui", "start the mcode webui", "launch mcode browser", "mcode webui status", "show mcode webui url".'
 ---
 
 # mcode Web UI
