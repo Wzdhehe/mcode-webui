@@ -19,7 +19,7 @@ landed on the development branch but are not yet cut into a release.
 
 - **`README.zh-CN.md`** — full Chinese translation of `README.md`,
   with a "命名说明" section explaining why the product is called
-  "mcode CLI 的 webui" (mcode is the upstream CLI; webui is the
+  "Mcode CLI 的 webui" (mcode is the upstream CLI; webui is the
   browser layer for it — the direction is CLI → webui, not the
   other way around).
 - **`CONTRIBUTING.md`** at the repo root — contribution workflow,
@@ -30,8 +30,8 @@ landed on the development branch but are not yet cut into a release.
 
 ### Changed
 
-- **`SKILL.md` moved** from `plugins/Wzdhehe/mcode-webui/SKILL.md`
-  to `plugins/Wzdhehe/mcode-webui/skills/mcode-webui/SKILL.md` to
+- **`SKILL.md` moved** from `plugins/Wzdhehe/Mcode-webui/SKILL.md`
+  to `plugins/Wzdhehe/Mcode-webui/skills/Mcode-webui/SKILL.md` to
   match the official Agent Plugins 1.0 `skills/` layout (the local
   `validate-plugin` mirror flagged this; the official registry
   gate is the same check).
@@ -71,7 +71,7 @@ landed on the development branch but are not yet cut into a release.
   link. The popover was removed entirely (the topbar LAN chip already
   shows + copies the access URL); LAN card now only toggles.
 - **Session delete left ~19k-row orphans per active session** — the
-  cross-delete covered 9 of 33 session-keyed tables in the mcode
+  cross-delete covered 9 of 33 session-keyed tables in the Mcode
   schema, missing `local_runtime_message_rows` (message bodies),
   `local_runtime_token_usage`, `local_runtime_pi_history_rows`, and
   more. Table list extended to 32 (all `local_runtime_*` tables with a
@@ -96,7 +96,7 @@ landed on the development branch but are not yet cut into a release.
 ### Added
 
 - `MCODE_RUNTIME_DB` env override — lets tests run the real-delete
-  path against a copy of the mcode runtime db instead of the live one.
+  path against a copy of the Mcode runtime db instead of the live one.
 - Historical port note: default port is 8080 (was 7890 before v0.5).
 
 ## v0.5.bx (2026-08-20) — Documentation rewrite
@@ -149,10 +149,10 @@ landed on the development branch but are not yet cut into a release.
 ### Notes
 
 - `docs/acp-goal-plan-status.md` kept as-is (archaeology only).
-- The plugin at `~\.minimax\plugins\mcode-webui\`
+- The plugin at `~\.minimax\plugins\Mcode-webui\`
   (the mavis-level install) was not updated in this pass; its
   `SKILL.md` is a different artifact (mavis skill format, with
-  the install steps for the mcode.ps1 shim injection).
+  the install steps for the Mcode.ps1 shim injection).
 - No code changes in this version — server, routes, libs, public/
   are all byte-identical to the previous `70e3555` commit. This
   is a docs-only release.

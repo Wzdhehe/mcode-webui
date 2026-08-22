@@ -77,7 +77,7 @@
 ```
 
 **外部依赖**：
-- mcode CLI：`~\.minimax-code\mcode.cmd` (acp 0.1.5)
+- Mcode CLI：`~\.minimax-code\mcode.cmd` (acp 0.1.5)
 - mavis desktop db：`~\.minimax\v2\sqlite\runtime-state.sqlite`（**别去动它**，670MB；测试用 `test/fixtures/v2/sqlite/runtime-state.sqlite`）
 - sqlite3 binary：`~\anaconda3\Library\bin\sqlite3.exe`（绝对路径，不在 PATH）
 

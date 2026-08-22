@@ -1,4 +1,4 @@
-# mcode Web UI
+# Mcode Web UI
 
 **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -11,7 +11,7 @@
 > 套餐用量右向展开，token 鉴权局域网，移动端响应。
 
 ```
-[浏览器 :8080] ←─ SSE /api/events ─ [Node server.js] ─ mcode acp / exec ─ [mcode CLI]
+[浏览器 :8080] ←─ SSE /api/events ─ [Node server.js] ─ mcode acp / exec ─ [Mcode CLI]
       │                                     │
       └──── REST /api/* ────────────────────┴── ~/.minimax/v2 sqlite（读 + 删会话）
 ```
@@ -40,9 +40,9 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/Wzdhehe/mcode-webui.git
-cd mcode-webui
-node server.js                 # mcode CLI 自动探测
+git clone https://github.com/Wzdhehe/Mcode-webui.git
+cd Mcode-webui
+node server.js                 # Mcode CLI 自动探测
 # → http://127.0.0.1:8080/     (局域网：http://<局域网IP>:8080/)
 
 # 在共享网络上推荐加 token：
@@ -82,31 +82,31 @@ webui 在 `mcode-rpc.js` 把这些列白名单 + 优雅降级（toast + 兜底�
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发环境、新增路由 / 命令 / 面板 |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | 常见报错 + 验证过的修法 |
 | [CHANGELOG.md](CHANGELOG.md) | 发布历史 |
-| [SECURITY-NOTES](plugins/Wzdhehe/mcode-webui/references/SECURITY-NOTES.md) | 安全披露（权威源） |
+| [SECURITY-NOTES](plugins/Wzdhehe/Mcode-webui/references/SECURITY-NOTES.md) | 安全披露（权威源） |
 
 ## 插件打包
 
-`plugins/Wzdhehe/mcode-webui/` 是 Agent Plugins 1.0 规范的产物，
+`plugins/Wzdhehe/Mcode-webui/` 是 Agent Plugins 1.0 规范的产物，
 会提交到[官方插件社区](https://github.com/MiniMax-AI/MiniMax-Code-Plugins)。
 
 ```bash
 npm run validate:plugin   # 契约检查（跟官方门禁镜像）
-npm run package:plugin    # dist/Wzdhehe/mcode-webui/ + .zip
+npm run package:plugin    # dist/Wzdhehe/Mcode-webui/ + .zip
 ```
 
 ## 贡献
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。`npm test`（302 个测试）
-和 `npm run lint` 必须保持全绿；插件树（`plugins/.../mcode-webui/`）
+和 `npm run lint` 必须保持全绿；插件树（`plugins/.../Mcode-webui/`）
 的副本与仓库根保持同步。
 
 ## 开源协议
 
-MIT —— 见 [LICENSE](plugins/Wzdhehe/mcode-webui/LICENSE)。
+MIT —— 见 [LICENSE](plugins/Wzdhehe/Mcode-webui/LICENSE)。
 
 ## 命名说明
 
-"mcode-webui" 这个名字里 "mcode" 是上游 CLI 工具名，"webui" 是
-它的 Web 界面后缀。所以 "mcode CLI 的 webui" = "mcode 这个命令行
+"Mcode-webui" 这个名字里 "mcode" 是上游 CLI 工具名，"webui" 是
+它的 Web 界面后缀。所以 "Mcode CLI 的 webui" = "mcode 这个命令行
 工具的 Web 界面"，不是 "mcode 命令行版的 Web 工具"。两者方向
 相反。
