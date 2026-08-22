@@ -99,3 +99,97 @@ export function formatResetTime(target) {
   if (target.getDay() === 0) return `周日 ${hm}`
   return hm
 }
+
+// ---- batch 4 step 2 additions (from main.js) ----
+
+// ============================================================
+// Debug log (in-page) — v0.5.bx-NN
+// 默认收起 (hidden), 首次报错自动弹出; 用户可关闭; 关闭后只显小红点提示
+// ============================================================
+export const __DBG = (() => {
+  const buf = []
+  const MAX = 30
+  const panel = () => document.getElementById('debug-log-panel')
+  const pre = () => document.getElementById('debug-log')
+  const titleEl = () => document.getElementById('debug-log-title')
+
+  const flush = () => {
+    const el = pre()
+    if (el) el.textContent = buf.map(e => `[${e.t}] ${e.msg}`).join('\n')
+  }
+  const hasError = () => buf.some(e => /^❌/.test(e.msg))
+  const updateBadge = () => {
+    const p = panel()
+    if (!p) return
+    // 报错时: 自动展开面板 (除非用户主动收起过)
+    if (hasError() && !p.dataset.userClosed) {
+      p.hidden = false
+    }
+    if (titleEl()) {
+      const errCount = buf.filter(e => /^❌/.test(e.msg)).length
+      titleEl().textContent = errCount > 0
+        ? `📋 webui log (${errCount} ❌ + ${buf.length - errCount} info)`
+        : `📋 webui log (${buf.length} lines)`
+    }
+  }
+  const log = (msg) => {
+    const t = new Date().toTimeString().slice(0, 8)
+    buf.push({ t, msg: String(msg) })
+    if (buf.length > MAX) buf.shift()
+    flush()
+    updateBadge()
+    try { console.log('[webui]', msg) } catch {}
+  }
+  return { log, buf, flush, hasError, updateBadge, panel }
+})()
+window.__DBG = __DBG
+window.addEventListener('error', (e) => {
+  __DBG.log('❌ERR: ' + (e.error?.message || e.message) + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?') + ':' + (e.colno || '?'))
+})
+window.addEventListener('unhandledrejection', (e) => {
+  __DBG.log('❌REJ: ' + (e.reason?.message || e.reason?.toString() || e.reason))
+})
+document.addEventListener('DOMContentLoaded', () => {
+  // copy: 全部 buffer → clipboard
+  document.getElementById('debug-log-copy')?.addEventListener('click', () => {
+    const txt = __DBG.buf.map(e => `[${e.t}] ${e.msg}`).join('\n')
+    navigator.clipboard?.writeText(txt).then(() => __DBG.log('✓ copied ' + __DBG.buf.length + ' lines'))
+  })
+  // clear: 清空 buffer (不隐藏面板, 让用户看到空状态)
+  document.getElementById('debug-log-clear')?.addEventListener('click', () => {
+    __DBG.buf.length = 0
+    __DBG.flush()
+    __DBG.updateBadge()
+  })
+  // close: 隐藏面板 + 标记 user-closed, 不再自动展开
+  document.getElementById('debug-log-close')?.addEventListener('click', () => {
+    const p = document.getElementById('debug-log-panel')
+    if (p) { p.hidden = true; p.dataset.userClosed = '1' }
+  })
+  // 调试入口: 在 console 输 __DBG.show() 可手动展开
+  __DBG.show = () => { const p = __DBG.panel(); if (p) { p.hidden = false; delete p.dataset.userClosed } }
+  // URL 里有 ?debug=1 时强制显示 (开发用)
+  try {
+    if (new URLSearchParams(window.location.search).get('debug') === '1') {
+      __DBG.show()
+    }
+  } catch {}
+})
+
+// 权限模式图标（按当前 permissions 状态切换）
+// shield=完全访问 / help=询问 / check=自动 / eye=只读
+export const MODE_ICONS = {
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+}
+
+export function showToast(msg, duration = 2200) {
+  const t = document.getElementById('toast')
+  if (!t) return
+  t.textContent = msg
+  t.classList.add('show')
+  clearTimeout(t._timer)
+  t._timer = setTimeout(() => t.classList.remove('show'), duration)
+}
