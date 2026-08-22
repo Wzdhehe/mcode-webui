@@ -133,3 +133,17 @@ export function getActiveChild(cid) {
 export function clearActiveChild(cid) {
   if (cid) activeChildByCid.delete(cid)
 }
+
+// SSE channel helpers — only state-bus.js should touch sseByCid directly.
+export function getSseClient(cid) {
+  return sseByCid.get(cid) || null
+}
+
+export function setSseClient(cid, res) {
+  sseByCid.set(cid, res)
+}
+
+export function endSseClient(cid, res) {
+  // Only clear the map entry if it still points at the same res (avoid races)
+  if (sseByCid.get(cid) === res) sseByCid.delete(cid)
+}
