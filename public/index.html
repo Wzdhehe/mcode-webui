@@ -422,8 +422,11 @@ a { color: var(--accent); text-decoration: none; }
 }
 .usage-popover-refresh:hover { color: var(--text); background: var(--bg-hover); }
 .usage-popover-refresh .icon { width: 12px; height: 12px; display: block; }
-.usage-popover-refresh.loading .icon { animation: spin 1s linear infinite; }
-@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.usage-popover-refresh.loading { color: var(--text); cursor: wait; }
+.usage-popover-refresh.loading .icon { animation: spin 0.8s linear infinite; }
+.usage-popover-refresh.loading .usage-popover-refresh-text::before { content: "刷新中"; }
+.usage-popover-refresh.loading .usage-popover-refresh-text { font-size: 0; }
+.usage-popover-refresh.loading .usage-popover-refresh-text::before { font-size: 12px; }
 .usage-popover-body { padding: 10px 12px 12px; }
 .usage-row {
   display: flex;
@@ -445,6 +448,27 @@ a { color: var(--accent); text-decoration: none; }
 .usage-loading { color: var(--text-muted); font-style: italic; padding: 4px 0; }
 .usage-error { color: var(--danger); padding: 4px 0; line-height: 1.5; word-break: break-word; }
 .usage-empty { color: var(--text-muted); padding: 4px 0; font-style: italic; }
+
+/* v0.5.bb: toast 通知（用量刷新成功提示） */
+.toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% + 8px));
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translate(-50%, -50%); }
 
 /* 移动端（窄屏）：弹层改为向下展开到按钮下方，避免被 sidebar 边界裁掉 */
 @media (max-width: 600px) {
@@ -1486,6 +1510,7 @@ a { color: var(--accent); text-decoration: none; }
           <div class="usage-popover-header">
             <span class="usage-popover-title" data-i18n="usage">套餐用量</span>
             <button class="usage-popover-refresh" id="usage-popover-refresh" title="刷新" aria-label="刷新用量">
+              <span class="usage-popover-refresh-text" data-refresh-default>刷新</span>
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>
           </div>
@@ -2820,17 +2845,44 @@ function toggleUsagePopover(forceState) {
   }
 }
 
-async function refreshUsage() {
+async function refreshUsage(opts = {}) {
+  const isManual = opts.manual === true
   const btn = document.getElementById('usage-popover-refresh')
   if (btn) btn.classList.add('loading')
+  // v0.5.bb: 记录触发时的 fetchedAt，渲染时如果变了就停转 + 弹 toast
+  const beforeFetchedAt = state?.usage?.fetchedAt
   try {
     await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS })
-    // state.usage 由 SSE 推过来，render() → renderUsage() 自动刷新
+    // v0.5.bb: 等真实数据到来（fetchedAt 变化 或 弹层刷新）才停转 + toast
+    // 用轮询兜底：最长 5s，超时也算失败
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline) {
+      if (state?.usage?.fetchedAt && state.usage.fetchedAt !== beforeFetchedAt) break
+      await new Promise((r) => setTimeout(r, 80))
+    }
+    if (state?.usage?.fetchedAt === beforeFetchedAt) {
+      // 没拿到新数据
+      if (isManual) showToast('刷新超时，请重试')
+    } else if (isManual) {
+      showToast('用量已刷新')
+    }
   } catch (e) {
     const body = document.getElementById('usage-popover-body')
     if (body) body.innerHTML = `<div class="usage-error">加载失败：${escapeHtml(e.message || String(e))}</div>`
+    if (isManual) showToast('刷新失败：' + (e.message || String(e)))
+  } finally {
     if (btn) btn.classList.remove('loading')
   }
+}
+
+// v0.5.bb: 全局 toast 通知
+function showToast(msg, duration = 2200) {
+  const t = document.getElementById('toast')
+  if (!t) return
+  t.textContent = msg
+  t.classList.add('show')
+  clearTimeout(t._timer)
+  t._timer = setTimeout(() => t.classList.remove('show'), duration)
 }
 
 // ============================================================
@@ -2987,8 +3039,8 @@ function attachEvents() {
   // Refresh sessions button
   document.getElementById('btn-refresh-sessions')?.addEventListener('click', refreshSessions)
 
-  // Quota card refresh button
-  document.getElementById('usage-popover-refresh')?.addEventListener('click', refreshUsage)
+  // Quota card refresh button (手动刷新 → 弹 toast)
+  document.getElementById('usage-popover-refresh')?.addEventListener('click', () => refreshUsage({ manual: true }))
 
   // Search sessions input — 实时过滤 sidebar 列表
   document.getElementById('search-input')?.addEventListener('input', (e) => {
@@ -3587,5 +3639,7 @@ function attachModalEvents() {
 init()
 attachModalEvents()
 </script>
+<!-- v0.5.bb: 全局 toast 通知（用量刷新等用） -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
