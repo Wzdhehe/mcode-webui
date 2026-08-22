@@ -1,0 +1,48 @@
+# webui CI — REFACTORING.md 批次 3
+# Runs on every push + PR. Matrix: Node 22 / 24 (matches package.json engines).
+#
+# Notes:
+# - mavis-usage tests spawn a real sqlite3 binary against the committed
+#   fixture DB (mocking spawn is broken on Node 24 — see REFACTORING.md §3.2
+#   坑 3). Runners have sqlite3 in PATH; point SQLITE3_BIN at it.
+# - ESLint already parses server/ + test/, but public/app/main.js is
+#   intentionally outside lint scope, so we node --check it explicitly.
+# - This repo currently has no remote; the workflow activates automatically
+#   once one is added and pushed (user must explicitly authorize pushes).
+
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install sqlite3 CLI (fixture db reader)
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
+
+      - name: Syntax check
+        run: |
+          node --check server.js
+          node --check public/app/main.js
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        env:
+          SQLITE3_BIN: sqlite3
+        run: npm test
