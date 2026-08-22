@@ -19,7 +19,7 @@
     <div class="topbar-brand">
       <img class="topbar-logo" id="topbar-logo" src="/brand-logo.png" alt="mcode" title="双击重置 ask_user 弹窗（如果之前被 dismiss 了）" />
       <span data-i18n="title">mcode Web UI</span>
-      <span class="topbar-version" id="version">v0.1.2</span>
+      <span class="topbar-version" id="version">v0.1.3</span>
     </div>
     <div class="topbar-status" id="topbar-status">
       <!-- v0.5.ak: 在线 webui tab 数 -->
@@ -34,11 +34,7 @@
         </svg>
         <span id="chip-lan-link-text">—</span>
       </a>
-      <!-- v0.5.ax: chip-workspace 从顶栏挪到 chat-empty 欢迎页（启动对话后不允许改工作区） -->
-      <span class="chip" id="chip-tps" hidden>
-        <span data-i18n="tps_label">tok/s</span>
-        <b id="tps-value">—</b>
-      </span>
+      <!-- v0.5.by: 顶栏 tok/s 移除 (侧栏 CONTEXT 已有, 重复) — Ponkan 反馈 -->
     </div>
     <button class="btn-mobile-toggle" id="btn-toggle-right" title="详情" style="margin-left:auto">
       <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>
@@ -175,11 +171,12 @@
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
               </button>
               <input type="file" id="file-input" multiple hidden>
-              <button class="btn-tool" id="btn-mode" title="权限模式">
+              <!-- v0.5.by: btn-mode 隐藏 (mcode 0.1.5 acp 不支持 session/set_config_option, 切 mode 等于没切)
+                   仍保留 mode-label 节点让 state push 不报错, 但整按钮 hidden — Ponkan 反馈 -->
+              <span class="btn-mode-static" id="btn-mode" title="mcode 0.1.5 不支持 mid-session 改 permission mode (实测 probe)" hidden>
                 <svg class="icon mode-icon" id="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <span id="mode-label">Default</span>
-                <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
+              </span>
               <div class="input-spacer"></div>
               <button class="btn-tool" id="btn-model" title="模型">
                 <span id="model-label">—</span>
@@ -208,15 +205,11 @@
                 <span data-i18n="mode_full">完全 访问</span>
                 <span class="mode-popover-item-desc" data-i18n="mode_full_desc">无需确认</span>
               </button>
-              <!-- v0.5.bx-9: Plan 模式 — mcode 0.1.4 LLM 不能自己进 plan mode (没有 /plan slash command 也没有 plan tool)
-                   webui workaround: 选 Plan 后自动给 prompt 加 plan 模板前缀, 强制 mcode 按 Plan: 标题 / Plan complete. 格式输出
-                   webui parseChatLines 解析 + 渲染 plan 块 + 弹 plan 弹窗 (老 Ask/Plan 渲染本来就 OK) -->
-              <div class="mode-popover-divider"></div>
-              <button class="mode-popover-item" data-mode="plan" id="mode-plan-btn">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                <span data-i18n="mode_plan">Plan 模式</span>
-                <span class="mode-popover-item-desc" data-i18n="mode_plan_desc">强制 mcode 按 Plan: 格式输出</span>
-              </button>
+              <!-- v0.5.by: Plan 模式按钮删除
+                   mcode 0.1.5 acp 不支持 session/set_mode (实测 "Method not found")
+                   之前 v0.5.bx-9 的 plan template workaround 仍 work, 但按钮没法真接 RPC
+                   Ponkan 反馈 "删掉 plan" — 直接干掉按钮
+                   想用 plan 还是输 "/plan <text>" slash cmd 走 mcode 自身解析 -->
             </div>
             <!-- v0.5.ak: model picker popover（btn-model 点击弹出） -->
             <!-- v0.5.bi: 列表来自 /api/models（基于 mcode TUI 已配置的 provider 映射） -->
@@ -237,33 +230,30 @@
               <div class="workspace-picker-title" data-i18n="workspace_picker_title">切换工作区</div>
               <div class="workspace-picker-current" id="workspace-picker-current">—</div>
               <input class="workspace-picker-input" id="workspace-picker-input" placeholder="C:\Users\your-name\project-path" />
-              <div class="workspace-picker-actions-row">
-                <button class="btn-workspace-action" id="workspace-picker-confirm" title="Switch to entered path">Switch</button>
-                <button class="btn-workspace-action" id="workspace-picker-tui" data-i18n-title="workspace_use_tui" title="切换到 mcode TUI 当前的工作区">Use TUI</button>
-                <button class="btn-workspace-action" id="workspace-picker-reset" data-i18n-title="workspace_reset" title="恢复 webui 启动时检测到的默认工作区">Reset</button>
-              </div>
+              <!-- v0.5.by: Switch/Use TUI/Reset 三按钮删除 (Ponkan 反馈 不需要)
+                   想换工作区直接输路径 + 回车 即可 -->
               <label class="workspace-picker-sync">
                 <input type="checkbox" id="workspace-picker-sync" />
-                <span>Also update mcode TUI's cwd (write cwd.json)</span>
+                <span data-i18n="workspace_sync_tui">Also update mcode TUI's cwd (write cwd.json)</span>
               </label>
               <div class="workspace-picker-recents" id="workspace-picker-recents" hidden>
-                <div class="workspace-picker-recents-title">最近使用</div>
+                <div class="workspace-picker-recents-title" data-i18n="workspace_recents_title">最近使用</div>
                 <div class="workspace-picker-recents-list" id="workspace-picker-recents-list"></div>
               </div>
               <!-- v0.5.am: 可视化目录树浏览（懒加载） -->
               <div class="workspace-picker-browse">
                 <button class="workspace-picker-browse-toggle" id="workspace-picker-browse-toggle">
                   <span class="workspace-picker-browse-chevron" id="workspace-picker-browse-chevron">▶</span>
-                  <span>浏览目录…</span>
+                  <span data-i18n="workspace_browse">浏览目录…</span>
                 </button>
                 <div class="workspace-picker-browse-panel" id="workspace-picker-browse-panel" hidden>
                   <div class="workspace-picker-breadcrumb" id="workspace-picker-breadcrumb"></div>
                   <div class="workspace-picker-tree" id="workspace-picker-tree">
-                    <div class="workspace-picker-tree-loading" id="workspace-picker-tree-loading">加载中…</div>
+                    <div class="workspace-picker-tree-loading" id="workspace-picker-tree-loading" data-i18n="workspace_loading">加载中…</div>
                   </div>
                 </div>
               </div>
-              <div class="workspace-picker-hint">回车切换 · Esc 关闭</div>
+              <div class="workspace-picker-hint" data-i18n="workspace_picker_hint">回车切换 · Esc 关闭</div>
             </div>
           </div>
           <!-- v0.5.bc: 工作区 chip 从欢迎页挪到输入框下面（独立一行，左对齐，仿 kimi） -->
@@ -508,8 +498,8 @@
      marked 配置的 highlight() 函数有 window.hljs 判空 fallback（见下），没 hljs 就返回纯文本 code blocks，不影响聊天 -->
 <script src="/lib/marked.min.js"></script>
 <!-- v0.5.bx-NN: stage 2 — JS extracted to /public/app/main.js (ES module) -->
-<!-- v2: bumped after Stage 2 review flagged cache-bust for /app/main.js -->
-<script type="module" src="/app/main.js?v=2"></script>
+<!-- v3: v0.5.by bump — tpsEl null check + workspace picker i18n + 删 3 按钮 -->
+<script type="module" src="/app/main.js?v=3"></script>
 
 <div class="lan-url-popover" id="lan-url-popover" hidden>
   <div class="lan-url-title">访问地址</div>

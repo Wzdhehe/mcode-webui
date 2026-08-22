@@ -20,6 +20,10 @@ export async function getMavisTokenUsage(mvsSessionId) {
     //   累计 cache_read 13 轮能到 6519.5k, 跟 "上下文一共最高才 512k" 矛盾 (Ponkan 反馈)
     //   per-turn 反映"当前一轮 prompt" 的 cache 复用 — 这才是 user 关心的"当前 context 命中率"
     //   稳态 session per-turn 95-100%, 早期/大 input session 低一些 (因为新加 input 多, cache miss 多)
+    // v0.5.by: 改 SQL 拿最近一行的全部字段 (input/output/cache_read/cache_write/reasoning)
+    //   之前只拿 cache_read/input/cache_write, context 用 totalInput+totalOutput+totalReasoning (累计),
+    //   导致 13 轮累计能到 566k / 512k — Ponkan 反馈 "我最大才 512, 确定没有统计错误吗"
+    //   改 per-turn 后, context 数字 = 最近一轮 LLM 调用的 input + output + reasoning, 永远不会超 limit
     const sql = `SELECT
       COALESCE(SUM(input_tokens),0) AS total_input,
       COALESCE(SUM(output_tokens),0) AS total_output,
@@ -29,9 +33,11 @@ export async function getMavisTokenUsage(mvsSessionId) {
       COUNT(*) AS rows,
       COALESCE(MAX(ts),0) AS last_ts,
       COALESCE(MIN(ts),0) AS first_ts,
-      (SELECT cache_read_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_cache_read,
       (SELECT input_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_input,
-      (SELECT cache_write_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_cache_write
+      (SELECT output_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_output,
+      (SELECT cache_read_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_cache_read,
+      (SELECT cache_write_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_cache_write,
+      (SELECT reasoning_tokens FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}' ORDER BY ts DESC LIMIT 1) AS last_reasoning
     FROM local_runtime_token_usage WHERE session_id = '${mvsSessionId}'`
     const child = spawn(SQLITE3_BIN, [MAVIS_DB_PATH, '-readonly', sql], { windowsHide: true })
     let stdout = ''
@@ -43,17 +49,24 @@ export async function getMavisTokenUsage(mvsSessionId) {
     child.on('exit', (code) => {
       clearTimeout(timer)
       if (code !== 0) { resolve(null); return }
-      // 解析: "total_input|total_output|total_cache_read|total_cache_write|total_reasoning|rows|last_ts|first_ts|last_cache_read|last_input|last_cache_write"
+      // 解析: 13 字段 — total_i/o/cr/cw/r + rows + last_ts + first_ts + last_i/o/cr/cw/r
+      //   索引: 0=ti 1=to 2=tcr 3=tcw 4=tr 5=rows 6=last_ts 7=first_ts
+      //        8=last_input 9=last_output 10=last_cache_read 11=last_cache_write 12=last_reasoning
       const parts = stdout.trim().split('|').map(s => s.trim())
-      if (parts.length < 11) { resolve(null); return }
+      if (parts.length < 13) { resolve(null); return }
       const [ti, to, tcr, tcw, tr, rows] = parts.map(Number)
       if (rows === 0) { resolve(null); return }
       // v0.5.bx-20: per-turn cache 命中率 — 基于最近一行的 input + cache_read + cache_write
-      //   这才是"当前 context 命中率", 反映最近一轮 prompt 的 cache 复用程度
       //   公式: cache_read / (input + cache_read + cache_write)
-      const lastCr = Number(parts[8])
-      const lastIn = Number(parts[9])
-      const lastCw = Number(parts[10])
+      //   这反映最近一轮 prompt 的 cache 复用, 累计算跟 context limit 矛盾
+      // v0.5.by: parts[8..12] 是 last 5 字段 (input/output/cache_read/cache_write/reasoning)
+      const lastIn = Number(parts[8])
+      const lastOut = Number(parts[9])
+      const lastCr = Number(parts[10])
+      const lastCw = Number(parts[11])
+      const lastReasoning = Number(parts[12]) || 0
+      // per-turn context 占用: input + output + reasoning (cache_read 是 input 子集, 不重算)
+      const lastContextTokens = lastIn + lastOut + lastReasoning
       const lastTotal = lastIn + lastCr + lastCw
       const cacheHitRate = lastTotal > 0 ? lastCr / lastTotal : 0
       resolve({
@@ -62,10 +75,13 @@ export async function getMavisTokenUsage(mvsSessionId) {
         totalCacheRead: tcr, totalCacheWrite: tcw, totalReasoning: tr,
         firstTs: Number(parts[6]), lastTs: Number(parts[7]),
         cacheHitRate,
-        // v0.5.bx-20: 也带 per-turn 原始值 (调试/显示用)
+        // v0.5.by: per-turn 原始值 (调试/显示用, 给 F12 排查方便)
         lastTurnInput: lastIn,
+        lastTurnOutput: lastOut,
         lastTurnCacheRead: lastCr,
         lastTurnCacheWrite: lastCw,
+        lastTurnReasoning: lastReasoning,
+        lastTurnContextTokens,  // applyMavisUsageToCs 用这个当 context.used
       })
     })
   })
@@ -97,10 +113,11 @@ export async function getMavisTokenUsageModel(mvsSessionId) {
 export async function applyMavisUsageToCs(cs, mvsSessionId, { getMcodeModelLimit }) {
   const mavisUsage = await getMavisTokenUsage(mvsSessionId)
   if (!mavisUsage || mavisUsage.rows === 0) return false
-  // v0.5.bx-10 fix: cache_read / cache_write 是 input 的子集, 不应该加进 context
-  //   context_used = input + output + reasoning (input 已经包含 cache 部分)
-  //   之前加 cache 会让数字虚高 (input=42k + cacheRead=210k = 252k, 实际只用 42k)
-  const newTokens = mavisUsage.totalInput + mavisUsage.totalOutput + mavisUsage.totalReasoning
+  // v0.5.by fix (改自 v0.5.bx-10): context 数字改用 per-turn, 不是累计
+  //   之前 newTokens = totalInput + totalOutput + totalReasoning (SUM 累计, 13 轮可到 566k)
+  //   改 lastTurnContextTokens = 最近一轮 input + output + reasoning (per-turn, 永远 ≤ limit)
+  //   累计值仍保留在 cs.usage.sessionInput/Output/Total, 供 "总成本" 展示用
+  const newTokens = mavisUsage.lastTurnContextTokens
   cs.context.tokens = newTokens
   cs.context.used = newTokens
   // v0.5.bx-10: 按 model 查真实 context limit (mcode cli.js 硬编码: MiniMax-M3=512k, M2.7*=200k)
