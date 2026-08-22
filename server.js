@@ -365,16 +365,18 @@ const server = http.createServer(async (req, res) => {
     // Spawn mcode exec and stream result into state.chat
     const exec = runMcodeExec(content, { label: 'prompt' })
     const r = await collectExecResult(exec)
-    // Note: webui.html's parseChatLines only reliably renders the FIRST `›`
-    // line of any given turn — the second bullet (●) we used to push often
-    // disappears because of how parseMarkdown handles multi-line text.
-    // Workaround: keep just ONE chat line per turn: the user message; the
-    // assistant answer is mirrored into state.context.assistantLast so the
-    // right panel can show it (and we also push it as a stand-alone
-    // `› assistant: ...` line so it appears in chat history).
+    // webui.html parseChatLines 角色前缀约定（见 public/index.html L2298-2340）：
+    //   › / >  → user   bubble
+    //   ● / •  → assistant bubble (Mcode)
+    //   ○ / ◯  → system  bubble
     if (r.status === 'succeeded' && r.answer) {
       const oneLine = r.answer.replace(/\n+/g, ' ').trim()
-      state.chat = [...state.chat, `› assistant: ${oneLine}`]
+      // webui.html parseChatLines 角色识别：
+      //   › / >  → user
+      //   ● / •  → assistant
+      //   ○ / ◯  → system
+      // 用 ● 前缀让 assistant 消息渲染到正确的 bubble
+      state.chat = [...state.chat, `● ${oneLine}`]
       state.context.assistantLast = oneLine
       state.context.assistantAt = Date.now()
       // update session title from first message
@@ -386,7 +388,8 @@ const server = http.createServer(async (req, res) => {
       }
     } else if (r.status === 'failed' || r.error) {
       const oneLine = (r.error?.message || r.status).replace(/\n+/g, ' ')
-      state.chat = [...state.chat, `› [error] ${oneLine}`]
+      // 错误用 ○ 渲染为 system bubble
+      state.chat = [...state.chat, `○ [error] ${oneLine}`]
       state.context.assistantLast = `[error] ${oneLine}`
       state.context.assistantAt = Date.now()
     }
@@ -421,7 +424,8 @@ const server = http.createServer(async (req, res) => {
         state.usage.sessionOutput = parseFloat(session[2])
         state.usage.sessionTotal = parseFloat(session[3])
       }
-      state.chat = [...state.chat, `› [assistant] /usage:\n${r.answer.replace(/\n/g, ' ')}`]
+      // /usage 报告用 ● 前缀渲染为 assistant bubble，多行内容转空格保留可读性
+      state.chat = [...state.chat, `● /usage:\n${r.answer.replace(/\n/g, ' ')}`]
     }
     pushState()
     return
