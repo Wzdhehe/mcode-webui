@@ -1,22 +1,42 @@
 // ============================================================
 // Debug log (in-page) — v0.5.bx-NN
-// 让用户能直接看到 init / render 流程, 不用开 devtools
+// 默认收起 (hidden), 首次报错自动弹出; 用户可关闭; 关闭后只显小红点提示
 // ============================================================
 const __DBG = (() => {
   const buf = []
   const MAX = 30
+  const panel = () => document.getElementById('debug-log-panel')
+  const pre = () => document.getElementById('debug-log')
+  const titleEl = () => document.getElementById('debug-log-title')
+
   const flush = () => {
-    const el = document.getElementById('debug-log')
+    const el = pre()
     if (el) el.textContent = buf.map(e => `[${e.t}] ${e.msg}`).join('\n')
+  }
+  const hasError = () => buf.some(e => /^❌/.test(e.msg))
+  const updateBadge = () => {
+    const p = panel()
+    if (!p) return
+    // 报错时: 自动展开面板 (除非用户主动收起过)
+    if (hasError() && !p.dataset.userClosed) {
+      p.hidden = false
+    }
+    if (titleEl()) {
+      const errCount = buf.filter(e => /^❌/.test(e.msg)).length
+      titleEl().textContent = errCount > 0
+        ? `📋 webui log (${errCount} ❌ + ${buf.length - errCount} info)`
+        : `📋 webui log (${buf.length} lines)`
+    }
   }
   const log = (msg) => {
     const t = new Date().toTimeString().slice(0, 8)
     buf.push({ t, msg: String(msg) })
     if (buf.length > MAX) buf.shift()
     flush()
+    updateBadge()
     try { console.log('[webui]', msg) } catch {}
   }
-  return { log, buf, flush }
+  return { log, buf, flush, hasError, updateBadge }
 })()
 window.__DBG = __DBG
 window.addEventListener('error', (e) => {
@@ -26,14 +46,30 @@ window.addEventListener('unhandledrejection', (e) => {
   __DBG.log('❌REJ: ' + (e.reason?.message || e.reason?.toString() || e.reason))
 })
 document.addEventListener('DOMContentLoaded', () => {
+  // copy: 全部 buffer → clipboard
   document.getElementById('debug-log-copy')?.addEventListener('click', () => {
     const txt = __DBG.buf.map(e => `[${e.t}] ${e.msg}`).join('\n')
     navigator.clipboard?.writeText(txt).then(() => __DBG.log('✓ copied ' + __DBG.buf.length + ' lines'))
   })
+  // clear: 清空 buffer (不隐藏面板, 让用户看到空状态)
   document.getElementById('debug-log-clear')?.addEventListener('click', () => {
     __DBG.buf.length = 0
     __DBG.flush()
+    __DBG.updateBadge()
   })
+  // close: 隐藏面板 + 标记 user-closed, 不再自动展开
+  document.getElementById('debug-log-close')?.addEventListener('click', () => {
+    const p = document.getElementById('debug-log-panel')
+    if (p) { p.hidden = true; p.dataset.userClosed = '1' }
+  })
+  // 调试入口: 在 console 输 __DBG.show() 可手动展开
+  __DBG.show = () => { const p = panel(); if (p) { p.hidden = false; delete p.dataset.userClosed } }
+  // URL 里有 ?debug=1 时强制显示 (开发用)
+  try {
+    if (new URLSearchParams(window.location.search).get('debug') === '1') {
+      __DBG.show()
+    }
+  } catch {}
 })
 
 // ============================================================

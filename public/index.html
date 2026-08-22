@@ -501,7 +501,8 @@
 <!-- v3: v0.5.by bump — tpsEl null check + workspace picker i18n + 删 3 按钮 -->
 <!-- v4: v0.5.bx-NN — 加 in-page debug log 面板 (visible), render() 包 try/catch -->
 <!-- v5: v0.5.bx-NN — session delete 确认 i18n (会话列表 X 按钮的二次确认) -->
-<script type="module" src="/app/main.js?v=5"></script>
+<!-- v6: v0.5.bx-NN — debug log 面板默认收起, 报错自动弹出, 加 close 按钮 -->
+<script type="module" src="/app/main.js?v=6"></script>
 
 <div class="lan-url-popover" id="lan-url-popover" hidden>
   <div class="lan-url-title">访问地址</div>
@@ -516,13 +517,14 @@
   <div class="lan-url-hint">手机/其他电脑用局域网 URL 访问（需在同一 WiFi）</div>
 </div>
 
-<!-- v0.5.bx-NN: in-page debug log (visible) — 让用户能直接看到 init / render 流程, 不用开 devtools -->
-<div id="debug-log-panel" style="position:fixed;bottom:8px;right:8px;width:420px;max-height:240px;background:#1e1e1e;color:#0f0;font:11px/1.4 ui-monospace,Consolas,monospace;border:1px solid #444;border-radius:6px;padding:6px 8px;z-index:99999;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4)">
+<!-- v0.5.bx-NN: in-page debug log (collapsed by default; auto-expand on error) -->
+<div id="debug-log-panel" hidden style="position:fixed;bottom:8px;right:8px;width:min(420px,calc(100vw - 16px));max-height:240px;background:#1e1e1e;color:#0f0;font:11px/1.4 ui-monospace,Consolas,monospace;border:1px solid #444;border-radius:6px;padding:6px 8px;z-index:99999;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;color:#0ff;border-bottom:1px solid #333;padding-bottom:2px">
-    <span>📋 webui log (last 30)</span>
+    <span id="debug-log-title">📋 webui log (last 30)</span>
     <span>
       <button id="debug-log-copy" style="background:#333;color:#0f0;border:1px solid #555;padding:1px 6px;font-size:10px;cursor:pointer;border-radius:3px">copy</button>
       <button id="debug-log-clear" style="background:#333;color:#0f0;border:1px solid #555;padding:1px 6px;font-size:10px;cursor:pointer;border-radius:3px;margin-left:2px">clear</button>
+      <button id="debug-log-close" title="收起" style="background:#333;color:#0f0;border:1px solid #555;padding:1px 6px;font-size:10px;cursor:pointer;border-radius:3px;margin-left:2px">×</button>
     </span>
   </div>
   <pre id="debug-log" style="margin:0;white-space:pre-wrap;word-break:break-all;font:inherit"></pre>
