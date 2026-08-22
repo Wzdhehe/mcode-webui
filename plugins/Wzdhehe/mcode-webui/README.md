@@ -5,7 +5,7 @@
 > dependencies; runs on Node 22.19+.
 
 This is the mcode-plugin-guide (Agent Plugins 1.0) packaging of the
-[mcode-webui](https://github.com/Ponkan/mcode-webui) web frontend.
+[mcode-webui](https://github.com/Wzdhehe/mcode-webui) web frontend.
 
 ## Quick start
 
@@ -79,5 +79,5 @@ MIT — see [LICENSE](LICENSE).
 ## Maintainer
 
 - **Author**: Ponkan
-- **Repository**: https://github.com/Ponkan/mcode-webui
-- **Homepage**: https://github.com/Ponkan/mcode-webui
+- **Repository**: https://github.com/Wzdhehe/mcode-webui
+- **Homepage**: https://github.com/Wzdhehe/mcode-webui

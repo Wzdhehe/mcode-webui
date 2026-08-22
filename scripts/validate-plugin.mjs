@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/validate-plugin.mjs
 //
-// Validate plugins/Ponkan/mcode-webui/ against the mcode-plugin-guide
+// Validate plugins/Wzdhehe/mcode-webui/ against the mcode-plugin-guide
 // contract.md + red-lines.md. Single source of truth for what
 // "shippable" means.
 //
@@ -21,12 +21,12 @@
 // Usage:
 //   node scripts/validate-plugin.mjs
 
-import { readFileSync, readdirSync, lstatSync, statSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, lstatSync, statSync, existsSync, readlinkSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const PLUGIN_DIR = join(ROOT, "plugins", "Ponkan", "mcode-webui");
+const PLUGIN_DIR = join(ROOT, "plugins", "Wzdhehe", "mcode-webui");
 const PLUGIN_JSON = join(PLUGIN_DIR, "plugin.json");
 const SKILL_MD = join(PLUGIN_DIR, "SKILL.md");
 const README = join(PLUGIN_DIR, "README.md");
@@ -72,6 +72,8 @@ else if (!NAME_REGEX.test(plugin.name)) fail(`name fails regex: ${plugin.name}`)
 else ok(`name = "${plugin.name}"`);
 
 if (!plugin.version) warn("missing version (recommended)");
+else if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/.test(plugin.version))
+  fail(`version "${plugin.version}" is not semver (Agent Plugins 1.0 requires x.y.z)`);
 else ok(`version = ${plugin.version}`);
 
 if (!plugin.description || plugin.description.length > 1024)
@@ -170,58 +172,35 @@ try {
 }
 
 // ---------------------------------------------------------------
-// 5. No symlinks / junctions in plugin tree
+// 5. No symlinks / junctions in plugin tree (STRICT — no allowlist)
 // ---------------------------------------------------------------
-// Note: in DEV layout, plugins/Ponkan/mcode-webui/{server,public,test}
-// are Windows junctions to the project root. This is INTENTIONAL — the
-// release artifact (`dist/`, built by `npm run package:plugin`) expands
-// them into real files. We allow-list the 3 dev junctions here; the
-// dist/ check below enforces "no junctions in shipped artifact".
-const DEV_JUNCTION_ALLOWLIST = new Set([
-  join(PLUGIN_DIR, "server"),
-  join(PLUGIN_DIR, "public"),
-  join(PLUGIN_DIR, "test"),
-]);
+// The dev tree used to contain Windows junctions for server/public/test;
+// they were dereferenced into real copies. Any reparse point is now an
+// error: the community repo forbids symlinks recursively.
 console.log();
-console.log("=== No symlinks/junctions (dev allowlist applied) ===");
+console.log("=== No symlinks/junctions (strict) ===");
 let symlinkCount = 0;
 function walkCheckSymlinks(p) {
   let lst;
   try { lst = lstatSync(p); } catch { return; }
-  if (lst.isSymbolicLink()) {
-    if (DEV_JUNCTION_ALLOWLIST.has(p)) return; // dev-only, OK
-    symlinkCount++;
-    fail(`symlink: ${p}`);
-    return;
+  let isReparse = lst.isSymbolicLink();
+  if (!isReparse && process.platform === "win32") {
+    try { readlinkSync(p); isReparse = true; } catch { /* not a junction */ }
   }
-  if (process.platform === "win32") {
-    // Junction detection on Windows: lstat on a junction returns a
-    // stat for the junction (not the target), so isDirectory() is
-    // usually true. readlinkSync works for both symlinks and junctions.
-    // We already handled symlink case above. Junction check:
-    try {
-      // readlinkSync will throw on a non-reparse-point file/dir
-      const lst2 = lstatSync(p);
-      // On NTFS junctions, lstat is unreliable. Use the fact that
-      // Windows junctions appear as directories in statSync. The
-      // check above (isSymbolicLink) already catches Unix-style
-      // symlinks. For Windows junctions, the dist/ check below is
-      // the authoritative one.
-      if (lst2.isDirectory()) {
-        for (const child of readdirSync(p)) walkCheckSymlinks(join(p, child));
-        return;
-      }
-    } catch { /* not a junction */ }
+  if (isReparse) {
+    symlinkCount++;
+    fail(`symlink/junction: ${p}`);
+    return;
   }
   if (lst.isDirectory()) {
     for (const child of readdirSync(p)) walkCheckSymlinks(join(p, child));
   }
 }
 walkCheckSymlinks(PLUGIN_DIR);
-if (symlinkCount === 0) ok("no unexpected symlinks in dev tree (3 allow-listed junctions: server, public, test)");
+if (symlinkCount === 0) ok("no symlinks/junctions in plugin tree");
 
 // Also verify dist/ is clean (if it exists)
-const DIST = join(ROOT, "dist", "Ponkan", "mcode-webui");
+const DIST = join(ROOT, "dist", "Wzdhehe", "mcode-webui");
 if (existsSync(DIST)) {
   let distSym = 0;
   function walkDist(p) {
@@ -260,31 +239,34 @@ walkCheckBom(PLUGIN_DIR);
 if (bomCount === 0) ok("no UTF-8 BOM");
 
 // ---------------------------------------------------------------
-// 7. No "TODO" in shipped files
+// 7. No "TODO" in shipped CONTRACT files
 // ---------------------------------------------------------------
-// PR_DESCRIPTION.md is a TEMPLATE — its checklist mentions "TODO" by
-// design ("no TODO in shipped files"). Exclude it.
+// Per guide contract.md: 「所有文本契约文件（.md、plugin.json、mcp.json）
+// 不得残留 TODO」 — scope is contract documents, NOT source code
+// (JS identifiers like `section_todo:` or UI labels are legitimate).
 const TODO_SKIP = new Set([join(PLUGIN_DIR, "PR_DESCRIPTION.md")]);
+const CONTRACT_EXTS = new Set([".md", ".json", ".yml", ".yaml", ".txt"]);
 console.log();
-console.log("=== No TODO in shipped files ===");
+console.log("=== No TODO in shipped contract files ===");
 let todoCount = 0;
 function walkCheckTodo(p) {
   let lst;
   try { lst = lstatSync(p); } catch { return; }
   if (lst.isDirectory()) {
     for (const child of readdirSync(p)) walkCheckTodo(join(p, child));
-  } else if (lst.isFile() && TEXT_EXTS.has("." + p.split(".").pop().toLowerCase())) {
+  } else if (lst.isFile() && CONTRACT_EXTS.has("." + p.split(".").pop().toLowerCase())) {
     if (TODO_SKIP.has(p)) return;
     const txt = readFileSync(p, "utf8");
-    // Match TODO but not "TODO_LIST" (e.g. word boundary matters)
-    if (/\bTODO\b/.test(txt)) {
+    // Match uppercase TODO placeholder only (contract requirement),
+    // not lowercase identifiers like `todo` / `renderTodo`.
+    if (/TODO/.test(txt)) {
       todoCount++;
       fail(`TODO in ${p.replace(ROOT + "\\", "")}`);
     }
   }
 }
 walkCheckTodo(PLUGIN_DIR);
-if (todoCount === 0) ok("no TODO");
+if (todoCount === 0) ok("no TODO in contract files");
 
 // ---------------------------------------------------------------
 // 8. SECURITY-NOTES.md exists (red-line 7 best practice)

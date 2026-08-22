@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "mcode-webui",
-  "version": "0.5.bx",
+  "version": "0.5.0",
   "description": "Browser-based chat frontend for the mcode agent runtime. Streams mcode acp / exec sessions with real-time tool events, plan review, ask-user prompts, context usage, and quota. Zero npm dependencies; runs on Node 22+.",
   "author": {
     "name": "Ponkan"
@@ -25,18 +25,57 @@
     "runtime": {
       "minNodeVersion": "22.19",
       "maxNodeVersion": "26",
-      "platforms": ["windows", "linux", "macos"],
+      "platforms": [
+        "windows",
+        "linux",
+        "macos"
+      ],
       "entry": "server.js",
-      "defaultPort": 7890
+      "defaultPort": 8080
     },
     "config": {
-      "PORT": { "type": "number", "default": 7890, "env": "PORT", "description": "HTTP server port" },
-      "HOST": { "type": "string", "default": "0.0.0.0", "env": "HOST", "description": "HTTP bind address (loopback-only or all interfaces)" },
-      "TOKEN": { "type": "string", "default": "", "env": "TOKEN", "description": "Required token for non-local requests (use ?token= or Authorization: Bearer)" },
-      "MCODE_MODEL": { "type": "string", "default": "minimax_api/MiniMax-M3", "env": "MCODE_MODEL", "description": "Default model" },
-      "MCODE_CMD": { "type": "string", "default": "auto-detect", "env": "MCODE_CMD", "description": "Path to mcode.cmd / mcode binary" },
-      "MCODE_WEBUI_UPLOAD_DIR": { "type": "string", "default": "auto-detect", "env": "MCODE_WEBUI_UPLOAD_DIR", "description": "Directory for uploaded attachments" },
-      "DEBUG_INJECT": { "type": "string", "default": "", "env": "DEBUG_INJECT", "description": "Set to '1' to enable /api/debug/* (testing only)" }
+      "PORT": {
+        "type": "number",
+        "default": 8080,
+        "env": "PORT",
+        "description": "HTTP server port"
+      },
+      "HOST": {
+        "type": "string",
+        "default": "0.0.0.0",
+        "env": "HOST",
+        "description": "HTTP bind address (loopback-only or all interfaces)"
+      },
+      "TOKEN": {
+        "type": "string",
+        "default": "",
+        "env": "TOKEN",
+        "description": "Required token for non-local requests (use ?token= or Authorization: Bearer)"
+      },
+      "MCODE_MODEL": {
+        "type": "string",
+        "default": "minimax_api/MiniMax-M3",
+        "env": "MCODE_MODEL",
+        "description": "Default model"
+      },
+      "MCODE_CMD": {
+        "type": "string",
+        "default": "auto-detect",
+        "env": "MCODE_CMD",
+        "description": "Path to mcode.cmd / mcode binary"
+      },
+      "MCODE_WEBUI_UPLOAD_DIR": {
+        "type": "string",
+        "default": "auto-detect",
+        "env": "MCODE_WEBUI_UPLOAD_DIR",
+        "description": "Directory for uploaded attachments"
+      },
+      "DEBUG_INJECT": {
+        "type": "string",
+        "default": "",
+        "env": "DEBUG_INJECT",
+        "description": "Set to '1' to enable /api/debug/* (testing only)"
+      }
     },
     "capabilities": [
       "chat-streaming",

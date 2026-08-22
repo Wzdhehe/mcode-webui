@@ -7,7 +7,7 @@ description: Browser-based chat frontend for the mcode agent runtime. Streams mc
 
 > 🌐 Browser-based chat frontend for the mcode agent runtime.
 
-- **Version**: 0.5.bx
+- **Version**: 0.5.0
 - **Author**: Ponkan
 - **License**: MIT
 - **Entry**: `server.js` (Node 22.19+)

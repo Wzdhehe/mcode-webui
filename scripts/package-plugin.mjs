@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/package-plugin.mjs
-// Package plugins/Ponkan/mcode-webui/ into a distributable directory and
+// Package plugins/Wzdhehe/mcode-webui/ into a distributable directory and
 // zip file. Resolves any junction/symlink so the final artifact contains
 // only real files (mcode-plugin-guide contract forbids symlinks in hosted
 // plugins).
@@ -8,8 +8,8 @@
 // Usage:
 //   node scripts/package-plugin.mjs
 //   # produces:
-//   #   dist/Ponkan/mcode-webui/        (expanded tree, no symlinks)
-//   #   dist/Ponkan/mcode-webui.zip     (zipped)
+//   #   dist/Wzdhehe/mcode-webui/        (expanded tree, no symlinks)
+//   #   dist/Wzdhehe/mcode-webui.zip     (zipped)
 //
 // Skips: node_modules/, .git/, coverage/, .server.*, *.log, etc.
 
@@ -29,8 +29,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const SRC = join(ROOT, "plugins", "Ponkan", "mcode-webui");
-const DEST_PARENT = join(ROOT, "dist", "Ponkan");
+const SRC = join(ROOT, "plugins", "Wzdhehe", "mcode-webui");
+const DEST_PARENT = join(ROOT, "dist", "Wzdhehe");
 const DEST = join(DEST_PARENT, "mcode-webui");
 
 // Files / dirs to skip

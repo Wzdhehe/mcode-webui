@@ -6,7 +6,7 @@
 
 ## What this PR adds
 
-- New plugin at `plugins/Ponkan/mcode-webui/` per Agent Plugins 1.0 spec
+- New plugin at `plugins/Wzdhehe/mcode-webui/` per Agent Plugins 1.0 spec
   - `plugin.json` with the 10 white-listed top-level fields
   - `SKILL.md` with `{name, description}` frontmatter (343 chars) + body
   - `LICENSE` (MIT)
@@ -145,4 +145,4 @@ CI: GitHub Actions on Node 22 / Node 24, Windows + Linux + macOS.
 - [x] No UTF-8 BOM in any text file
 - [x] No `TODO` in shipped files
 - [x] No `hooks` / unsupported capability fields
-- [x] One plugin per PR (this PR is only `plugins/Ponkan/mcode-webui/`)
+- [x] One plugin per PR (this PR is only `plugins/Wzdhehe/mcode-webui/`)

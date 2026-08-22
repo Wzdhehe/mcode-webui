@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/setup-plugin-layout.mjs
-// One-shot setup: create plugins/Ponkan/mcode-webui/ layout with Windows
+// One-shot setup: create plugins/Wzdhehe/mcode-webui/ layout with Windows
 // junction symlinks for directories + file copy for package.json.
 //
 // Why junction (not symlink): Windows symlink requires admin/Developer Mode.
@@ -20,7 +20,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const PLUGIN_DIR = join(ROOT, "plugins", "Ponkan", "mcode-webui");
+const PLUGIN_DIR = join(ROOT, "plugins", "Wzdhehe", "mcode-webui");
 
 // Directory items: link via Windows junction (no admin) or Unix symlink
 const DIR_ITEMS = ["server", "public", "test"];
