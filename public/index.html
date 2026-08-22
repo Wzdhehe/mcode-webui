@@ -3283,7 +3283,8 @@ body.is-remote .btn-lan-toggle { display: none; }
      marked 配置的 highlight() 函数有 window.hljs 判空 fallback（见下），没 hljs 就返回纯文本 code blocks，不影响聊天 -->
 <script src="/lib/marked.min.js"></script>
 <!-- v0.5.bx-NN: stage 2 — JS extracted to /public/app/main.js (ES module) -->
-<script type="module" src="/app/main.js"></script>
+<!-- v2: bumped after Stage 2 review flagged cache-bust for /app/main.js -->
+<script type="module" src="/app/main.js?v=2"></script>
 
 <div class="lan-url-popover" id="lan-url-popover" hidden>
   <div class="lan-url-title">访问地址</div>
