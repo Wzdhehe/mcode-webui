@@ -3417,20 +3417,8 @@ function attachEvents() {
     }
   })
 
-  document.getElementById('workspace-picker-confirm').addEventListener('click', (e) => {
-    e.stopPropagation()
-    const dir = wsInput.value.trim()
-    if (!dir) { alert('请输入目录路径'); return }
-    submitWorkspaceChange({ dir, syncTui: wsSyncCheckbox.checked })
-  })
-  document.getElementById('workspace-picker-tui').addEventListener('click', (e) => {
-    e.stopPropagation()
-    submitWorkspaceChange({ action: 'useTui', syncTui: false })
-  })
-  document.getElementById('workspace-picker-reset').addEventListener('click', (e) => {
-    e.stopPropagation()
-    submitWorkspaceChange({ action: 'reset' })
-  })
+  // v0.5.by: 3 按钮 (workspace-picker-confirm/tui/reset) HTML 已删 — Enter 键提交已覆盖
+  //   (见上方 wsInput.addEventListener('keydown') Enter 分支)
 
   // v0.5.am: 可视化目录树浏览（懒加载）
   const browseToggle = document.getElementById('workspace-picker-browse-toggle')
