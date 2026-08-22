@@ -60,7 +60,6 @@ const ROUTES = [
   { method: 'GET',    match: (p) => p === '/api/sessions', handler: sessionsRoute.handleListSessions },
   { method: 'POST',   match: (p) => p === '/api/sessions', handler: sessionsRoute.handleNewSession },
   { method: 'POST',   match: (p) => p === '/api/sessions/switch', handler: sessionsRoute.handleSwitchSession },
-  { method: 'POST',   match: (p) => p === '/api/sessions/cleanup-orphans', handler: sessionsRoute.handleCleanupOrphans },
   { method: 'DELETE', match: (p) => p.startsWith('/api/sessions/') && p.length > '/api/sessions/'.length,
     handler: sessionsRoute.handleDeleteSession },
 

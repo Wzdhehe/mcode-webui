@@ -69,6 +69,16 @@ export async function getMcodeSessionsForWorkspace(workspace) {
   return filtered
 }
 
+// v0.5.bx-31: 同步读 cache, 给 pushStateFor 用 (pushStateFor 是同步, 不能 await getMcodeSessionsForWorkspace)
+//   命中: 返 array; miss 或 workspace 不匹配: 返 null (caller 自己决定 fallback [] 或 fire-and-forget 拉)
+export function getMcodeSessionsCacheSync(workspace) {
+  const now = Date.now()
+  if (mcodeSessionsCache.ws === workspace && (now - mcodeSessionsCache.fetchedAt) < 30 * 1000) {
+    return mcodeSessionsCache.sessions
+  }
+  return null
+}
+
 // v0.5.bx: prompt 完成后用 mcodeSessionId 反查 mcode 真实 title
 // 数据源：mcode TUI 自己的 session 存储（不是 webui 的）
 // 用途：替换 webui "New session" / 截断首句 → 用 mcode 自动生成的标题

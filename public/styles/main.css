@@ -425,24 +425,6 @@ body.is-remote .btn-lan-toggle { display: none; }
   transition: all 0.15s;
 }
 .btn-new:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
-/* v0.5.bx-19: 清理孤儿按钮 — 紧凑的小图标按钮, 跟 btn-new 同位置但次要 */
-.btn-cleanup {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  margin-top: 6px;
-  padding: 6px 10px;
-  background: transparent;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  color: var(--text-tertiary);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-cleanup:hover { color: var(--text); border-color: var(--text-tertiary); background: var(--bg-hover); }
 .search-box {
   position: relative;
   margin-top: 8px;
@@ -529,6 +511,36 @@ body.is-remote .btn-lan-toggle { display: none; }
   color: var(--text-tertiary);
   padding: 12px 8px;
   text-align: center;
+  font-style: italic;
+}
+/* v0.5.bx-31: sidebar 首次加载骨架屏 — mcode acp singleton 启动期 (1-3s) 显示
+   加载完后被真实会话列表替换，期间 click handler 都不绑 */
+.session-skeleton {
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none; /* 防止误点 */
+}
+.session-skeleton-line {
+  height: 12px;
+  background: linear-gradient(90deg, var(--bg-hover) 0%, var(--bg-elevated, var(--bg-hover)) 50%, var(--bg-hover) 100%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.session-skeleton-line.short { width: 60%; }
+.session-skeleton-line:nth-child(odd) { animation-delay: 0.2s; }
+.session-skeleton-line:nth-child(even) { animation-delay: 0.4s; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.session-skeleton-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 6px 8px;
   font-style: italic;
 }
 .session-item {

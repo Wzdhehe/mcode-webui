@@ -66,7 +66,11 @@ export async function getMavisTokenUsage(mvsSessionId) {
       const lastCw = Number(parts[11])
       const lastReasoning = Number(parts[12]) || 0
       // per-turn context 占用: input + output + reasoning (cache_read 是 input 子集, 不重算)
-      const lastContextTokens = lastIn + lastOut + lastReasoning
+      // v0.5.bx-30 (修): 之前叫 `lastContextTokens`,但 L84 的 shorthand 写的是 `lastTurnContextTokens`,
+      //   applyMavisUsageToCs 也读 `mavisUsage.lastTurnContextTokens` — 三处名字不一致导致 child process
+      //   exit handler 抛 ReferenceError, resolve 永远不调, applyMavisUsageToCs 永远 await 不出真值
+      //   改: 变量名跟 shorthand 跟 reader 三处都对齐成 `lastTurnContextTokens`
+      const lastTurnContextTokens = lastIn + lastOut + lastReasoning
       const lastTotal = lastIn + lastCr + lastCw
       const cacheHitRate = lastTotal > 0 ? lastCr / lastTotal : 0
       resolve({

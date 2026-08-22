@@ -3,7 +3,8 @@
 
 import { DEFAULT_WORKSPACE, DEFAULT_MODEL } from './config.js'
 import { loadSessions } from './sessions.js'
-import { getCachedMcodeCommands } from './acp-client.js'
+import { getCachedMcodeCommands, getMcodeSessionsForWorkspace, getMcodeSessionsCacheSync } from './acp-client.js'
+import { getLanBroadcast } from './settings.js'
 
 // v0.5.ai: A2 per-client 架构
 // 每个 webui tab 一个 client (cid = localStorage webui_cid)
@@ -19,6 +20,10 @@ export function makeClientState() {
     sessionId: null,         // webui 侧边栏 session id (randomUUID)
     mcodeSessionId: null,    // mcode acp/exec 自己的 session id (mvs_xxx)
     sessionTitle: 'Untitled',
+    // v0.5.bx-31: "最近 active session 所属工作区" — 独立于 state.workspace.dir
+    //   之前切 session 会同步改 state.workspace.dir (v0.5.ar),导致 sidebar 排序时该工作区组永远置顶
+    //   现在切 session 改 lastUsedWorkspace,不再动 workspace.dir (chip-workspace 跟它无关)
+    lastUsedWorkspace: null,
     context: {
       tokens: 0, used: 0, percent: 0, limit: 512000,
       tps: 0, thinkingStatus: 'Idle', thinkingDuration: null,
@@ -70,17 +75,55 @@ export const SSE_HEADERS = {
 // pushStateFor: 推 state 给指定 cid（或 '__broadcast__' 推给所有）
 //   opts.lanBroadcast: 当前 LAN 广播状态（从 settings.js 注入）
 //   opts.mcodeSessions: 已过滤的 mcode sessions 数组（从 acp-client.js 注入）
+// v0.5.bx-31: cache miss 时 fire-and-forget 拉一次, 拉完自动 push 给所有 SSE 客户端
+const _mcodeSessionsFetchPending = new Set()  // workspace keys currently being fetched
+function ensureMcodeSessionsFetchedAndPush(workspace) {
+  if (_mcodeSessionsFetchPending.has(workspace)) return
+  _mcodeSessionsFetchPending.add(workspace)
+  getMcodeSessionsForWorkspace(workspace)
+    .then(() => {
+      _mcodeSessionsFetchPending.delete(workspace)
+      for (const [c, res] of sseByCid) {
+        const ccs = clients.get(c) || makeClientState()
+        const cws = ccs.workspace && ccs.workspace.dir || ''
+        const cached = getMcodeSessionsCacheSync(cws) || []
+        const snapshot = {
+          ...ccs,
+          sessions: loadSessions(),
+          mcodeSessions: cached,
+          availableCommands: getCachedMcodeCommands(),
+          onlineCount: sseByCid.size,
+          lanBroadcast: getLanBroadcast(),
+        }
+        try { res.write(`data: ${JSON.stringify(snapshot)}\n\n`) } catch {}
+      }
+    })
+    .catch((e) => {
+      _mcodeSessionsFetchPending.delete(workspace)
+      console.warn(`[webui] ensureMcodeSessionsFetchedAndPush failed: ${e.message}`)
+    })
+}
+
 export function pushStateFor(cid, opts = {}) {
-  const lanBroadcast = opts.lanBroadcast
+  const lanBroadcast = opts.lanBroadcast !== undefined ? opts.lanBroadcast : getLanBroadcast()
   const cachedCmds = getCachedMcodeCommands()
-  const mcodeSessions = opts.mcodeSessions !== undefined ? opts.mcodeSessions : null
 
   if (cid === '__broadcast__') {
     for (const [c, res] of sseByCid) {
-      const cs = clients.get(c) || makeClientState()
+      const ccs = clients.get(c) || makeClientState()
+      const cws = ccs.workspace && ccs.workspace.dir || ''
+      let cmcodeSessions
+      if (opts.mcodeSessions !== undefined) {
+        cmcodeSessions = opts.mcodeSessions
+      } else {
+        const cached = getMcodeSessionsCacheSync(cws)
+        if (cached !== null) cmcodeSessions = cached
+        else { cmcodeSessions = []; ensureMcodeSessionsFetchedAndPush(cws) }
+      }
       const snapshot = {
-        ...cs,
+        ...ccs,
         sessions: loadSessions(),
+        mcodeSessions: cmcodeSessions,
         availableCommands: cachedCmds,
         onlineCount: sseByCid.size,
         lanBroadcast,
@@ -90,6 +133,15 @@ export function pushStateFor(cid, opts = {}) {
     return
   }
   const cs = getClient(cid)
+  let mcodeSessions
+  if (opts.mcodeSessions !== undefined) {
+    mcodeSessions = opts.mcodeSessions
+  } else {
+    const cws = cs.workspace && cs.workspace.dir || ''
+    const cached = getMcodeSessionsCacheSync(cws)
+    if (cached !== null) mcodeSessions = cached
+    else { mcodeSessions = []; ensureMcodeSessionsFetchedAndPush(cws) }
+  }
   // 注入 sessions 列表（来自磁盘 db）— 让 webui 侧边栏 "最近会话" 不被 SSE 推送覆盖
   // v0.5.bv: 同步带 mcodeSessions（cache 命中，0 cost；cache miss 才 await）
   const snapshot = {

@@ -213,6 +213,8 @@ const I18N = {
     workspace_unset_short: '未设置',
     workspace_current: '当前',
     workspace_switch: '点击切换工作区',
+    // v0.5.bx-31: sidebar 首次加载骨架屏文案
+    sidebar_loading: '加载会话中…',
     workspace_picker_title: '切换工作区',
     workspace_picker_select: '选择工作区',
     workspace_picker_current: '当前：',
@@ -346,6 +348,8 @@ const I18N = {
     workspace_unset_short: 'Unset',
     workspace_current: 'Current',
     workspace_switch: 'Click to switch workspace',
+    // v0.5.bx-31: sidebar 首次加载骨架屏文案
+    sidebar_loading: 'Loading sessions…',
     workspace_picker_title: 'Switch Workspace',
     workspace_picker_select: 'Select Workspace',
     workspace_picker_current: 'Current: ',
@@ -510,6 +514,12 @@ function connect() {
       const preserved = state?.askUserAnswers
       state = JSON.parse(ev.data)
       if (preserved) state.askUserAnswers = preserved
+      // v0.5.bx-31: mcodeSessions 第一次非空时 sidebarReady=true, renderSessions 切到真实列表
+      //   之前没这判断, 首次 render 用空 mcodeSessions 渲染, 用户点删除/切时 race
+      if (!sidebarReady && Array.isArray(state.mcodeSessions) && state.mcodeSessions.length > 0) {
+        console.log('[webui] sidebar ready: mcodeSessions.length=' + state.mcodeSessions.length)
+        sidebarReady = true
+      }
       render()
     } catch (e) { console.error('sse parse', e) }
   }
@@ -835,6 +845,13 @@ function renderTodo() {
 let collapsedWorkspaces = (() => {
   try { return new Set(JSON.parse(localStorage.getItem('webui_ws_collapsed_v1') || '[]')) } catch { return new Set() }
 })()
+
+// v0.5.bx-31: sidebar 首次 SSE 推 mcodeSessions 之前显示 skeleton, 避免点删除/切时 race
+//   mcode acp singleton 启动要 1-3s, 期间 state.mcodeSessions=[] → render 显示空
+//   用户在空 sidebar 上点删除 webui entry, mcode db 的对应 session 没删 → SSE 推过来时"又出现"
+//   sidebarReady=false 时 renderSessions 显示 skeleton + 全部 click 不绑
+//   SSE 推过来 mcodeSessions.length>0 时设 true (模块级 let, 跨 render 共享)
+let sidebarReady = false
 function saveCollapsedWorkspaces() {
   try { localStorage.setItem('webui_ws_collapsed_v1', JSON.stringify([...collapsedWorkspaces])) } catch {}
 }
@@ -851,8 +868,24 @@ function wsShortName(ws) {
 }
 
 function renderSessions() {
-  console.log('[webui] renderSessions: state.sessions=' + (state?.sessions?.length || 0) + ' mcodeSessions=' + (state?.mcodeSessions?.length || 0))
+  console.log('[webui] renderSessions: state.sessions=' + (state?.sessions?.length || 0) + ' mcodeSessions=' + (state?.mcodeSessions?.length || 0) + ' sidebarReady=' + sidebarReady)
   const list = document.getElementById('sessions-list')
+  // v0.5.bx-31: 首次 SSE 推 mcodeSessions 之前显示 skeleton, 禁用全部 click
+  //   等 SSE 推过来 mcodeSessions 第一次非空时, 消息处理那边会设 sidebarReady=true
+  if (!sidebarReady) {
+    list.innerHTML = `
+      <div class="session-skeleton">
+        <div class="session-skeleton-line"></div>
+        <div class="session-skeleton-line short"></div>
+        <div class="session-skeleton-line"></div>
+        <div class="session-skeleton-line short"></div>
+        <div class="session-skeleton-line"></div>
+        <div class="session-skeleton-line short"></div>
+      </div>
+      <div class="session-skeleton-hint">${t('sidebar_loading') || '加载会话中…'}</div>
+    `
+    return
+  }
   // v0.5.bv: 优先显示 mcode 真实 sessions（mvs_xxx id + mcode 自动 title）
   // 合并：mcode sessions (按 cwd 过滤) + webui 自己的 sessions (还没跟 mcode 关联的)
   const mcodeSessions = Array.isArray(state?.mcodeSessions) ? state.mcodeSessions : []
@@ -887,7 +920,11 @@ function renderSessions() {
     }
   }
   const sessions = merged
-  const currentWs = (state && state.workspace && state.workspace.dir) || ''
+  // v0.5.bx-31: currentWs 改用 state.lastUsedWorkspace (独立字段)
+  //   之前用 state.workspace.dir, 但 server 切 session 会同步改它 (v0.5.ar),导致 sidebar 排序把该工作区置顶
+  //   现在 server 切 session 只写 lastUsedWorkspace,state.workspace.dir 保持不变 (chip-workspace 跟它无关)
+  //   第一次 (没切过) lastUsedWorkspace=null, fallback 到 state.workspace.dir (chip 当前显示的工作区)
+  const currentWs = (state && state.lastUsedWorkspace) || (state && state.workspace && state.workspace.dir) || ''
   const q = (sessionSearchQuery || '').trim().toLowerCase()
   let filtered = sessions
   if (q) {
@@ -907,6 +944,11 @@ function renderSessions() {
     const ws = (s.workspace || '').trim() || t('workspace_unset')
     if (!groups.has(ws)) groups.set(ws, [])
     groups.get(ws).push(s)
+  }
+  // v0.5.bx-31: 子分类置顶 — group 内按 updatedAt desc 排序
+  //   之前没做, 最近触发的对话不排到第一位
+  for (const [ws, items] of groups) {
+    items.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
   }
   const sortedKeys = [...groups.keys()].sort((a, b) => {
     if (a === currentWs) return -1
@@ -1059,6 +1101,10 @@ async function deleteSession(sessionId) {
       const data = await r.json().catch(() => ({}))
       // v0.5.bx-5: 同时按 webui id 和 mcodeSessionId 过滤（孤儿 webui-mcode session 的 id 是 mvs_xxx）
       state.sessions = (state.sessions || []).filter(s => s.id !== sessionId && s.mcodeSessionId !== sessionId)
+      // v0.5.bx-31: 同时清 mcodeSessions (mvs_xxx id), 避免 SSE 推过来时"删了又出现"
+      //   server 端 mcode acp cache 30s 内可能还有这 session, invalidate 后下次 list 才彻底干净
+      //   但 mcodeSessions 是 server 推送的, 下次 push 会覆盖整个 state; 本地提前 filter 避免闪动
+      state.mcodeSessions = (state.mcodeSessions || []).filter(s => s.sessionId !== sessionId)
       renderSessions()
       // 触发 SSE 拉取最新 state（包括 current session 是否被清空）
       // （SSE 会自动推送，但 pushState 已被 server 调过——等下一次刷新也行）
@@ -2342,16 +2388,13 @@ function renderMessage(msg, ctx) {
       const isLatestAsk = !!(ctx && ctx.isLatestAsk)
       openAskModal(pq, { isLatestAsk, source: 'render' })
 
-      // v0.5.bx-8: 设 state.pendingAskUser (在没答过时, 让 send() 知道有 ask 在等)
-      //   现在 modal 提交不走 send(), 但仍作为兜底 (用户在 chat 框发消息时模板化)
-      if (!allAnswered && state && (!state.pendingAskUser || state.pendingAskUser.firstQuestion !== pq.steps[0].question)) {
-        state.pendingAskUser = {
-          firstQuestion: pq.steps[0].question,
-          steps: pq.steps.map(s => s.question),
-          answered: null,
-          toolRef: msg,
-        }
-      }
+      // v0.5.bx-31: 删掉 render 时设 state.pendingAskUser 的逻辑
+      //   之前: 给每个未答的 ask_user 块都设 pendingAskUser, 让 send() 把下一条 chat 套成 Q/A 模板
+      //         副作用: 历史 ask_user 块 (不是最新回复) 也触发模板化 — 进入有 N 个历史 ask 的对话,
+      //         前 N 条 chat 都会被套成 "Q: Qx\nA: <输入>" 当假答案, 用户体验极差
+      //   现在: Q/A 模板化只在弹窗 submit / skip / option click / 其他输入 时走 submitAskModal
+      //         chat 输入框发消息永远走正常通路, 不被套
+      //   pendingAskUser 字段保留 (closeAskModal 防御性清) 但不再被设也不再被 send() 读
     }
     if (outputText) {
       outputHtml = `<div class="msg-tool-output"><span class="msg-tool-label">output</span><pre>${escapeHtml(outputText)}</pre></div>`
@@ -3016,30 +3059,12 @@ async function send() {
       state.planMode = false
       if (typeof renderRight === 'function') renderRight()
     }
-    // v0.5.bx-8: 如果有 pendingAskUser (mcode ask_user 工具在等回答), 把用户消息模板化成
-    //   "Q: <question> A: <text>" — 让 mcode/LLM 知道这是 ask_user 工具的 result
-    //   同时写 state.askUserAnswers 让下次 render 显示 ✓
-    if (state?.pendingAskUser && state.pendingAskUser.firstQuestion && !state.pendingAskUser.answered) {
-      const pau = state.pendingAskUser
-      const answer = text || '未回答'
-      // 单 step: pau.firstQuestion 是当前题; 多 step: 模板化成"全部题目" (没答的填"未回答")
-      if (Array.isArray(pau.steps) && pau.steps.length > 1) {
-        // 多 step: 模板化所有 step
-        const blocks = pau.steps.map(q => {
-          const a = state.askUserAnswers?.[q]
-          return `Q: ${q}\nA: ${a ? a.answer : '未回答'}`
-        })
-        content = blocks.join('\n')
-      } else {
-        content = buildAskUserPrompt(pau.firstQuestion, answer)
-      }
-      // 持久化已答 (state + localStorage) — 只持久化 firstQuestion (其它题等点发送按钮再写)
-      if (!state.askUserAnswers) state.askUserAnswers = {}
-      setAskUserAnswer(pau.firstQuestion, { answer, mode: text ? 'answered' : 'skipped' })
-      // 标记已答 + 清 pending
-      pau.answered = { answer, mode: text ? 'answered' : 'skipped' }
-      state.pendingAskUser = null
-    }
+    // v0.5.bx-31: 删掉 send() 里基于 pendingAskUser 的 Q/A 模板化兜底
+    //   之前: 任何有 pendingAskUser 时, 用户在 chat 框发消息会被自动套成 "Q: <q>\nA: <text>"
+    //   现在: chat 输入框发消息永远走正常通路, 不被套
+    //   Q/A 模板化只在弹窗 submit (submitAskModal) 时走 — 用户必须明确点 × 提交 / 跳过 / 选项 / 其他+回车
+    //   这样历史 ask_user 块 (不是最新回复) 也不会触发模板化, 避免"进入对话前 N 条都被套"的 bug
+    //   pendingAskUser 字段已不在 render 时被设, 这里也不再读 (防御性保留 closeAskModal 清)
     const r = await fetch('/api/send' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
@@ -3912,36 +3937,9 @@ function attachEvents() {
     clearCurrentSession()
   })
 
-  // v0.5.bx-19: 一键清理 mcode 孤儿 session — webui session db 没关联 + chatLen=0 的 mvs_xxx
-  document.getElementById('btn-cleanup-orphans').addEventListener('click', async (e) => {
-    e.stopPropagation()
-    if (state && state.running && state.running.active) {
-      alert('AI 还在回复中，请先等回复完成。')
-      return
-    }
-    if (!confirm('清理 sidebar 上 "Mcode session" 类型的空状态卡片?\n\n(只删 webui 没 chat 历史的 mcode session, 保留你创建的对话)')) return
-    const btn = document.getElementById('btn-cleanup-orphans')
-    const origText = btn.textContent
-    btn.disabled = true
-    btn.textContent = '清理中...'
-    try {
-      const r = await fetch('/api/sessions/cleanup-orphans' + API_SUFFIX, { method: 'POST', headers: HEADERS })
-      const data = await r.json()
-      if (data.ok) {
-        const msg = `已清理 ${data.deleted} 个孤儿 session${data.failed ? ` (${data.failed} 失败)` : ''}`
-        if (typeof showToast === 'function') showToast(msg, data.failed ? 'warn' : 'success')
-        else alert(msg)
-        // server 已经 pushStateFor(cid), sidebar 自动刷新
-      } else {
-        alert('清理失败: ' + (data.error || 'unknown'))
-      }
-    } catch (err) {
-      alert('清理失败: ' + err.message)
-    } finally {
-      btn.disabled = false
-      btn.textContent = origText
-    }
-  })
+  // v0.5.bx-33: 删 "清理孤儿" 按钮 (用户反馈不要这个功能) — 按钮 + handler + API 一起删
+  //   之前: index.html btn-cleanup-orphans + main.js click handler + router.js 路由 + handleCleanupOrphans
+  //   现在: 全部清掉,代码干净,用户改主意找 git history
 
   // v0.5.ax: 清空当前 session，回到 welcome 页（不创建新 session，等用户发消息时再创建）
   function clearCurrentSession() {
@@ -4363,9 +4361,10 @@ function attachModalEvents() {
 }
 
 // Start
+// v0.5.bx-31: 删 send() 里基于 pendingAskUser 的 Q/A 模板化兜底 + render 时设 pendingAskUser; chat 发消息永远不被套
 // v0.5.bx-28: ask_user 弹窗 X / Esc / 背景 = 彻底放弃, 不发 Q/A 给 mcode; 防御性清 pendingAskUser
 // v0.5.bx-27: 启动日志 + JS 错误捕获 — 让 reload 后能立刻看到 fatal error
-console.log('[webui] init start, version=v0.5.bx-28, build=2026-08-20')
+console.log('[webui] init start, version=v0.5.bx-31, build=2026-08-20')
 window.addEventListener('error', (e) => {
   console.error('[webui FATAL]', e.error?.stack || e.message, '@', e.filename + ':' + e.lineno + ':' + e.colno)
   document.title = '⚠ JS ERR: ' + (e.error?.message || e.message).substring(0, 50)

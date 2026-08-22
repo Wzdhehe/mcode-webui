@@ -52,11 +52,6 @@
           <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           <span data-i18n="new_chat">新建会话</span>
         </button>
-        <!-- v0.5.bx-19: 一键清理 mcode 孤儿 session (mvs_xxx 但 webui 没关联) -->
-        <button class="btn-cleanup" id="btn-cleanup-orphans" title="清理 sidebar 上 'Mcode session' 类型空状态卡片（webui 没 chat 历史的 mcode session）">
-          <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-          <span>清理孤儿</span>
-        </button>
         <div class="search-box">
           <svg class="icon search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input class="search-input" id="search-input" data-i18n-placeholder="search_placeholder" placeholder="搜索会话...">
@@ -512,7 +507,8 @@
 <!-- v6: v0.5.bx-NN — debug log 面板默认收起, 报错自动弹出, 加 close 按钮 -->
 <!-- v7: v0.5.bx-28 ask modal X/Esc/背景 改"彻底放弃" (清除 pendingAskUser, 不发 Q/A 给 mcode) -->
 <!-- v8: v0.5.bx-29 fix context usage: SSE 连接时主动 hydrate mavis db 真值 + finalize 时 broadcast 到同 mcodeSessionId 的所有 cid -->
-<script type="module" src="/app/main.js?v=8"></script>
+<!-- v9: v0.5.bx-31 删 send() 里基于 pendingAskUser 的 Q/A 模板化兜底 + render 时设 pendingAskUser; chat 发消息永远不被套 -->
+<script type="module" src="/app/main.js?v=9"></script>
 
 <div class="lan-url-popover" id="lan-url-popover" hidden>
   <div class="lan-url-title">访问地址</div>

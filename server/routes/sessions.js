@@ -1,11 +1,12 @@
 // webui/server/routes/sessions.js
 // GET/POST /api/sessions, POST /api/sessions/switch, DELETE /api/sessions/:id,
-// POST /api/sessions/cleanup-orphans, GET /api/acp-sessions, GET /api/acp-session-title
+// GET /api/acp-sessions, GET /api/acp-session-title
+// (v0.5.bx-33: 删 POST /api/sessions/cleanup-orphans — Ponkan 不要这个 UI,API 一起删)
 
 import { randomUUID } from 'node:crypto'
 import { loadSessions, saveSessions, resetContext } from '../lib/sessions.js'
 import { deleteMcodeSessionFromDb } from '../lib/db.js'
-import { listAllMcodeSessions, getMcodeSessionTitle, getMcodeSessionsForWorkspace, invalidateMcodeSessionsCache } from '../lib/acp-client.js'
+import { getMcodeSessionTitle, getMcodeSessionsForWorkspace } from '../lib/acp-client.js'
 import { applyMavisUsageToCs } from '../lib/mavis-usage.js'
 import { getMcodeModelLimit } from '../lib/models.js'
 import { pushStateFor } from '../lib/state-bus.js'
@@ -103,11 +104,18 @@ export async function handleSwitchSession(req, res, ctx) {
   cs.sessionTitle = target.title || 'Untitled'
   cs.chat = Array.isArray(target.chat) ? target.chat : []
   cs.usage = { ...cs.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
-  // v0.5.ar: 跨工作区 session 切换 → 同步 cs.workspace.dir
-  const targetWs = (target.workspace || '').trim()
-  if (cs.workspace.dir !== targetWs) {
-    cs.workspace = { dir: targetWs, branch: null, tree: null }
-  }
+  // v0.5.bx-31: 切 session 不再同步 cs.workspace.dir (回退 v0.5.ar)
+  //   之前: 切到 b 工作区的 session → cs.workspace.dir 改成 b → sidebar 排序 currentWs=b → b 工作区组永远置顶
+  //   现在: 只写 lastUsedWorkspace 字段,state.workspace.dir 保持不变 (chip-workspace 跟它无关,workspace 切换走专门路径)
+  //   排序: client renderSessions 用 lastUsedWorkspace 作 currentWs,子分类按 updatedAt 排序
+  //
+  // v0.5.bx-32: 切 session 不再写 lastUsedWorkspace
+  //   Ponkan 反馈: '点击 c 区任意对话 (不发消息),c 区就自动置顶了,我想的是发消息才置顶'
+  //   切 session 只是浏览,不算'发消息',所以 lastUsedWorkspace 只在 send prompt 时写
+  //   之前的逻辑导致用户点哪个工作区的对话,那个工作区就置顶 — 体验不对
+  //
+  // const targetWs = (target.workspace || '').trim()
+  // cs.lastUsedWorkspace = targetWs || null   // 删: 切 session 不写
   resetContext(cs)
   // v0.5.bx-10: 切到历史 session 时立即从 mavis db 拉真实 token usage
   if (cs.mcodeSessionId) {
@@ -188,50 +196,6 @@ export function handleDeleteSession(req, res, ctx) {
   console.log(`[delete] cid=${cid} OK match=${matchKind} deleted.webuiId=${deletedItem.id.substring(0, 8)}… remaining=${all.length}`)
   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
   return res.end(JSON.stringify({ ok: true, deleted: id, matchKind, remaining: all.length, mcodeDbDel }))
-}
-
-// POST /api/sessions/cleanup-orphans
-export async function handleCleanupOrphans(req, res, ctx) {
-  const cs = ctx.cs
-  const cid = ctx.cid
-  const url = new URL(req.url, 'http://localhost')
-  const scope = url.searchParams.get('scope') || 'orphans'
-  const mcodeSessList = await listAllMcodeSessions()
-  const all = loadSessions()
-  const webuiLinkedMcodeSids = new Set(all.filter(s => s.mcodeSessionId).map(s => s.mcodeSessionId))
-  const protectedSids = new Set()
-  if (cs && cs.mcodeSessionId) protectedSids.add(cs.mcodeSessionId)
-
-  let targets
-  if (scope === 'all') {
-    targets = mcodeSessList.filter(s => !protectedSids.has(s.sessionId))
-  } else {
-    targets = mcodeSessList.filter(s => !webuiLinkedMcodeSids.has(s.sessionId) && !protectedSids.has(s.sessionId))
-  }
-  const result = { scope, total: mcodeSessList.length, targets: targets.length, deleted: 0, deletedWebui: 0, failed: 0, log: [] }
-  console.log(`[cleanup-orphans] cid=${cid} scope=${scope} total=${result.total} targets=${result.targets} (linked=${webuiLinkedMcodeSids.size} protected=${protectedSids.size})`)
-  for (const o of targets) {
-    if (scope === 'all') {
-      const webuiIdx = all.findIndex(s => s.mcodeSessionId === o.sessionId)
-      if (webuiIdx >= 0) {
-        all.splice(webuiIdx, 1)
-        result.deletedWebui++
-      }
-    }
-    const r = deleteMcodeSessionFromDb(o.sessionId)
-    if (r.ok) {
-      result.deleted++
-      result.log.push({ sid: o.sessionId, title: o.title, ok: true })
-    } else {
-      result.failed++
-      result.log.push({ sid: o.sessionId, title: o.title, ok: false, error: r.reason || r.error })
-    }
-  }
-  if (scope === 'all' && result.deletedWebui > 0) saveSessions(all)
-  invalidateMcodeSessionsCache()
-  pushStateFor(cid)
-  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-  return res.end(JSON.stringify({ ok: true, ...result }))
 }
 
 // GET /api/acp-sessions?cwd=... — mcode acp session/list

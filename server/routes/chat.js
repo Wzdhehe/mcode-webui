@@ -35,6 +35,11 @@ export async function handleSend(req, res, ctx) {
   // v0.5.ai: per-cid — 操作 cs (ask 答案跳过, chat 保持干净)
   if (!isAskAnswer) {
     cs.chat = [...(cs.chat || []), `› ${content}`]
+    // v0.5.bx-32: 真正发消息时记 lastUsedWorkspace — sidebar 排序时该工作区置顶
+    //   之前切 session 也写,用户点 c 区对话 (不发消息) c 区就自动置顶了 — 体验不对
+    //   切 session 不算发消息,所以切 session 时不写 (在 routes/sessions.js handleSwitchSession 已删)
+    //   ask_user 答案不算发消息,也不写
+    cs.lastUsedWorkspace = (cs.workspace && cs.workspace.dir) || null
     pushStateFor(cid)
     persistCurrentChat(cs)
   }
