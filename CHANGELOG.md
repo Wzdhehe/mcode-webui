@@ -1,8 +1,56 @@
 # Changelog
 
 All notable changes to this project are documented here. Versions
-follow `v0.5.bx-NN` where `bx` is the modularization branch and
-`NN` is the iteration counter.
+follow `vMAJOR.MINOR.PATCH`. The `v0.5.bx-NN` scheme was used during
+the modularization period (2026-08-17 → 2026-08-20) and is preserved
+in the "Earlier history" table below.
+
+This project follows [Keep a Changelog](https://keepachangelog.com/).
+The `## Unreleased` section at the top tracks changes that have
+landed on the development branch but are not yet cut into a release.
+
+## Unreleased
+
+> Documentation patch layered on top of v1.0.0 — no behavior
+> changes, no version bump. The plugin schema (`plugin.json`),
+> runtime, and API surface are byte-identical to v1.0.0.
+
+### Added
+
+- **`README.zh-CN.md`** — full Chinese translation of `README.md`,
+  with a "命名说明" section explaining why the product is called
+  "mcode CLI 的 webui" (mcode is the upstream CLI; webui is the
+  browser layer for it — the direction is CLI → webui, not the
+  other way around).
+- **`CONTRIBUTING.md`** at the repo root — contribution workflow,
+  commit message convention, PR checklist, release process,
+  sync rule for the dual-layout repo, style guide, FAQ.
+- **`CONTRIBUTING.md`** in the plugin tree — a short pointer doc
+  for plugin-tree-only readers, linking back to the source repo.
+
+### Changed
+
+- **`SKILL.md` moved** from `plugins/Wzdhehe/mcode-webui/SKILL.md`
+  to `plugins/Wzdhehe/mcode-webui/skills/mcode-webui/SKILL.md` to
+  match the official Agent Plugins 1.0 `skills/` layout (the local
+  `validate-plugin` mirror flagged this; the official registry
+  gate is the same check).
+- **`PR_DESCRIPTION.md`** — placeholder phrasing ("fill in the
+  blanks", "Template for the upstream PR") replaced with direct
+  language ("Submission body — use verbatim"). Repository link
+  corrected from the non-existent `hetaoBackend/MiniMax-Code-Plugins`
+  to the official `MiniMax-AI/MiniMax-Code-Plugins`.
+
+### Verified (no code changes in this patch)
+
+- `npm test` — 302/302 pass
+- `npm run lint` — 0 warnings
+- `npm run validate:plugin` — 0 errors, 0 warnings
+- No tracked debug residue (`git ls-files` shows zero
+  `.server.*`, `acp-probe*`, `goal-plan-probe*`, `probes/`)
+- No new `node_modules` / build artifacts in the working tree
+- No personal data committed (no IPs, usernames, real session
+  IDs in any tracked file)
 
 ## v1.0.0 (2026-08-22) — First public release
 

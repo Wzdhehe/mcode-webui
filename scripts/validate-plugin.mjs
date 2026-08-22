@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PLUGIN_DIR = join(ROOT, "plugins", "Wzdhehe", "mcode-webui");
 const PLUGIN_JSON = join(PLUGIN_DIR, "plugin.json");
-const SKILL_MD = join(PLUGIN_DIR, "SKILL.md");
+const SKILL_MD = join(PLUGIN_DIR, "skills", "mcode-webui", "SKILL.md"); // v1.0: 官方布局 skills/<name>/SKILL.md
 const README = join(PLUGIN_DIR, "README.md");
 const LICENSE = join(PLUGIN_DIR, "LICENSE");
 

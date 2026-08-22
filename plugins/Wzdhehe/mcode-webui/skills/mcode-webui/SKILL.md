@@ -137,7 +137,7 @@ contribution workflow, see `docs/DEVELOPMENT.md`.
 ## Files in this plugin
 
 - `plugin.json` — Agent Plugins 1.0 manifest (10 top-level fields, white-listed)
-- `SKILL.md` — this file
+- `skills/mcode-webui/SKILL.md` — this file (official skills/ layout)
 - `LICENSE` — MIT
 - `README.md` — user-facing quick start
 - `docs/` — ARCHITECTURE, API, CAPABILITIES, DEVELOPMENT, TROUBLESHOOTING

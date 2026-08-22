@@ -1,14 +1,14 @@
 # PR Description — mcode-webui plugin
 
-> **Template for the upstream PR to the
-> [MiniMax-Code-Plugins](https://github.com/hetaoBackend/MiniMax-Code-Plugins)
-> community repo. Fill in the blanks before submitting.**
+> **Submission body for the upstream PR to the
+> [MiniMax-Code-Plugins](https://github.com/MiniMax-AI/MiniMax-Code-Plugins)
+> community registry. Use this as the PR body verbatim.**
 
 ## What this PR adds
 
 - New plugin at `plugins/Wzdhehe/mcode-webui/` per Agent Plugins 1.0 spec
   - `plugin.json` with the 10 white-listed top-level fields
-  - `SKILL.md` with `{name, description}` frontmatter (343 chars) + body
+  - `skills/mcode-webui/SKILL.md` with `{name, description}` frontmatter (343 chars) + body (official skills/ layout)
   - `LICENSE` (MIT)
   - `README.md` (user-facing quick start)
   - `references/SECURITY-NOTES.md` (canonical security disclosure)
