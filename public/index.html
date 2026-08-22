@@ -4,11 +4,38 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#ffffff">
-<title>mcode Web UI</title>
+<title>Mcode Web UI</title>
+<!-- v0.5.bn: highlight.js 资源包已移到 public/lib/.hl.bak/（v0.5.bn 删 4 个 broken CommonJS script），css link 同步删 -->
 <style>
 /* ============================================================
    主题变量
    ============================================================ */
+/* v0.5.bh: 首次加载无 data-theme 时跟随系统 — 避免 light 闪一下 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115;
+    --bg-elevated: #1a1d23;
+    --bg-sidebar: #13161b;
+    --bg-hover: #1f2329;
+    --bg-active: #2a2f36;
+    --bg-input: #1a1d23;
+    --text: #e5e7eb;
+    --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
+    --border: #2a2f36;
+    --border-light: #1f2329;
+    --accent: #60a5fa;
+    --accent-hover: #3b82f6;
+    --accent-bg: #1e3a8a;
+    --accent-text: #93c5fd;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  }
+}
 :root[data-theme="light"] {
   --bg: #ffffff;
   --bg-elevated: #ffffff;
@@ -112,13 +139,10 @@ a { color: var(--accent); text-decoration: none; }
 }
 .topbar-logo {
   width: 24px; height: 24px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  display: block;
+  flex-shrink: 0;
   border-radius: 6px;
-  display: grid; place-items: center;
-  color: white;
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: -0.5px;
+  overflow: hidden;
 }
 .topbar-version {
   font-size: 11px;
@@ -145,6 +169,23 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 12px;
   color: var(--text-secondary);
 }
+/* v0.5.bp: 局域网访问链接 chip — 用 <a> 渲染所以继承 cursor:pointer + 去掉下划线；hover 加背景色表示可点 */
+a.chip-lan-link {
+  text-decoration: none;
+  cursor: pointer;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+a.chip-lan-link:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-hover));
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+a.chip-lan-link .icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
 .chip-dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--text-tertiary);
@@ -153,18 +194,208 @@ a { color: var(--accent); text-decoration: none; }
 .chip[data-status="loading"] .chip-dot { background: var(--warning); animation: pulse 1s infinite; }
 .chip[data-status="completed"] .chip-dot { background: var(--success); }
 .chip[data-status="error"] .chip-dot { background: var(--danger); }
+.chip[data-status="offline"] .chip-dot { background: var(--text-tertiary); }
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
 
+/* v0.5.al: chip-workspace — 顶栏可点击切换工作区（用 <button> 而不是 <span> 才能触发 click） */
+.chip-workspace {
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 4px 10px;
+  max-width: 240px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.chip-workspace:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); border-color: var(--accent); }
+.chip-workspace:active { background: var(--bg-active, rgba(0,0,0,0.08)); }
+.chip-workspace-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* v0.5.al: workspace picker popover（fixed 定位，跟随 chip-workspace） */
+.workspace-picker {
+  position: fixed;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  /* v0.5.bd: 防止 popover 超出 viewport，加 max-height + 内滚动 */
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  background: var(--bg-elevated, #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  z-index: 200;
+}
+.workspace-picker-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+.workspace-picker-current {
+  font-size: 11px; color: var(--text-tertiary); margin-bottom: 10px;
+  padding: 6px 8px; background: var(--bg-input, var(--bg)); border-radius: 6px;
+  word-break: break-all; font-family: monospace;
+}
+.workspace-picker-input {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--bg-input, var(--bg));
+  color: var(--text); font-size: 13px; box-sizing: border-box;
+  font-family: monospace;
+}
+.workspace-picker-input:focus { outline: none; border-color: var(--accent); }
+.workspace-picker-actions-row {
+  display: flex; gap: 6px; margin-top: 10px;
+}
+.btn-workspace-action {
+  flex: 1; padding: 6px 8px; background: transparent; border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-secondary); font-size: 12px; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-workspace-action:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); border-color: var(--accent); color: var(--text); }
+.btn-workspace-action.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-workspace-action.primary:hover { background: var(--accent-hover, #4a6cf7); }
+.workspace-picker-sync {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  font-size: 11px; color: var(--text-tertiary); cursor: pointer;
+}
+.workspace-picker-sync input { margin: 0; cursor: pointer; }
+.workspace-picker-recents { margin-top: 10px; }
+.workspace-picker-recents-title { font-size: 11px; color: var(--text-tertiary); margin-bottom: 4px; }
+.workspace-picker-recents-list { display: flex; flex-direction: column; gap: 2px; }
+.workspace-picker-recent {
+  font-size: 12px; padding: 4px 8px; border-radius: 4px; cursor: pointer;
+  color: var(--text-secondary); font-family: monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background 0.1s;
+}
+.workspace-picker-recent:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); color: var(--text); }
+.workspace-picker-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 10px; }
+
+/* v0.5.at: chip-lan — 跟其他 btn-menu 同结构，仅 WiFi 图标按状态着色（文字 / 箭头保持正常色） */
+.btn-lan-toggle .chip-lan-icon {
+  transition: stroke 0.15s;
+}
+.btn-lan-toggle[data-lan="on"] .chip-lan-icon { stroke: var(--success, #22c55e); }
+.btn-lan-toggle[data-lan="off"] .chip-lan-icon { stroke: var(--text-tertiary); }
+/* v0.5.bh: chip-lan 只在本机显示，LAN 设备上隐藏（不需要这个开关） */
+body.is-remote .btn-lan-toggle { display: none; }
+
+/* v0.5.aq: LAN URL popover（hover chip-lan 时显示） */
+.lan-url-popover {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-elevated, #fff);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  z-index: 200;
+  font-size: 12px;
+}
+.lan-url-title {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  margin-bottom: 8px;
+}
+.lan-url-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 0;
+}
+.lan-url-label {
+  font-size: 11px; color: var(--text-tertiary);
+  min-width: 36px; flex-shrink: 0;
+}
+.lan-url-value {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg-input, var(--bg));
+  padding: 3px 8px;
+  border-radius: 4px;
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: pointer;
+}
+.lan-url-value:hover { background: var(--bg-hover, rgba(0,0,0,0.05)); }
+.lan-url-hint {
+  font-size: 11px; color: var(--text-tertiary);
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--border-light, var(--border));
+}
+
+/* v0.5.am: 可视化目录树 */
+.workspace-picker-browse { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+.workspace-picker-browse-toggle {
+  display: flex; align-items: center; gap: 6px;
+  background: transparent; border: none; padding: 4px 0;
+  color: var(--text-secondary); font-size: 12px; cursor: pointer; width: 100%;
+  text-align: left;
+}
+.workspace-picker-browse-toggle:hover { color: var(--text); }
+.workspace-picker-browse-chevron {
+  display: inline-block; width: 12px; font-size: 10px;
+  transition: transform 0.15s; color: var(--text-tertiary);
+}
+.workspace-picker-browse-toggle.open .workspace-picker-browse-chevron { transform: rotate(90deg); }
+.workspace-picker-browse-panel { margin-top: 8px; }
+.workspace-picker-breadcrumb {
+  display: flex; flex-wrap: wrap; gap: 2px; align-items: center;
+  font-size: 11px; font-family: monospace;
+  padding: 6px 8px; background: var(--bg-input, var(--bg)); border-radius: 4px;
+  margin-bottom: 6px; min-height: 22px;
+}
+.workspace-picker-breadcrumb-item {
+  cursor: pointer; padding: 1px 4px; border-radius: 3px; color: var(--text-secondary);
+}
+.workspace-picker-breadcrumb-item:hover { background: var(--bg-hover, rgba(0,0,0,0.06)); color: var(--text); }
+.workspace-picker-breadcrumb-sep { color: var(--text-tertiary); font-size: 10px; }
+.workspace-picker-tree {
+  max-height: 260px; overflow-y: auto; overflow-x: hidden;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); font-size: 12px;
+}
+.workspace-picker-tree-loading,
+.workspace-picker-tree-error,
+.workspace-picker-tree-empty {
+  padding: 12px; text-align: center; color: var(--text-tertiary); font-size: 12px;
+}
+.workspace-picker-tree-error { color: var(--danger); }
+.workspace-tree-node {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 6px; cursor: pointer; user-select: none;
+  color: var(--text-secondary);
+}
+.workspace-tree-node:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); color: var(--text); }
+.workspace-tree-node.current { background: var(--accent-faint, rgba(99,102,241,0.12)); color: var(--accent); font-weight: 500; }
+.workspace-tree-node.selected { background: var(--accent); color: #fff; }
+.workspace-tree-chevron {
+  display: inline-block; width: 14px; text-align: center; flex-shrink: 0;
+  color: var(--text-tertiary); font-size: 9px;
+  transition: transform 0.15s;
+}
+.workspace-tree-chevron.empty { visibility: hidden; }
+.workspace-tree-chevron.open { transform: rotate(90deg); }
+.workspace-tree-chevron.loading { color: var(--accent); }
+.workspace-tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.workspace-tree-children { padding-left: 14px; }
+.workspace-tree-set-btn {
+  flex-shrink: 0; padding: 1px 6px; font-size: 10px;
+  background: transparent; border: 1px solid currentColor; border-radius: 3px;
+  cursor: pointer; opacity: 0; transition: opacity 0.15s;
+}
+.workspace-tree-node:hover .workspace-tree-set-btn { opacity: 1; }
+.workspace-tree-node.current .workspace-tree-set-btn { display: none; }
+
 .layout {
-  display: grid;
-  grid-template-columns: 240px 1fr 320px;
+  display: flex;                  /* v0.5.bf: 从 grid 改 flex，welcome 时能彻底收回右侧栏 320px */
+  flex: 1;
+  min-height: 0;
   height: 100%;
   overflow: hidden;
   position: relative;
 }
+/* v0.5.bf: 三栏布局通过 width 控制（grid 改 flex 后这层不必要，保留作 fallback） */
+.layout > .left-panel { width: 240px; flex-shrink: 0; }
+.layout > .right-panel { width: 320px; flex-shrink: 0; }
+.layout > .chat-area { flex: 1; min-width: 0; }
 
 /* ============================================================
    Left panel
@@ -254,6 +485,25 @@ a { color: var(--accent); text-decoration: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.session-item {
+  cursor: pointer;
+  position: relative;
+}
+.session-info { flex: 1; min-width: 0; }
+.session-name {
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-id {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: ui-monospace, monospace;
+  margin-top: 1px;
+}
+.workspace-item { display: none; } /* v0.5.ar: 旧单工作区行已废弃，保留 selector 防止外部 break */
 .session-time {
   font-size: 11px;
   color: var(--text-tertiary);
@@ -346,36 +596,205 @@ a { color: var(--accent); text-decoration: none; }
 .btn-refresh-sessions {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 4px;
-  width: 100%;
-  margin-top: 4px;
-  padding: 4px 8px;
+  padding: 3px 8px;
   background: transparent;
+  border: none;
   color: var(--text-tertiary);
   font-size: 11px;
   border-radius: 4px;
+  cursor: pointer;
   transition: all 0.15s;
 }
 .btn-refresh-sessions:hover { background: var(--bg-hover); color: var(--text); }
 .btn-refresh-sessions:disabled { opacity: 0.5; cursor: wait; }
 .btn-refresh-sessions.loading svg { animation: spin 0.8s linear infinite; }
 .btn-refresh-sessions svg { width: 12px; height: 12px; }
+
+/* v0.5.as: 会话列表 标题 + 刷新按钮 同行（flex space-between） */
+.sessions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 8px 4px;
+}
+.sessions-header-title {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-/* Sessions list (scrollable middle area) */
+/* Sessions list (scrollable middle area) — flex:1 + overflow-y:auto 自然滚动，不加 max-height 避免把底部组件挤上去 */
 .sessions-scroll {
   flex: 1;
   overflow-y: auto;
-  min-height: 100px;
+  min-height: 0;
 }
 .sessions-section {
   padding: 8px 0;
 }
 .sessions-section .section-title { padding: 4px 12px 6px; }
+
+/* v0.5.ar: 按工作区分组的会话列表 */
+.workspace-group {
+  margin: 2px 0;
+}
+.workspace-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.workspace-group-header:hover { background: var(--bg-hover); color: var(--text); }
+.workspace-group-chevron {
+  display: inline-block;
+  width: 10px;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s;
+}
+.workspace-group.collapsed .workspace-group-chevron { transform: rotate(-90deg); }
+.workspace-group-icon {
+  width: 12px; height: 12px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.workspace-group-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-group-count {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.workspace-group-current-badge {
+  font-size: 9px;
+  background: var(--accent-bg, #dbeafe);
+  color: var(--accent-text, #1d4ed8);
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.workspace-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 4px 22px;  /* 缩进，对齐图标 */
+}
+.workspace-group.collapsed .workspace-group-items { display: none; }
+.workspace-group .session-item {
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+.workspace-group .session-item.current-ws { border-left: 2px solid var(--accent); padding-left: 6px; }
+.workspace-group .session-name { font-size: 12.5px; }
+.workspace-group .session-id { font-size: 10px; }
+.workspace-group-empty {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* v0.5.ar: 新建会话 - 工作区选择 popover */
+.ws-picker-popover {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-elevated, #fff);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  z-index: 200;
+  font-size: 12px;
+}
+.ws-picker-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.ws-picker-current {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+.ws-picker-current code {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  background: var(--bg-input, var(--bg));
+  padding: 1px 4px;
+  border-radius: 3px;
+  word-break: break-all;
+}
+.ws-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.ws-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  text-align: left;
+  width: 100%;
+  color: var(--text);
+  font-size: 12px;
+  transition: background 0.1s;
+}
+.ws-picker-item:hover { background: var(--bg-hover); }
+.ws-picker-item.current {
+  background: var(--accent-bg, #dbeafe);
+  color: var(--accent-text, #1d4ed8);
+}
+.ws-picker-item .ws-picker-item-icon {
+  width: 14px; height: 14px;
+  color: inherit;
+  flex-shrink: 0;
+}
+.ws-picker-item .ws-picker-item-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+}
+.ws-picker-item .ws-picker-item-count {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
 
 /* Bottom: quota + settings + user */
 .left-bottom {
@@ -424,9 +843,7 @@ a { color: var(--accent); text-decoration: none; }
 .usage-popover-refresh .icon { width: 12px; height: 12px; display: block; }
 .usage-popover-refresh.loading { color: var(--text); cursor: wait; }
 .usage-popover-refresh.loading .icon { animation: spin 0.8s linear infinite; }
-.usage-popover-refresh.loading .usage-popover-refresh-text::before { content: "刷新中"; }
-.usage-popover-refresh.loading .usage-popover-refresh-text { font-size: 0; }
-.usage-popover-refresh.loading .usage-popover-refresh-text::before { font-size: 12px; }
+/* v0.5.av: 加载中文字由 JS 设置（避免 CSS ::before content 难 i18n） */
 .usage-popover-body { padding: 10px 12px 12px; }
 .usage-row {
   display: flex;
@@ -496,47 +913,27 @@ a { color: var(--accent); text-decoration: none; }
 .btn-menu .btn-value { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; }
 .btn-menu .btn-chevron { color: var(--text-tertiary); }
 
-/* User footer (bottom-left, plan name) */
+/* v0.5.ak: User footer 改成 GitHub 链接 */
 .user-footer {
   padding: 10px 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border-top: 1px solid var(--border);
-}
-.user-avatar {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--user-accent), #8b5cf6);
-  color: white;
-  display: grid; place-items: center;
-  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-secondary);
   font-size: 13px;
-  flex-shrink: 0;
-}
-.user-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-.user-name {
-  font-size: 12px;
   font-weight: 500;
+  transition: background 0.1s, color 0.1s;
+  cursor: pointer;
+}
+.user-footer:hover {
+  background: var(--bg-hover);
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.user-plan {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.user-chevron { color: var(--text-tertiary); }
+.user-footer .icon { flex-shrink: 0; }
+/* 兼容旧 CSS（避免删 .user-avatar 等导致 layout 警告） */
+.user-avatar, .user-info, .user-name, .user-plan, .user-chevron { display: none; }
 
 /* ============================================================
    Chat area
@@ -548,13 +945,59 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--bg);
   position: relative;
 }
+/* v0.5.bx-2: 切到 mcode session 但没历史 chat 的空状态（区别于 welcome 页） */
+.chat-empty-mcode {
+  margin: 40px auto 0;
+  max-width: 520px;
+  text-align: center;
+  padding: 24px;
+  color: var(--text-secondary);
+}
+.chat-empty-mcode-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.6; }
+.chat-empty-mcode-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.chat-empty-mcode-text { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.chat-empty-mcode-hint { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
+.chat-empty-mcode-hint code {
+  background: var(--bg-hover);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+}
+
+/* v0.5.bd: 欢迎页模式 — chat-empty + input-area 居中堆叠（仿 kimi） */
+.chat-area.is-welcome {
+  justify-content: center;       /* 垂直居中 */
+  align-items: stretch;
+}
+.chat-area.is-welcome .chat-scroll {
+  flex: 0 0 auto;                /* 不再撑满高度，flex 0 让整体被居中 */
+  width: 100%;
+  max-width: 1200px;             /* v0.5.be: 跟 input-inner 对齐 (920 → 1200) */
+  padding: 0;
+  overflow: visible;
+  margin: 0 auto;
+}
+.chat-area.is-welcome .chat-empty {
+  min-height: auto;              /* 覆盖之前的 55% min-height */
+  padding: 40px 24px 20px;
+}
+.chat-area.is-welcome .input-area {
+  border-top: none;              /* 去掉分隔线（跟 chat-empty 是一体的） */
+  background: transparent;
+  padding: 8px 24px 24px;
+}
+.chat-area.is-welcome .input-hint {
+  text-align: center;
+  margin-top: 8px;
+}
 .chat-scroll {
   flex: 1;
   overflow-y: auto;
   padding: 24px 0;
 }
 .chat-inner {
-  max-width: 800px;
+  max-width: 1100px;            /* v0.5.be: 跟 input-inner 对齐 (800 → 1100) */
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -563,25 +1006,65 @@ a { color: var(--accent); text-decoration: none; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100%;
-  padding: 40px 24px;
+  min-height: 55%;              /* v0.5.bc: 60% → 55%，给输入框让出一点空间 */
+  padding: 60px 24px 20px;      /* v0.5.bc: 40/24 → 60/24/20，让 logo 略高 */
   text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
 }
+/* v0.5.bc: logo 放大 88 → 110，仿 kimi 那种"icon 显眼"的感觉 */
+/* v0.5.bh: 去掉黑色背景（用户反馈原图本身就是透明背景，加 #000 反而是多余的黑边） */
 .chat-empty-logo {
-  font-size: 64px;
-  font-weight: 900;
-  letter-spacing: -3px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  margin-bottom: 24px;
-  line-height: 1;
+  width: 110px;
+  height: 110px;
+  border-radius: 22px;
+  margin-bottom: 28px;
+  padding: 0;
+  object-fit: contain;
 }
 .chat-empty-subtitle {
-  font-size: 16px;
+  font-size: 17px;              /* v0.5.bc: 18 → 17，subtitle 是提示语不需要太大 */
   color: var(--text-secondary);
-  margin-bottom: 24px;
+  margin-bottom: 0;             /* v0.5.bc: 28 → 0，因为 chip 已经挪走 */
+  font-weight: 500;
+}
+/* v0.5.bc: 工作区 chip 从欢迎页挪到输入框下面（仿 kimi 单独一行、左对齐） */
+.input-workspace-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+  padding: 0 4px;
+}
+.input-workspace-row .chat-empty-workspace {
+  margin-bottom: 0;             /* 覆盖 .chat-empty-workspace 原来的下边距 */
+}
+/* 欢迎页工作区选择 chip（仿桌面端 📁 xxx ⌄） */
+.chat-empty-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;            /* v0.5.bc: 8/16 → 6/14，更紧凑 */
+  margin-bottom: 28px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.chat-empty-workspace:hover {
+  background: var(--bg-active);
+  border-color: var(--accent);
+}
+.chat-empty-workspace .icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.chat-empty-workspace .ws-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 .chat-empty-hints {
   display: flex;
@@ -617,8 +1100,15 @@ a { color: var(--accent); text-decoration: none; }
   color: white;
 }
 .msg.user .msg-avatar { background: linear-gradient(135deg, #6b7280, #4b5563); }
-.msg.assistant .msg-avatar { background: linear-gradient(135deg, #3b82f6, #8b5cf6); }
+.msg.assistant .msg-avatar { background: transparent; padding: 0; }  /* v0.5.bs: 透出来让 brand-logo 满框 */
 .msg.system .msg-avatar { background: linear-gradient(135deg, #f59e0b, #d97706); }
+/* v0.5.bs: assistant avatar 用 img 填充整个 avatar 框 */
+.msg-avatar-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
 .msg-content { flex: 1; min-width: 0; }
 .msg-role {
   font-size: 12px;
@@ -658,6 +1148,416 @@ a { color: var(--accent); text-decoration: none; }
 }
 .msg-thinking-label { color: var(--accent); font-weight: 600; font-style: normal; }
 
+/* v0.5.af: 思考块紧凑内联显示（无 avatar 无双层标题） */
+.msg-thinking-inline {
+  margin: 2px 0 4px 12px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.msg-thinking-inline > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  padding: 1px 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+  font-style: italic;
+}
+.msg-thinking-inline > summary:hover {
+  color: var(--accent);
+}
+.msg-thinking-inline > summary::-webkit-details-marker { display: none; }
+.msg-thinking-inline > summary::marker { content: ''; }
+.msg-thinking-toggle {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s;
+  font-style: normal;
+}
+.msg-thinking-inline[open] > summary .msg-thinking-toggle {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+.msg-thinking-inline[open] > summary {
+  margin-bottom: 4px;
+}
+.msg-thinking-count {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-style: normal;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+.msg-thinking-inline > .msg-thinking {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 2px 0 0 16px;
+  padding: 4px 0 4px 8px;
+  border-left: 2px solid var(--border);
+}
+
+/* v0.5.bw: 工具调用块（→ toolName + input/output/status）
+   模仿 mcode TUI 风格：tool 块独立成块，header 显示 tool name + status
+   默认折叠（点开看 input/output），流式中默认展开 */
+.msg-tool {
+  margin: 4px 0 4px 12px;
+  font-size: 12.5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.msg-tool > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+  transition: background 0.12s;
+}
+.msg-tool > summary:hover { background: var(--bg-hover); }
+.msg-tool > summary::-webkit-details-marker { display: none; }
+.msg-tool > summary::marker { content: ''; }
+.msg-tool-toggle {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s;
+  width: 10px;
+  flex-shrink: 0;
+}
+.msg-tool[open] > summary .msg-tool-toggle { transform: rotate(90deg); color: var(--accent); }
+.msg-tool-icon { font-size: 12px; flex-shrink: 0; }
+.msg-tool-name {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: var(--text);
+  font-size: 12.5px;
+}
+.msg-tool-status {
+  margin-left: auto;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-family: var(--font-mono, monospace);
+  text-transform: lowercase;
+  letter-spacing: 0.3px;
+}
+.msg-tool-status.done { background: color-mix(in srgb, #10b981 20%, transparent); color: #10b981; }
+.msg-tool-status.failed { background: color-mix(in srgb, #ef4444 20%, transparent); color: #ef4444; }
+.msg-tool-status.running { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.msg-tool-status.pending { background: var(--bg-hover); color: var(--text-tertiary); }
+.msg-tool-body {
+  padding: 6px 10px 10px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary, var(--bg-hover));
+}
+.msg-tool-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+.msg-tool-input, .msg-tool-output, .msg-tool-locations {
+  margin-bottom: 6px;
+}
+.msg-tool-input:last-child, .msg-tool-output:last-child, .msg-tool-locations:last-child { margin-bottom: 0; }
+.msg-tool-input pre, .msg-tool-output pre {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.msg-tool-error {
+  font-size: 11.5px;
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+  font-family: var(--font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+/* v0.5.bx-6: tool 涉及的本地文件路径 — 跟 output 同级，区分样式 */
+.msg-tool-locations {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.msg-tool-loc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  cursor: pointer;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  color: var(--text);
+  transition: background 0.12s, border-color 0.12s;
+  user-select: none;
+}
+.msg-tool-loc:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.msg-tool-loc.copied {
+  background: color-mix(in srgb, #10b981 18%, transparent);
+  border-color: color-mix(in srgb, #10b981 40%, transparent);
+  color: #10b981;
+}
+.msg-tool-loc-icon { flex-shrink: 0; font-size: 11px; }
+.msg-tool-loc-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* v0.5.ad: 流式光标 ▍ 闪烁（chat 末尾 streaming 行的标识） */
+.msg-cursor {
+  display: inline-block;
+  color: var(--accent);
+  animation: cursor-blink 0.9s steps(2, end) infinite;
+  font-weight: 400;
+  margin-left: 1px;
+}
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+/* v0.5.bx-7: ask_user 工具的 questionnaire 渲染（mcode 0.1.4 的 mode: "questionnaire" 格式）
+   v0.5.bx-8: 学 mavis 桌面端弹窗布局 (内嵌 tool 块里, 不弹窗)
+   - 选项: 字母方块 (A/B/C/D) + 文字, 行间有分割线
+   - 顶部: 步数指示 (连问时)
+   - 底部: "其他"输入框 + 跳过/发送按钮 (横排) */
+.ask-questionnaire {
+  margin: 4px 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ask-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ask-step-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.ask-q {
+  font-size: 13.5px;
+  color: var(--text);
+  font-weight: 500;
+  line-height: 1.5;
+  flex: 1;
+}
+.ask-q-single {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.ask-step-counter {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ask-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+}
+.ask-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.08s;
+  width: 100%;
+}
+.ask-opt:last-child { border-bottom: none; }
+.ask-opt:hover {
+  background: var(--bg-hover);
+}
+.ask-opt:active { transform: translateX(1px); }
+.ask-opt.clicked {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-hover));
+  color: var(--accent);
+  font-weight: 500;
+  cursor: default;
+}
+.ask-opt:disabled { opacity: 0.45; cursor: default; }
+.ask-opt:disabled:hover { background: transparent; }
+.ask-opt-letter {
+  display: inline-grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border-radius: 4px;
+  background: var(--bg-sidebar);
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-family: "SF Mono", Consolas, monospace;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.ask-opt:hover .ask-opt-letter {
+  background: var(--bg-elevated);
+  border-color: var(--text-tertiary);
+}
+.ask-opt.clicked .ask-opt-letter {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.ask-opt-label { flex: 1; }
+.ask-opt-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.ask-answered {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 2px;
+  padding: 4px 10px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  align-self: flex-start;
+}
+.ask-answered.skipped { color: var(--text-tertiary); }
+.ask-answered-mark { color: var(--success); font-weight: 700; }
+/* 底部"其他"输入框 + 跳过/发送按钮 (学弹窗 footer) */
+.ask-step-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.ask-step-foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.ask-step-other {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: border-color 0.1s;
+  min-width: 0;
+}
+.ask-step-other:focus-within { border-color: var(--accent); }
+.ask-step-other-icon {
+  color: var(--text-tertiary);
+  font-size: 13px;
+  flex-shrink: 0;
+  font-family: "SF Mono", Consolas, monospace;
+}
+.ask-step-other-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  padding: 0;
+  min-width: 0;
+}
+.ask-step-other-input::placeholder { color: var(--text-tertiary); }
+.ask-step-other-clear {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  font-family: inherit;
+}
+.ask-step-other-clear:hover { color: var(--text); }
+.ask-skip,
+.ask-submit {
+  padding: 7px 18px;
+  background: var(--bg-main);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s;
+  font-family: inherit;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.ask-skip:hover,
+.ask-submit:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-tertiary);
+}
+.ask-submit.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.ask-submit.primary:hover {
+  filter: brightness(1.05);
+  border-color: var(--accent);
+}
+
 .goal-block, .todo-block {
   margin: 8px 0;
   padding: 10px 12px;
@@ -687,6 +1587,117 @@ a { color: var(--accent); text-decoration: none; }
 .todo-item.pending .todo-marker { color: var(--text-tertiary); }
 .todo-item.done .todo-text { text-decoration: line-through; color: var(--text-tertiary); }
 
+/* v0.5.ab: Ask 块（在 chat 里内嵌显示，可点击选项） */
+.ask-block {
+  margin: 10px 0;
+  padding: 12px 14px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.ask-block-header {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 600; color: var(--accent);
+  margin-bottom: 8px;
+}
+.ask-block-progress { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-weight: normal; }
+.ask-block-question { color: var(--text); margin-bottom: 10px; font-size: 14px; font-weight: 500; }
+.ask-option {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 6px 10px; margin: 2px 0;
+  border-radius: 4px; cursor: pointer;
+  transition: background 0.1s;
+}
+.ask-option:hover { background: var(--bg-hover); }
+.ask-option-num { color: var(--text-tertiary); min-width: 18px; font-variant-numeric: tabular-nums; }
+.ask-option-label { color: var(--text); font-weight: 500; min-width: 180px; }
+.ask-option-desc { color: var(--text-secondary); font-size: 12.5px; }
+.ask-option-other { color: var(--text-tertiary); font-style: italic; }
+
+/* v0.5.ab: Plan 块（chat 内的摘要预览） */
+.plan-block {
+  margin: 4px 0 10px 0;
+  padding: 14px 16px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-left: 3px solid #5e8bff;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.plan-block-header {
+  display: flex; align-items: center; gap: 8px;
+  color: #5e8bff; font-weight: 600;
+  margin-bottom: 8px;
+}
+.plan-block-title { font-size: 15px; }
+.plan-block-meta { margin-left: auto; font-size: 11px; color: var(--text-tertiary); }
+.plan-block-summary { color: var(--text); margin: 8px 0; }
+.plan-block-actions { display: flex; gap: 8px; margin-top: 10px; }
+.plan-action {
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-hover);
+  font-size: 12.5px;
+}
+.plan-action.primary { background: var(--accent); color: white; border-color: var(--accent); }
+.plan-action:hover { filter: brightness(0.95); }
+
+/* v0.5.ab: Modal 覆盖层（Plan/Ask 弹窗） */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+  animation: fade-in 0.15s ease-out;
+}
+.modal {
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-width: 880px; max-height: 80vh;
+  width: 90vw; display: flex; flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+.modal-header {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; color: #5e8bff;
+}
+.modal-header-title { font-size: 15px; }
+.modal-header-meta { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-weight: normal; }
+.modal-close {
+  background: none; border: none; cursor: pointer; padding: 4px;
+  color: var(--text-secondary); font-size: 18px; line-height: 1;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body {
+  padding: 16px 22px; overflow: auto; flex: 1;
+  font-size: 13.5px; line-height: 1.65;
+}
+.modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 10px; align-items: center;
+  font-size: 12px; color: var(--text-tertiary);
+}
+.modal-footer-spacer { flex: 1; }
+
+/* v0.5.ab: Ask 弹窗里的 "Other" 输入框 */
+.ask-other-input {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px; background: var(--bg-main);
+  color: var(--text); font: inherit;
+  margin-top: 6px;
+}
+.ask-other-input:focus { outline: none; border-color: var(--accent); }
+
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+
 .thinking-indicator {
   display: flex;
   align-items: center;
@@ -711,10 +1722,11 @@ a { color: var(--accent); text-decoration: none; }
 .input-area {
   border-top: 1px solid var(--border);
   background: var(--bg-elevated);
-  padding: 12px 16px 16px;
+  padding: 16px 24px 20px;
 }
 .input-inner {
-  max-width: 800px;
+  max-width: 1200px;           /* v0.5.be: 仿 kimi 大输入框 (920 → 1200) */
+  width: 100%;                 /* 撑满 chat area 宽度 */
   margin: 0 auto;
 }
 .attachment-list {
@@ -746,8 +1758,8 @@ a { color: var(--accent); text-decoration: none; }
   position: relative;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 8px;
+  border-radius: 16px;          /* v0.5.bc: 12 → 16，仿 kimi 更大圆角 */
+  padding: 12px 14px;           /* v0.5.bc: 8 → 12/14，更宽松 */
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .input-box:focus-within {
@@ -756,15 +1768,15 @@ a { color: var(--accent); text-decoration: none; }
 }
 .input-textarea {
   width: 100%;
-  min-height: 36px;
-  max-height: 200px;
+  min-height: 48px;             /* v0.5.bc: 36 → 48，输入框整体放大 */
+  max-height: 240px;
   background: transparent;
   border: none;
   resize: none;
-  font-size: 14px;
+  font-size: 15px;              /* v0.5.bc: 14 → 15 */
   line-height: 1.5;
   color: var(--text);
-  padding: 6px 8px;
+  padding: 6px 4px;
 }
 .input-textarea::placeholder { color: var(--text-tertiary); }
 .input-toolbar {
@@ -787,13 +1799,11 @@ a { color: var(--accent); text-decoration: none; }
 .btn-tool .icon { width: 14px; height: 14px; }
 .btn-tool.active { background: var(--accent-bg); color: var(--accent-text); }
 .btn-tool .mode-icon { width: 14px; height: 14px; margin-right: 2px; }
-/* v0.5.x: btn-folder 不假装可点（只是显示当前 workspace） */
-#btn-folder { cursor: default; }
-#btn-folder:hover { background: transparent; color: var(--text-secondary); }
-
-/* v0.5.x: 窄屏自适应 — 模式按钮只显示图标，隐藏 label
-   触发条件：聊天区窄于 720px 时（input-toolbar 容纳不下） */
-@media (max-width: 720px) {
+.btn-tool #mode-label { white-space: nowrap; }
+/* v0.5.bh: 模式按钮 — 显示 label（"Full Access"）让用户知道当前模式 */
+.btn-tool #mode-label { display: inline; margin-left: 4px; }
+.btn-tool#btn-mode { padding: 5px 8px; }
+@media (max-width: 700px) {
   .btn-tool #mode-label { display: none; }
   .btn-tool#btn-mode { padding: 5px; }
 }
@@ -809,6 +1819,115 @@ a { color: var(--accent); text-decoration: none; }
 .btn-send:hover { background: var(--accent-hover); }
 .btn-send:disabled { background: var(--text-tertiary); cursor: not-allowed; }
 .btn-send .icon { width: 16px; height: 16px; }
+.btn-send .icon-stop { display: none; }
+/* v0.5.aa: exec running 时 send 按钮变 stop（红色方块图标，hover 变深红） */
+.btn-send.is-stop { background: var(--danger); }
+.btn-send.is-stop:hover { background: var(--danger-hover, #c0392b); }
+.btn-send.is-stop .icon-send { display: none; }
+.btn-send.is-stop .icon-stop { display: block; }
+
+/* v0.5.aa: 思考中指示器，显示在 chat 底部（取代顶部 chip-thinking） */
+.chat-thinking {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 8px 0 4px 16px;
+  padding: 8px 14px;
+  background: var(--bg-hover);
+  border-radius: 12px 12px 12px 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+/* v0.5.ak: model picker popover（btn-model 点击弹出） */
+.model-picker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  z-index: 100;
+}
+.model-picker-title { font-size: 12px; color: var(--text-tertiary); margin-bottom: 8px; }
+/* v0.5.bh: 可选模型列表（从 /api/models 拉） */
+.model-picker-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.model-picker-item-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.model-picker-item-btn:hover { background: var(--bg-hover); }
+.model-picker-item-btn.current {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.model-picker-item-btn .provider {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-left: 8px;
+}
+.model-picker-item-btn.current .provider { color: var(--accent-text); }
+.model-picker-loading, .model-picker-empty {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 8px 10px;
+  text-align: center;
+}
+.model-picker-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0 8px;
+}
+.model-picker-input {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--bg-input, var(--bg));
+  color: var(--text); font-size: 13px; box-sizing: border-box;
+}
+.model-picker-input:focus { outline: none; border-color: var(--accent); }
+.model-picker-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 6px; }
+.model-picker-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.btn-cancel {
+  padding: 4px 12px; background: transparent; border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-secondary); font-size: 12px; cursor: pointer;
+}
+.btn-cancel:hover { background: var(--bg-hover); }
+.chat-thinking-avatar {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.chat-thinking-dots {
+  display: inline-flex; gap: 3px;
+}
+.chat-thinking-dots span {
+  width: 5px; height: 5px;
+  background: var(--text-tertiary);
+  border-radius: 50%;
+  animation: thinking-bounce 1.2s infinite ease-in-out;
+}
+.chat-thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+.chat-thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes thinking-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
 .input-hint {
   font-size: 11px;
   color: var(--text-tertiary);
@@ -850,7 +1969,10 @@ a { color: var(--accent); text-decoration: none; }
   border-left: 1px solid var(--border);
   overflow-y: auto;
   padding: 16px;
+  transition: transform 0.2s;
 }
+/* v0.5.ax: 欢迎页时隐藏右侧栏（chat-area 居中铺满） */
+.right-panel.welcome-hidden { display: none; }
 .right-section {
   margin-bottom: 16px;
   padding: 12px;
@@ -877,6 +1999,12 @@ a { color: var(--accent); text-decoration: none; }
 .kv-label { color: var(--text-secondary); }
 .kv-value { color: var(--text); font-family: "SF Mono", Consolas, monospace; font-size: 11.5px; text-align: right; word-break: break-all; }
 .kv-value.muted { color: var(--text-tertiary); }
+/* v0.5.bx: mcode session id 用 monospace + 略大字（避免 10px 下 m/n 混淆） */
+#r-session-id {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
 
 .context-bar {
   margin: 8px 0;
@@ -982,16 +2110,16 @@ a { color: var(--accent); text-decoration: none; }
 .slash-item.empty { color: var(--text-tertiary); justify-content: center; padding: 20px; }
 
 /* ============================================================
-   Mode popover
+   Mode popover — v0.5.bf: 移到 input-box 内部，position 相对 input-box
    ============================================================ */
 .mode-popover {
   position: absolute;
-  bottom: 60px;
-  left: 12px;
-  width: 220px;
+  bottom: calc(100% + 6px);   /* 跟 model-picker 一致：按钮上方 */
+  left: 0;                    /* 跟按钮左对齐（mode 按钮在 toolbar 最左） */
+  width: 260px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
   box-shadow: var(--shadow-lg);
   padding: 4px;
   z-index: 50;
@@ -1050,11 +2178,13 @@ a { color: var(--accent); text-decoration: none; }
    Mobile responsive
    ============================================================ */
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 220px 1fr 300px; }
+  .layout > .left-panel { width: 220px; }
+  .layout > .right-panel { width: 300px; }
 }
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; }
-  .left-panel, .right-panel {
+  .layout { flex-direction: column; }
+  .layout > .left-panel, .layout > .right-panel {
+    width: 100%;
     position: fixed;
     top: 44px;
     bottom: 0;
@@ -1436,19 +2566,24 @@ a { color: var(--accent); text-decoration: none; }
       <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="topbar-brand">
-      <span class="topbar-logo">M</span>
+      <img class="topbar-logo" src="/brand-logo.png" alt="mcode" />
       <span data-i18n="title">mcode Web UI</span>
       <span class="topbar-version" id="version">v0.1.2</span>
     </div>
     <div class="topbar-status" id="topbar-status">
-      <span class="chip" data-status="idle" id="chip-status">
-        <span class="chip-dot"></span>
-        <span data-i18n="status_idle">空闲</span>
+      <!-- v0.5.ak: 在线 webui tab 数 -->
+      <span class="chip chip-online" id="chip-online" data-i18n-title="chip_online_title" title="当前连到 webui server 的 tab 数">
+        <span>🟢</span>
+        <span id="chip-online-text">1 台</span>
       </span>
-      <span class="chip" data-status="idle" id="chip-thinking" hidden>
-        <span class="chip-dot"></span>
-        <span data-i18n="status_thinking">思考中</span>
-      </span>
+      <!-- v0.5.bp: 局域网访问链接 — LAN on 时显示当前 IP，点复制完整 URL（URL 来自 server 的 detectLanIp()，非硬编码） -->
+      <a class="chip chip-lan-link" id="chip-lan-link" hidden data-lan-url="" data-i18n-title="lan_link_title" title="点击复制局域网访问 URL">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+        </svg>
+        <span id="chip-lan-link-text">—</span>
+      </a>
+      <!-- v0.5.ax: chip-workspace 从顶栏挪到 chat-empty 欢迎页（启动对话后不允许改工作区） -->
       <span class="chip" id="chip-tps" hidden>
         <span data-i18n="tps_label">tok/s</span>
         <b id="tps-value">—</b>
@@ -1477,22 +2612,17 @@ a { color: var(--accent); text-decoration: none; }
       </div>
 
       <div class="sessions-scroll" id="sessions-scroll">
-        <div class="sessions-section">
-          <div class="section-title" data-i18n="workspace">工作区</div>
-          <div class="workspace-item active" id="workspace-item">
-            <svg class="icon workspace-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-            <span class="workspace-text" id="workspace-text">—</span>
-          </div>
-        </div>
-        <div class="sessions-section">
-          <div class="section-title" data-i18n="recent">最近会话</div>
-          <div id="sessions-list">
-            <div class="session-title-empty" data-i18n="no_sessions">暂无会话记录</div>
-          </div>
-          <button class="btn-refresh-sessions" id="btn-refresh-sessions" title="刷新会话列表">
+        <!-- v0.5.as: 会话列表 标题 + 刷新按钮 放顶部 -->
+        <div class="sessions-header">
+          <span class="sessions-header-title" data-i18n="sessions_list">会话列表</span>
+          <button class="btn-refresh-sessions" id="btn-refresh-sessions" data-i18n-title="refresh" title="刷新会话列表">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            <span>刷新</span>
+            <span data-i18n="refresh">刷新</span>
           </button>
+        </div>
+        <!-- v0.5.ar: 按工作区分组的会话列表（每组可折叠） -->
+        <div id="sessions-list">
+          <div class="session-title-empty" data-i18n="no_sessions">暂无会话记录</div>
         </div>
       </div>
 
@@ -1509,8 +2639,8 @@ a { color: var(--accent); text-decoration: none; }
         <div class="usage-popover" id="usage-popover" role="dialog" aria-label="套餐用量详情" hidden>
           <div class="usage-popover-header">
             <span class="usage-popover-title" data-i18n="usage">套餐用量</span>
-            <button class="usage-popover-refresh" id="usage-popover-refresh" title="刷新" aria-label="刷新用量">
-              <span class="usage-popover-refresh-text" data-refresh-default>刷新</span>
+            <button class="usage-popover-refresh" id="usage-popover-refresh" data-i18n-title="refresh" title="刷新" data-i18n-aria-label="refresh" aria-label="刷新用量">
+              <span class="usage-popover-refresh-text" data-refresh-default data-i18n="refresh">刷新</span>
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>
           </div>
@@ -1530,34 +2660,46 @@ a { color: var(--accent); text-decoration: none; }
           <span class="btn-value" id="language-value">—</span>
           <svg class="icon btn-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
-        <!-- v0.4.0: 设置按钮暂时不需要（外观/语言/局域网在主栏已暴露） -->
 
-        <!-- 用户 plan 名（最底部） -->
-        <div class="user-footer" id="user-footer">
-          <div class="user-avatar" id="user-avatar">M</div>
-          <div class="user-info">
-            <div class="user-name" id="user-name" data-i18n="user_loading">加载中...</div>
-            <div class="user-plan" id="user-plan">—</div>
-          </div>
-          <svg class="icon user-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        </div>
+        <!-- v0.5.at: 局域网访问开关（左下角）— 跟 Usage/Appearance 同结构：icon + 文字 + 右侧 开/关 + 右箭头 -->
+        <button class="btn-menu btn-lan-toggle" id="chip-lan" data-lan="on" data-i18n-aria-label="lan_access" aria-label="局域网访问">
+          <svg class="icon btn-icon chip-lan-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+            <line x1="12" y1="20" x2="12.01" y2="20"/>
+          </svg>
+          <span class="btn-text" data-i18n="lan_access">局域网访问</span>
+          <span class="btn-value" id="chip-lan-value" data-i18n="lan_on">开</span>
+          <svg class="icon btn-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+
+        <!-- v0.5.ak: 改为 GitHub 链接（指向 Ponkan 的开源仓库） -->
+        <a class="user-footer github-link" id="user-footer" href="https://github.com/Wzdhehe/mcode-webui" target="_blank" rel="noopener noreferrer" title="mcode-webui on GitHub">
+          <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.69-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.83 1.18 3.09 0 4.42-2.7 5.39-5.27 5.68.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.67.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
+          <span>GitHub</span>
+        </a>
       </div>
     </aside>
 
     <!-- ============================ Chat Area ============================ -->
     <main class="chat-area" id="chat-area">
       <div class="chat-scroll" id="chat-scroll">
+        <!-- v0.5.bb: 欢迎页挪到 chat-inner 外面，避免 renderChat 的 innerHTML='' 把它清掉 -->
+        <!-- v0.5.bc: 仿 kimi — 欢迎页只留 logo + 提示语，工作区 chip 挪到输入框下面 -->
+        <div class="chat-empty" id="chat-empty">
+          <img class="chat-empty-logo" src="/brand-logo.png" alt="MiniMax Code" />
+          <div class="chat-empty-subtitle" data-i18n="welcome_tagline">还没有消息 — 在下方输入开始对话</div>
+        </div>
         <div class="chat-inner" id="chat-inner">
-          <div class="chat-empty" id="chat-empty">
-            <div class="chat-empty-logo">MCODE</div>
-            <div class="chat-empty-subtitle" data-i18n="empty_hint_1">还没有消息</div>
-            <div class="chat-empty-hints">
-              <button class="chat-hint" data-cmd="/help" data-i18n="hint_help">查看命令</button>
-              <button class="chat-hint" data-cmd="/status" data-i18n="hint_status">查看状态</button>
-              <button class="chat-hint" data-cmd="/sessions" data-i18n="hint_sessions">会话列表</button>
-              <button class="chat-hint" data-cmd="/usage" data-i18n="hint_usage">套餐用量</button>
-            </div>
-          </div>
+          <!-- 消息渲染到这里（renderChat 动态填充） -->
+        </div>
+        <div class="chat-thinking" id="chat-thinking" hidden>
+          <img class="chat-thinking-avatar" src="/brand-logo.png" alt="MiniMax Code" />
+          <span class="chat-thinking-dots">
+            <span></span><span></span><span></span>
+          </span>
+          <span class="chat-thinking-text" data-i18n="status_thinking">思考中</span>
         </div>
       </div>
 
@@ -1582,19 +2724,91 @@ a { color: var(--accent); text-decoration: none; }
                 <span id="mode-label">Default</span>
                 <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <button class="btn-tool" id="btn-folder" title="工作目录">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                <span id="folder-label">—</span>
-              </button>
               <div class="input-spacer"></div>
               <button class="btn-tool" id="btn-model" title="模型">
                 <span id="model-label">—</span>
                 <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
               <button class="btn-send" id="btn-send" title="发送 (Enter)">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                <svg class="icon icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                <svg class="icon icon-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
               </button>
             </div>
+            <!-- v0.5.bf: mode popover 移到 input-box 内部，跟着输入框走（之前在 body 底部，welcome 时定位错位） -->
+            <!-- v0.5.bh: Ask 图标改成纯问号（去掉外圆）；auto ↔ full 图标互换 -->
+            <div class="mode-popover" id="mode-popover" hidden>
+              <button class="mode-popover-item" data-mode="ask">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1 2-1.5 2.5-.5.5-1 1-1 1.5"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span data-i18n="mode_ask">询问</span>
+                <span class="mode-popover-item-desc" data-i18n="mode_ask_desc">敏感操作确认</span>
+              </button>
+              <button class="mode-popover-item" data-mode="auto">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span data-i18n="mode_auto">自动</span>
+                <span class="mode-popover-item-desc" data-i18n="mode_auto_desc">仅高风险询问</span>
+              </button>
+              <button class="mode-popover-item" data-mode="full">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span data-i18n="mode_full">完全 访问</span>
+                <span class="mode-popover-item-desc" data-i18n="mode_full_desc">无需确认</span>
+              </button>
+            </div>
+            <!-- v0.5.ak: model picker popover（btn-model 点击弹出） -->
+            <!-- v0.5.bi: 列表来自 /api/models（基于 mcode TUI 已配置的 provider 映射） -->
+            <div class="model-picker" id="model-picker" hidden>
+              <div class="model-picker-title" data-i18n="model_picker_title">切换模型</div>
+              <div class="model-picker-list" id="model-picker-list">
+                <div class="model-picker-loading" data-i18n="model_picker_loading">加载中...</div>
+              </div>
+              <div class="model-picker-divider"></div>
+              <input class="model-picker-input" id="model-picker-input" placeholder="provider/model[#variant]" />
+              <div class="model-picker-hint" data-i18n="model_picker_hint">回车发送 /model 命令给 mcode</div>
+              <div class="model-picker-actions">
+                <button class="btn-cancel" id="model-picker-cancel" data-i18n="cancel">取消</button>
+              </div>
+            </div>
+            <!-- v0.5.al: workspace picker popover（chip-workspace 点击弹出） -->
+            <div class="workspace-picker" id="workspace-picker" hidden>
+              <div class="workspace-picker-title" data-i18n="workspace_picker_title">切换工作区</div>
+              <div class="workspace-picker-current" id="workspace-picker-current">—</div>
+              <input class="workspace-picker-input" id="workspace-picker-input" placeholder="C:\Users\your-name\project-path" />
+              <div class="workspace-picker-actions-row">
+                <button class="btn-workspace-action" id="workspace-picker-confirm" title="Switch to entered path">Switch</button>
+                <button class="btn-workspace-action" id="workspace-picker-tui" data-i18n-title="workspace_use_tui" title="切换到 mcode TUI 当前的工作区">Use TUI</button>
+                <button class="btn-workspace-action" id="workspace-picker-reset" data-i18n-title="workspace_reset" title="恢复 webui 启动时检测到的默认工作区">Reset</button>
+              </div>
+              <label class="workspace-picker-sync">
+                <input type="checkbox" id="workspace-picker-sync" />
+                <span>Also update mcode TUI's cwd (write cwd.json)</span>
+              </label>
+              <div class="workspace-picker-recents" id="workspace-picker-recents" hidden>
+                <div class="workspace-picker-recents-title">最近使用</div>
+                <div class="workspace-picker-recents-list" id="workspace-picker-recents-list"></div>
+              </div>
+              <!-- v0.5.am: 可视化目录树浏览（懒加载） -->
+              <div class="workspace-picker-browse">
+                <button class="workspace-picker-browse-toggle" id="workspace-picker-browse-toggle">
+                  <span class="workspace-picker-browse-chevron" id="workspace-picker-browse-chevron">▶</span>
+                  <span>浏览目录…</span>
+                </button>
+                <div class="workspace-picker-browse-panel" id="workspace-picker-browse-panel" hidden>
+                  <div class="workspace-picker-breadcrumb" id="workspace-picker-breadcrumb"></div>
+                  <div class="workspace-picker-tree" id="workspace-picker-tree">
+                    <div class="workspace-picker-tree-loading" id="workspace-picker-tree-loading">加载中…</div>
+                  </div>
+                </div>
+              </div>
+              <div class="workspace-picker-hint">回车切换 · Esc 关闭</div>
+            </div>
+          </div>
+          <!-- v0.5.bc: 工作区 chip 从欢迎页挪到输入框下面（独立一行，左对齐，仿 kimi） -->
+          <!-- v0.5.bx: 有对话时整个 row 隐藏（已选工作区就不让改，要改就点 sidebar "New Chat" 重新选） -->
+          <div class="input-workspace-row" id="input-workspace-row">
+            <button class="chat-empty-workspace" id="chat-empty-workspace" data-i18n-title="workspace_switch" title="点击切换工作区">
+              <svg class="icon workspace-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span id="chat-empty-ws-text">…</span>
+              <svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
           </div>
           <div class="input-hint" id="input-hint">
             <span data-i18n="hint_footer">/ 命令 · @ 文件 · Ctrl+V 粘贴图片 · Enter 发送</span>
@@ -1606,6 +2820,22 @@ a { color: var(--accent); text-decoration: none; }
 
     <!-- ============================ Right Panel ============================ -->
     <aside class="right-panel" id="right-panel">
+
+      <!-- TODO (dynamic, only when present) — 优先显示在最上面 -->
+      <div class="right-section" id="r-todo-section" hidden>
+        <div class="right-section-title" data-i18n="section_todo">TODO</div>
+        <div class="todo-content" id="r-todo-list"></div>
+      </div>
+
+      <!-- GOAL (dynamic, only when active) -->
+      <div class="right-section" id="r-goal-section" hidden>
+        <div class="right-section-title" data-i18n="section_goal">GOAL</div>
+        <div class="goal-content">
+          <span class="goal-status-badge" id="r-goal-status">—</span>
+          <span id="r-goal-text">—</span>
+        </div>
+        <div class="goal-content" id="r-goal-duration" style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"></div>
+      </div>
 
       <!-- SESSION -->
       <div class="right-section">
@@ -1644,24 +2874,11 @@ a { color: var(--accent); text-decoration: none; }
         </div>
       </div>
 
-      <!-- GOAL (dynamic, only when active) -->
-      <div class="right-section" id="r-goal-section" hidden>
-        <div class="right-section-title" data-i18n="section_goal">GOAL</div>
-        <div class="goal-content">
-          <span class="goal-status-badge" id="r-goal-status">—</span>
-          <span id="r-goal-text">—</span>
-        </div>
-        <div class="goal-content" id="r-goal-duration" style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"></div>
-      </div>
-
-      <!-- TODO (dynamic, only when present) -->
-      <div class="right-section" id="r-todo-section" hidden>
-        <div class="right-section-title" data-i18n="section_todo">TODO</div>
-        <div class="todo-content" id="r-todo-list"></div>
-      </div>
-
     </aside>
   </div>
+
+  <!-- v0.5.ab: Ask / Plan 弹窗容器（位置 fixed，不参与 grid） -->
+  <div id="modal-root" style="position:fixed;inset:0;pointer-events:none;z-index:8000"></div>
 
   <!-- ============================ Slash Command Overlay ============================ -->
   <div class="slash-overlay" id="slash-overlay" hidden>
@@ -1669,42 +2886,22 @@ a { color: var(--accent); text-decoration: none; }
     <div class="slash-results" id="slash-results"></div>
   </div>
 
-  <!-- ============================ Mode Popover ============================ -->
-  <div class="mode-popover" id="mode-popover" hidden>
-    <button class="mode-popover-item" data-mode="ask">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      <span data-i18n="mode_ask">询问</span>
-      <span class="mode-popover-item-desc" data-i18n="mode_ask_desc">敏感操作确认</span>
-    </button>
-    <button class="mode-popover-item" data-mode="auto">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-      <span data-i18n="mode_auto">自动</span>
-      <span class="mode-popover-item-desc" data-i18n="mode_auto_desc">仅高风险询问</span>
-    </button>
-    <button class="mode-popover-item" data-mode="full">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      <span data-i18n="mode_full">完全 访问</span>
-      <span class="mode-popover-item-desc" data-i18n="mode_full_desc">无需确认</span>
-    </button>
+  <!-- v0.5.ar: 新建会话 - 工作区选择 popover（点"新建会话"按钮弹） -->
+  <div class="ws-picker-popover" id="new-chat-ws-picker" hidden>
+    <div class="ws-picker-title" data-i18n="workspace_picker_select">选择工作区</div>
+    <div class="ws-picker-current"><span data-i18n="workspace_picker_current">当前：</span><code id="new-chat-current-ws">—</code></div>
+    <div class="ws-picker-list" id="new-chat-ws-list">
+      <!-- 动态渲染已知 workspace -->
+    </div>
+    <div class="ws-picker-actions-row">
+      <button class="btn-workspace-action" id="new-chat-ws-other">Other path…</button>
+      <button class="btn-workspace-action primary" id="new-chat-ws-cancel" data-i18n="cancel">取消</button>
+    </div>
   </div>
 
-  <!-- ============================ Settings Menu (v0.4.0: 暂时不需要，隐藏) ============================ -->
-  <div class="settings-menu" id="settings-menu" hidden>
-    <div class="settings-menu-title" data-i18n="settings">设置</div>
-    <button class="btn-menu" id="menu-toggle-theme" style="padding:8px 10px">
-      <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      <span class="btn-text" data-i18n="toggle_theme">切换主题</span>
-    </button>
-    <button class="btn-menu" id="menu-toggle-lang" style="padding:8px 10px">
-      <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-      <span class="btn-text" data-i18n="toggle_lang">中/English</span>
-    </button>
-    <div class="settings-menu-divider"></div>
-    <button class="btn-menu" id="menu-network" style="padding:8px 10px">
-      <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-      <span class="btn-text" data-i18n="network">局域网访问</span>
-    </button>
-  </div>
+  <!-- v0.5.bf: mode popover 已移入 input-box 内部（避免 welcome 时定位错位） -->
+
+    <!-- v0.5.aq: 旧 settings menu 元素已删除（chip-lan 自带开关） -->
 
   <!-- ============================ Ask Modal (v0.4.0 新增) ============================ -->
   <div class="modal-backdrop" id="ask-modal">
@@ -1839,6 +3036,11 @@ a { color: var(--accent); text-decoration: none; }
 
 </div>
 
+<!-- v0.5.ab: MD 渲染 + 代码高亮（本地化） -->
+<!-- v0.5.bn: 删掉 hl/core.min.js 等 4 个 script —— 是 CommonJS bundle (`module.exports=...`)，浏览器跑报错
+     marked 配置的 highlight() 函数有 window.hljs 判空 fallback（见下），没 hljs 就返回纯文本 code blocks，不影响聊天 -->
+<script src="/lib/marked.min.js"></script>
+
 <script>
 // ============================================================
 // Config
@@ -1847,6 +3049,20 @@ const urlParams = new URLSearchParams(window.location.search)
 const tokenParam = urlParams.get('token') || ''
 const TOKEN = tokenParam  // 给 fetch/SSE 用
 const TOKEN_QUERY = TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : ''
+
+// v0.5.ai: A2 per-client — 每个 webui tab 一个 client id (localStorage 持久化)
+// 拼到所有 /api/xxx URL query string，server 端按 cid 路由 SSE + state
+const CID = (() => {
+  let c = localStorage.getItem('webui_cid')
+  if (!c) {
+    c = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10))
+    try { localStorage.setItem('webui_cid', c) } catch {}
+  }
+  return c
+})()
+const CID_QUERY = `cid=${encodeURIComponent(CID)}`
+// API_SUFFIX = TOKEN_QUERY (if any) + '&cid=xxx' (or '?cid=xxx' first)
+const API_SUFFIX = TOKEN_QUERY ? `${TOKEN_QUERY}&${CID_QUERY}` : `?${CID_QUERY}`
 
 const HEADERS = TOKEN ? { 'Authorization': `Bearer ${TOKEN}` } : {}
 
@@ -1864,12 +3080,17 @@ const MODE_ICONS = {
 // ============================================================
 const I18N = {
   zh: {
-    title: 'mcode Web UI',
+    title: 'Mcode Web UI',
     new_chat: '新建会话',
     search_placeholder: '搜索会话...',
     workspace: '工作区',
     recent: '最近会话',
     no_sessions: '暂无会话记录',
+    model_picker_title: '切换模型',
+    model_picker_loading: '加载中...',
+    model_picker_empty: '没有可用模型',
+    model_picker_hint: '回车发送 /model 命令给 mcode',
+    cancel: '取消',
     usage: '套餐用量',
     usage_loading: '点击套餐用量加载...',
     upgrade: '升级',
@@ -1882,6 +3103,7 @@ const I18N = {
     language_en: 'English',
     empty_hint_1: '还没有消息 — 在下方输入开始对话',
     empty_hint_2: '按 / 触发命令检索，Ctrl+V 粘贴图片',
+    welcome_tagline: '还没有消息 — 在下方输入开始对话',
     hint_help: '查看命令',
     hint_status: '查看状态',
     hint_sessions: '会话列表',
@@ -1894,9 +3116,17 @@ const I18N = {
     section_context: '上下文',
     section_goal: '目标',
     section_todo: '待办',
+    section_plan: '计划',
+    section_thinking: '思考',
+    show_thinking: '查看思考',
+    lines: '行',
+    ask_title: '提问',
+    plan_review: '计划预览',
+    plan_view_btn: '查看完整计划',
     r_title: '标题', r_dir: '目录', r_branch: '分支', r_tree: '状态',
     r_used: '已用', r_percent: '占比', r_tps: '速度',
     status_idle: '空闲',
+    status_offline: '离线',
     status_thinking: '思考中',
     status_running: '运行中',
     status_completed: '完成',
@@ -1924,14 +3154,69 @@ const I18N = {
     perm_read: '只读',
     plan_mode_continue: '继续 plan',
     plan_mode_deny: '拒绝',
+    // v0.5.av: 新增 i18n 键
+    lan_access: '局域网访问',
+    lan_on: '开',
+    lan_off: '关',
+    // v0.5.bp: 顶栏 LAN 链接 chip
+    lan_link_title: '点击复制局域网访问 URL',
+    // v0.5.br: copy / model-switch toast 文案
+    copy_success: '已复制',
+    copy_failed: '复制失败',
+    copy_failed_manual: '复制失败，请手动复制',
+    model_switched: '已切到',
+    sessions_list: '会话列表',
+    refresh: '刷新',
+    quota_remaining: '剩余',
+    quota_5h_limit: '5 小时限额',
+    quota_weekly_limit: '每周限额',
+    quota_next_reset: '下次重置',
+    quota_loading_fail: '加载失败',
+    quota_loading_idle: '点击套餐用量加载…',
+    usage_refreshed: '用量已刷新',
+    lan_title_on: '局域网访问已开启 — 手机/其他电脑可访问',
+    lan_title_off: '局域网访问已关闭 — 只有本机能访问',
+    // v0.5.aw: 工作区/会话相关
+    workspace_unset: '（未设置）',
+    workspace_unset_short: '未设置',
+    workspace_current: '当前',
+    workspace_switch: '点击切换工作区',
+    workspace_picker_title: '切换工作区',
+    workspace_picker_select: '选择工作区',
+    workspace_picker_current: '当前：',
+    session_delete: '删除此会话',
+    chip_online_title: '当前连到 webui server 的 tab 数',
+    chip_online_single: '1 台',
+    chip_online_plural: '{n} 台',
+    chip_offline: '离线',
+    workspace_use_tui: '切换到 mcode TUI 当前的工作区',
+    workspace_reset: '恢复 webui 启动时检测到的默认工作区',
+    workspace_locked_in_chat: '对话已开始，工作区已锁定。点击左侧「新建会话」可重新选择工作区。',
+    // v0.5.bx-8: ask_user 工具 (mcode 0.1.4 ask_user) — 学 mavis 桌面端弹窗布局文案
+    ask_user_other_placeholder: '其他...',
+    ask_user_clear: '清空',
+    ask_user_skip: '跳过',
+    ask_user_send: '发送',
+    ask_user_resend: '已答完 (点重发)',
+    ask_user_step_count: '共 {n} 步',
+    ask_user_answered: '已答: {answer}',
+    ask_user_skipped: '已跳过',
+    ask_user_no_options_hint: '无预设选项 — 用下方"其他"输入回答',
+    ask_user_send_count: '发送 ({n} 题)',
+    ask_user_resend_count: '已答完 ({n} 题, 点重发)',
   },
   en: {
-    title: 'mcode Web UI',
+    title: 'Mcode Web UI',
     new_chat: 'New Chat',
     search_placeholder: 'Search sessions...',
     workspace: 'Workspace',
     recent: 'Recent',
     no_sessions: 'No sessions yet',
+    model_picker_title: 'Switch Model',
+    model_picker_loading: 'Loading...',
+    model_picker_empty: 'No models available',
+    model_picker_hint: 'Press Enter to send /model command to mcode',
+    cancel: 'Cancel',
     usage: 'Usage',
     usage_loading: 'Click to load usage...',
     upgrade: 'Upgrade',
@@ -1944,6 +3229,7 @@ const I18N = {
     language_en: 'English',
     empty_hint_1: 'No messages yet — start typing below',
     empty_hint_2: 'Press / for commands, Ctrl+V to paste image',
+    welcome_tagline: 'No messages yet — start typing below',
     hint_help: 'Show commands',
     hint_status: 'Show status',
     hint_sessions: 'Sessions',
@@ -1956,9 +3242,17 @@ const I18N = {
     section_context: 'CONTEXT',
     section_goal: 'GOAL',
     section_todo: 'TODO',
+    section_plan: 'Plan',
+    section_thinking: 'Thinking',
+    show_thinking: 'Show thinking',
+    lines: 'lines',
+    ask_title: 'Ask',
+    plan_review: 'Plan Review',
+    plan_view_btn: 'View full plan',
     r_title: 'Title', r_dir: 'Directory', r_branch: 'Branch', r_tree: 'Status',
     r_used: 'Used', r_percent: 'Percent', r_tps: 'Speed',
     status_idle: 'Idle',
+    status_offline: 'Offline',
     status_thinking: 'Thinking',
     status_running: 'Running',
     status_completed: 'Done',
@@ -1984,9 +3278,60 @@ const I18N = {
     perm_full: 'Full access',
     perm_ask: 'Ask',
     perm_read: 'Read-only',
+    // v0.5.av: 新增 i18n 键
+    lan_access: 'LAN Access',
+    lan_on: 'On',
+    lan_off: 'Off',
+    // v0.5.bp: 顶栏 LAN 链接 chip
+    lan_link_title: 'Click to copy LAN access URL',
+    // v0.5.br: copy / model-switch toast 文案
+    copy_success: 'Copied',
+    copy_failed: 'Copy failed',
+    copy_failed_manual: 'Copy failed, please copy manually',
+    model_switched: 'Switched to',
+    sessions_list: 'Sessions',
+    refresh: 'Refresh',
+    quota_remaining: 'left',
+    quota_5h_limit: '5-Hour Limit',
+    quota_weekly_limit: 'Weekly Limit',
+    quota_next_reset: 'Next reset',
+    quota_loading_fail: 'Load failed',
+    quota_loading_idle: 'Click to load usage…',
+    usage_refreshed: 'Usage refreshed',
+    lan_title_on: 'LAN access enabled — phone/other PCs can access',
+    lan_title_off: 'LAN access disabled — only this PC can access',
+    // v0.5.aw: 工作区/会话相关
+    workspace_unset: '(Unset)',
+    workspace_unset_short: 'Unset',
+    workspace_current: 'Current',
+    workspace_switch: 'Click to switch workspace',
+    workspace_picker_title: 'Switch Workspace',
+    workspace_picker_select: 'Select Workspace',
+    workspace_picker_current: 'Current: ',
+    session_delete: 'Delete this session',
+    chip_online_title: 'WebUI tabs currently connected to server',
+    chip_online_single: '1 dev',
+    chip_online_plural: '{n} devs',
+    chip_offline: 'offline',
+    workspace_use_tui: 'Use mcode TUI\'s current workspace',
+    workspace_reset: 'Reset to default workspace detected at startup',
+    workspace_locked_in_chat: 'Chat already started — workspace locked. Click "New Chat" in the sidebar to pick a new workspace.',
+    // v0.5.bx-8: ask_user 工具 (mcode 0.1.4 ask_user) — 学 mavis 桌面端弹窗布局文案
+    ask_user_other_placeholder: 'Other...',
+    ask_user_clear: 'Clear',
+    ask_user_skip: 'Skip',
+    ask_user_send: 'Send',
+    ask_user_resend: 'Answered (click to resend)',
+    ask_user_step_count: 'of {n} steps',
+    ask_user_answered: 'Answered: {answer}',
+    ask_user_skipped: 'Skipped',
+    ask_user_no_options_hint: 'No preset options — type in "Other" below',
+    ask_user_send_count: 'Send ({n} questions)',
+    ask_user_resend_count: 'Answered ({n} questions, click to resend)',
   }
 }
-let currentLang = localStorage.getItem('webui-lang') || 'zh'
+// v0.5.bh: 首次加载默认英文（用户反馈），有缓存时读缓存
+let currentLang = localStorage.getItem('webui-lang') || 'en'
 function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || key }
 function applyI18n() {
   document.documentElement.setAttribute('lang', currentLang)
@@ -1998,6 +3343,13 @@ function applyI18n() {
     const key = el.getAttribute('data-i18n-placeholder')
     el.placeholder = t(key)
   })
+  // v0.5.av: 支持 title / aria-label i18n
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.getAttribute('data-i18n-title'))
+  })
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+    el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria-label')))
+  })
   document.getElementById('language-value').textContent = t(currentLang === 'zh' ? 'language_zh' : 'language_en')
   document.getElementById('appearance-value').textContent = t(theme === 'light' ? 'appearance_light' : 'appearance_dark')
 }
@@ -2005,7 +3357,8 @@ function applyI18n() {
 // ============================================================
 // Theme
 // ============================================================
-let theme = localStorage.getItem('webui-theme') || 'light'
+// v0.5.bh: 首次加载跟随系统（prefers-color-scheme），有缓存时用缓存
+let theme = localStorage.getItem('webui-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', theme)
   document.getElementById('appearance-value').textContent = t(theme === 'light' ? 'appearance_light' : 'appearance_dark')
@@ -2025,11 +3378,27 @@ let slashQuery = ''
 let slashActiveIdx = 0
 let slashFiltered = []
 let modeOpen = false
-let settingsOpen = false
+// v0.5.ap: 旧 settingsOpen 变量已废弃（v0.5.ap 改用 settings-modal 替代旧 settings-menu）
+// 保留定义兼容可能的旧代码引用，但本文件其他地方不再使用
+// let settingsOpen = false
 let attachedFiles = []
 let isSending = false
 let leftOpen = false
 let rightOpen = false
+
+// v0.5.ax: 欢迎页时隐藏右侧栏（chat-area 居中铺满）
+function hideRightForWelcome(isWelcome) {
+  const rp = document.getElementById('right-panel')
+  if (!rp) return
+  if (isWelcome) {
+    rp.classList.add('welcome-hidden')
+    // 同时关掉右侧栏展开状态（避免下次的"显示按钮"逻辑不一致）
+    rightOpen = false
+    rp.classList.remove('open')
+  } else {
+    rp.classList.remove('welcome-hidden')
+  }
+}
 let lastTpsValue = null
 let lastTpsTime = null
 let spentSinceLastUsage = 0
@@ -2084,17 +3453,24 @@ let es = null
 let autoRefreshTimer = null
 function connect() {
   if (es) { try { es.close() } catch {} }
-  const url = '/api/events' + TOKEN_QUERY
+  const url = '/api/events' + API_SUFFIX
   es = new EventSource(url)
   es.onmessage = (ev) => {
-    try { state = JSON.parse(ev.data); render() } catch (e) { console.error('sse parse', e) }
+    try {
+      // v0.5.bx-8: 保留 askUserAnswers (webui-only, server 不存) — SSE 推送整 state 会覆盖
+      const preserved = state?.askUserAnswers
+      state = JSON.parse(ev.data)
+      if (preserved) state.askUserAnswers = preserved
+      render()
+    } catch (e) { console.error('sse parse', e) }
   }
   es.onerror = () => { setTimeout(connect, 3000) }
+  // v0.5.ak: user footer 已改为静态 GitHub 链接，不需要 ticker
 
   // 自动 /api/refresh 触发：页面打开 2s + 每 60s 拉一次
   // 避免 web UI 一直显示 "—" / "Loading..."
   const trigger = async () => {
-    try { await fetch('/api/refresh' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
+    try { await fetch('/api/refresh' + API_SUFFIX, { method: 'POST', headers: HEADERS }) } catch {}
   }
   setTimeout(trigger, 2000)
   if (autoRefreshTimer) clearInterval(autoRefreshTimer)
@@ -2106,27 +3482,61 @@ function connect() {
 // ============================================================
 function render() {
   if (!state) return
-  // Top status
-  const status = state.context?.thinkingStatus || 'Idle'
-  const statusEl = document.getElementById('chip-status')
-  const thinkingEl = document.getElementById('chip-thinking')
+  // v0.5.ap: chip-lan — 局域网访问状态（替 v0.5.ak 的 chip-status "空闲"）
+  // v0.5.at: 跟其他 btn-menu 同结构，value 位置显示 开/关
+  const lanBroadcast = state.lanBroadcast !== false  // 缺省 true
+  const lanChip = document.getElementById('chip-lan')
+  const lanValue = document.getElementById('chip-lan-value')
+  if (lanChip) {
+    lanChip.setAttribute('data-lan', lanBroadcast ? 'on' : 'off')
+    lanChip.title = lanBroadcast ? t('lan_title_on') : t('lan_title_off')
+  }
+  if (lanValue) {
+    lanValue.textContent = lanBroadcast ? t('lan_on') : t('lan_off')
+    lanValue.setAttribute('data-i18n', lanBroadcast ? 'lan_on' : 'lan_off')
+  }
+  // v0.5.bp: 顶栏 LAN 链接 chip — LAN on 时显示当前 IP，off 时隐藏
+  const chipLanLink = document.getElementById('chip-lan-link')
+  if (chipLanLink) {
+    chipLanLink.hidden = !lanBroadcast
+    console.log('[lan] render: state.lanBroadcast=', state.lanBroadcast, '→ chipLanLink.hidden=', chipLanLink.hidden)
+  } else {
+    console.warn('[lan] render: chip-lan-link element NOT found in DOM')
+  }
+
+  // v0.5.aa: TPS 还在用
   const tpsEl = document.getElementById('chip-tps')
 
-  if (status === 'Idle') {
-    statusEl.hidden = false
-    statusEl.querySelector('span:last-child').textContent = t('status_idle')
-    statusEl.setAttribute('data-status', 'idle')
-    thinkingEl.hidden = true
-  } else if (status === 'Completed') {
-    statusEl.hidden = false
-    statusEl.querySelector('span:last-child').textContent = t('status_completed')
-    statusEl.setAttribute('data-status', 'completed')
-    thinkingEl.hidden = true
-  } else {
-    statusEl.hidden = true
-    thinkingEl.hidden = false
-    thinkingEl.querySelector('span:last-child').textContent = `${t('status_thinking')} · ${state.context?.thinkingDuration || '—'}`
-    thinkingEl.setAttribute('data-status', status === 'Loading' ? 'loading' : 'running')
+  // v0.5.ak: 在线 webui tab 数（server sseByCid.size）
+  // v0.5.bh: 走 i18n（zh: 1 台, en: 1 dev），离线时显示红点 + "offline" 文案
+  const onlineCount = state.onlineCount || 1
+  const isOnline = navigator.onLine !== false  // 浏览器没主动报 false = 算在线
+  const onlineText = isOnline
+    ? (onlineCount === 1 ? t('chip_online_single') : t('chip_online_plural').replace('{n}', onlineCount))
+    : t('chip_offline')
+  const onlineDot = isOnline ? '🟢' : '🔴'
+  const chipOnline = document.getElementById('chip-online')
+  if (chipOnline) {
+    chipOnline.querySelector('span:first-child').textContent = onlineDot
+    chipOnline.querySelector('#chip-online-text').textContent = onlineText
+  }
+
+  // v0.5.aa: chat 底部思考中指示器 + send 按钮 → stop 按钮
+  const isRunning = state.running?.active === true
+  const chatThinkingEl = document.getElementById('chat-thinking')
+  if (chatThinkingEl) {
+    chatThinkingEl.hidden = !isRunning
+  }
+  const btn = document.getElementById('btn-send')
+  if (btn) {
+    if (isRunning) {
+      btn.classList.add('is-stop')
+      btn.title = '停止 (/stop)'
+      btn.disabled = false
+    } else {
+      btn.classList.remove('is-stop')
+      btn.title = '发送 (Enter)'
+    }
   }
 
   if (state.context?.tps) {
@@ -2139,11 +3549,19 @@ function render() {
   // Version
   if (state.version) document.getElementById('version').textContent = 'v' + state.version
 
-  // Workspace
-  if (state.workspace?.dir) {
-    const parts = state.workspace.dir.split(/[\\\/]/).filter(Boolean)
-    document.getElementById('workspace-text').textContent = parts[parts.length - 1] || state.workspace.dir
-    document.getElementById('folder-label').textContent = parts[parts.length - 1] || '—'
+  // Workspace — v0.5.ax: 顶栏 chip 挪到 chat-empty 欢迎页（启动对话后 chip 隐藏）
+  // v0.5.bb: 默认 workspace 可以是 null（用户没选），chip 显示 "未选择" + 提示选工作区
+  const wsDir = state.workspace?.dir
+  const wsText = wsDir
+    ? (() => { const parts = wsDir.split(/[\\\/]/).filter(Boolean); return parts[parts.length - 1] || wsDir })()
+    : '未选择（点击选择）'
+  const wsEl = document.getElementById('workspace-text')
+  if (wsEl) wsEl.textContent = wsText
+  const emptyWs = document.getElementById('chat-empty-ws-text')
+  if (emptyWs) {
+    emptyWs.textContent = wsText
+    const btn = document.getElementById('chat-empty-workspace')
+    if (btn) btn.title = wsDir || '点击选择工作区'
   }
 
   // Right panel
@@ -2164,7 +3582,9 @@ function render() {
   if (state.workspace?.tree) document.getElementById('r-tree').textContent = state.workspace.tree
 
   // Session right
-  if (state.sessionId) document.getElementById('r-session-id').textContent = state.sessionId
+  // v0.5.bx: 优先显示 mcode session id (mvs_xxx)，fallback webui randomUUID
+  const rightId = state?.mcodeSessionId || state?.sessionId
+  if (rightId) document.getElementById('r-session-id').textContent = rightId
   if (state.sessionTitle) document.getElementById('r-session-title').textContent = state.sessionTitle
 
   // Permissions → mode label + icon
@@ -2189,8 +3609,7 @@ function render() {
   // Todo (dynamic)
   renderTodo()
 
-  // User footer (plan name)
-  renderUserFooter()
+  // User footer: v0.5.ak 改为 GitHub 链接（静态，不需要 render）
 
   // Sessions list (左栏 RECENT)
   renderSessions()
@@ -2272,16 +3691,68 @@ function renderTodo() {
   }
 }
 
+// v0.5.ar: 已折叠的工作区（localStorage 持久化）
+let collapsedWorkspaces = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem('webui_ws_collapsed_v1') || '[]')) } catch { return new Set() }
+})()
+function saveCollapsedWorkspaces() {
+  try { localStorage.setItem('webui_ws_collapsed_v1', JSON.stringify([...collapsedWorkspaces])) } catch {}
+}
+
+// 取工作区短名（最后一段路径）— 桌面端风格显示
+function wsShortName(ws) {
+  if (!ws) return t('workspace_unset_short')
+  // 去掉尾部斜杠
+  let s = ws.replace(/[\\/]+$/, '')
+  if (!s) return t('workspace_unset_short')
+  // 取最后一段
+  const parts = s.split(/[\\/]/)
+  return parts[parts.length - 1] || s
+}
+
 function renderSessions() {
   const list = document.getElementById('sessions-list')
-  const sessions = state?.sessions || []
+  // v0.5.bv: 优先显示 mcode 真实 sessions（mvs_xxx id + mcode 自动 title）
+  // 合并：mcode sessions (按 cwd 过滤) + webui 自己的 sessions (还没跟 mcode 关联的)
+  const mcodeSessions = Array.isArray(state?.mcodeSessions) ? state.mcodeSessions : []
+  const webuiSessions = Array.isArray(state?.sessions) ? state.sessions : []
+  // 用 webui session 的 mcodeSessionId 字段去重：mcode 有但 webui 也有的就归 mcode
+  const webuiWithMcode = new Set()
+  const merged = []
+  for (const ms of mcodeSessions) {
+    webuiWithMcode.add(ms.sessionId)
+    merged.push({
+      id: ms.sessionId,           // mcode session id (mvs_xxx)
+      kind: 'mcode',
+      title: ms.title || '(untitled)',
+      workspace: ms.cwd || '',
+      updatedAt: ms.updatedAt || 0,
+    })
+  }
+  for (const ws of webuiSessions) {
+    if (ws.mcodeSessionId && webuiWithMcode.has(ws.mcodeSessionId)) continue  // 已在 mcode 列表里
+    if (ws.mcodeSessionId) {
+      // webui 有 mcodeSessionId 但 mcode list 里没出现（可能 mcode 那边已删）— 仍显示
+      merged.push({
+        id: ws.mcodeSessionId, kind: 'webui-mcode', title: ws.title || '(untitled)',
+        workspace: ws.workspace || '', updatedAt: ws.updatedAt || 0,
+      })
+    } else {
+      // webui session 还没 prompt 过（无 mcode 关联）— 用 webui id 显示
+      merged.push({
+        id: ws.id, kind: 'webui', title: ws.title || '(untitled)',
+        workspace: ws.workspace || '', updatedAt: ws.updatedAt || 0,
+      })
+    }
+  }
+  const sessions = merged
+  const currentWs = (state && state.workspace && state.workspace.dir) || ''
   const q = (sessionSearchQuery || '').trim().toLowerCase()
   let filtered = sessions
   if (q) {
     filtered = sessions.filter(s => {
-      const title = (s.title || s.raw || s.id || '').toLowerCase()
-      const id = (s.id || '').toLowerCase()
-      return title.includes(q) || id.includes(q)
+      const title = (s.title || s.id || '').toLowerCase()
+      return title.includes(q) || s.id.toLowerCase().includes(q)
     })
   }
   if (filtered.length === 0) {
@@ -2289,25 +3760,82 @@ function renderSessions() {
     list.innerHTML = `<div class="session-title-empty">${msg}</div>`
     return
   }
-  // 取前 8 个
-  const html = filtered.slice(0, 8).map(s => {
-    const title = s.title || s.raw || s.id
-    const short = escapeHtml(title.substring(0, 30))
-    const active = s.id === state?.sessionId ? ' active' : ''
-    return `<div class="session-item${active}" data-id="${escapeHtml(s.id)}" title="${escapeHtml(title)}">
-      <div class="session-dot"></div>
-      <div class="session-info">
-        <div class="session-name">${short}</div>
-        <div class="session-id">${escapeHtml(s.id.substring(0, 12))}…</div>
+  // 按 workspace 分组
+  const groups = new Map()
+  for (const s of filtered) {
+    const ws = (s.workspace || '').trim() || t('workspace_unset')
+    if (!groups.has(ws)) groups.set(ws, [])
+    groups.get(ws).push(s)
+  }
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    if (a === currentWs) return -1
+    if (b === currentWs) return 1
+    const aMax = Math.max(...groups.get(a).map(s => s.updatedAt || 0))
+    const bMax = Math.max(...groups.get(b).map(s => s.updatedAt || 0))
+    return bMax - aMax
+  })
+  const folderSvg = '<svg class="icon workspace-group-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+  const html = sortedKeys.map(ws => {
+    const items = groups.get(ws)
+    const isCurrent = ws === currentWs
+    const collapsed = collapsedWorkspaces.has(ws)
+    const headerClass = `workspace-group${collapsed ? ' collapsed' : ''}`
+    const badge = isCurrent ? `<span class="workspace-group-current-badge">${t('workspace_current')}</span>` : ''
+    const itemsHtml = items.map(s => {
+      // v0.5.bv: 空 title fallback 到 (untitled)，避免 mcode 端没生成时显示空
+      const title = (s.title && s.title.trim()) || '(untitled)'
+      const short = escapeHtml(title.substring(0, 28))
+      // v0.5.bv: active 判断用 mcodeSessionId（mcode sessions）或 webui sessionId（webui sessions）
+      const activeId = state?.mcodeSessionId || state?.sessionId
+      const active = s.id === activeId ? ' active' : ''
+      // mcode session id (mvs_xxx) 跟 webui randomUUID 一视同仁 — 都显示 12 字符 + 后缀
+      const idLabel = escapeHtml(s.id.substring(0, 12) + '…')
+      // v0.5.bv: mcode session 不显示删除按钮（webui 删不了 mcode session；走 mcode TUI）
+      const deleteBtn = s.kind === 'mcode' ? '' : `<button class="session-delete" data-id="${escapeHtml(s.id)}" title="${t('session_delete')}">×</button>`
+      return `<div class="session-item${active}" data-id="${escapeHtml(s.id)}" data-kind="${s.kind}" title="${escapeHtml(title)}">
+        <div class="session-dot"></div>
+        <div class="session-info">
+          <div class="session-name">${short}</div>
+          <div class="session-id">${idLabel}</div>
+        </div>
+        ${deleteBtn}
+      </div>`
+    }).join('')
+    return `<div class="${headerClass}" data-ws="${escapeHtml(ws)}">
+      <div class="workspace-group-header" data-ws="${escapeHtml(ws)}">
+        <span class="workspace-group-chevron">▼</span>
+        ${folderSvg}
+        <span class="workspace-group-name" title="${escapeHtml(ws)}">${escapeHtml(wsShortName(ws))}</span>
+        <span class="workspace-group-count">${items.length}</span>
+        ${badge}
       </div>
-      <button class="session-delete" data-id="${escapeHtml(s.id)}" title="删除此会话">×</button>
+      <div class="workspace-group-items">${itemsHtml}</div>
     </div>`
   }).join('')
   list.innerHTML = html
-  // 点击 session：切到那个 session（设置 state.sessionId 并请求服务器）
+
+  // 点击 group header 折叠/展开
+  list.querySelectorAll('.workspace-group-header').forEach(h => {
+    h.addEventListener('click', (e) => {
+      // 防止误点 group 内的 session 时触发
+      if (e.target.closest('.session-item')) return
+      const ws = h.getAttribute('data-ws')
+      const group = h.closest('.workspace-group')
+      if (!group) return
+      if (collapsedWorkspaces.has(ws)) {
+        collapsedWorkspaces.delete(ws)
+        group.classList.remove('collapsed')
+      } else {
+        collapsedWorkspaces.add(ws)
+        group.classList.add('collapsed')
+      }
+      saveCollapsedWorkspaces()
+    })
+  })
+
+  // 点击 session：切到那个 session
   list.querySelectorAll('.session-item').forEach(el => {
     el.addEventListener('click', (e) => {
-      // 点删除按钮/确认按钮时不要触发切 session
       if (e.target.closest('.session-delete') || e.target.closest('.session-confirm')) return
       const id = el.getAttribute('data-id')
       switchSession(id)
@@ -2320,12 +3848,10 @@ function renderSessions() {
       const item = btn.closest('.session-item')
       if (item.classList.contains('confirming')) return
       item.classList.add('confirming')
-      // 在 item 里插入确认条
       const bar = document.createElement('div')
       bar.className = 'session-confirm'
       bar.innerHTML = `<span>删除?</span><button class="session-confirm-yes" data-id="${btn.getAttribute('data-id')}">删</button><button class="session-confirm-no">×</button>`
       item.appendChild(bar)
-      // 5 秒没动作自动收回
       const timer = setTimeout(() => cancelConfirm(item), 5000)
       item._confirmTimer = timer
       bar.querySelector('.session-confirm-yes').addEventListener('click', async (ev) => {
@@ -2350,7 +3876,7 @@ async function refreshSessions() {
     // 双通道：先 mavis CLI（独立、快），再 mcode /sessions（兜底）
     let got = false
     try {
-      const r = await fetch('/api/sessions' + TOKEN_QUERY, { method: 'GET', headers: HEADERS })
+      const r = await fetch('/api/sessions' + API_SUFFIX, { method: 'GET', headers: HEADERS })
       if (r.ok) {
         const data = await r.json()
         if (data.ok && data.sessions && data.sessions.length > 0) {
@@ -2363,7 +3889,7 @@ async function refreshSessions() {
     } catch {}
     if (!got) {
       // fallback: 触发 mcode /sessions
-      try { await fetch('/api/sessions' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
+      try { await fetch('/api/sessions' + API_SUFFIX, { method: 'POST', headers: HEADERS }) } catch {}
     }
   } finally {
     if (btn) { btn.disabled = false; btn.classList.remove('loading') }
@@ -2381,14 +3907,18 @@ function cancelConfirm(item) {
 
 async function deleteSession(sessionId) {
   if (!sessionId) return
+  console.log(`[delete.client] click id=${sessionId.substring(0, 12)}… isMcode=${/^mvs_[a-f0-9]{32}$/.test(sessionId)}`)
   try {
-    const r = await fetch('/api/sessions/' + encodeURIComponent(sessionId) + TOKEN_QUERY, {
+    const r = await fetch('/api/sessions/' + encodeURIComponent(sessionId) + API_SUFFIX, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
     })
+    console.log(`[delete.client] response status=${r.status} ok=${r.ok}`)
     if (r.ok) {
-      // 从本地 state.sessions 移除并重渲染
-      state.sessions = (state.sessions || []).filter(s => s.id !== sessionId)
+      const data = await r.json().catch(() => ({}))
+      console.log(`[delete.client] data.ok=${data.ok} matchKind=${data.matchKind || 'n/a'} remaining=${data.remaining}`)
+      // v0.5.bx-5: 同时按 webui id 和 mcodeSessionId 过滤（孤儿 webui-mcode session 的 id 是 mvs_xxx）
+      state.sessions = (state.sessions || []).filter(s => s.id !== sessionId && s.mcodeSessionId !== sessionId)
       renderSessions()
       // 触发 SSE 拉取最新 state（包括 current session 是否被清空）
       // （SSE 会自动推送，但 pushState 已被 server 调过——等下一次刷新也行）
@@ -2400,20 +3930,30 @@ async function deleteSession(sessionId) {
 
 async function switchSession(sessionId) {
   if (!sessionId) return
+  // v0.5.bx: 加详细日志排查"切不过去"bug
+  const isMcode = /^mvs_[a-f0-9]{32}$/.test(sessionId)
+  console.log(`[switch.client] click id=${sessionId.substring(0, 12)}… isMcode=${isMcode} prev.sessionId=${state?.sessionId ? state.sessionId.substring(0, 8) : 'null'}… prev.mcodeSid=${state?.mcodeSessionId ? state.mcodeSessionId.substring(0, 12) : 'null'}…`)
   try {
-    const r = await fetch('/api/sessions/switch' + TOKEN_QUERY, {
+    const r = await fetch('/api/sessions/switch' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ id: sessionId }),
     })
+    console.log(`[switch.client] response status=${r.status} ok=${r.ok}`)
     if (r.ok) {
       const data = await r.json()
+      console.log(`[switch.client] data.ok=${data.ok} data.error=${data.error || 'none'} data.session.id=${data.session ? data.session.id.substring(0, 8) : 'null'}… mcodeSid=${data.session && data.session.mcodeSessionId ? data.session.mcodeSessionId.substring(0, 12) : 'null'}… chatLen=${data.session && Array.isArray(data.session.chat) ? data.session.chat.length : 0} title="${data.session ? (data.session.title || '').substring(0, 30) : ''}"`)
       if (data.ok) {
         // 直接用 server 返回的 session 数据更新本地 state（避免 SSE race condition）
         state.sessionId = data.session.id
         state.sessionTitle = data.session.title
+        // v0.5.bx: 也同步 mcodeSessionId（之前没同步，sidebar 切后 state.mcodeSessionId 还是旧的）
+        if (data.session.mcodeSessionId !== undefined) {
+          state.mcodeSessionId = data.session.mcodeSessionId || null
+        }
         // 关键：从 db 加载该 session 的历史 chat
         state.chat = Array.isArray(data.session.chat) ? data.session.chat : []
+        console.log(`[switch.client] state updated sessionId=${state.sessionId.substring(0, 8)}… mcodeSid=${state.mcodeSessionId ? state.mcodeSessionId.substring(0, 12) : 'null'}… chatLen=${state.chat.length} chatFirstLine="${state.chat[0] ? state.chat[0].substring(0, 40) : 'EMPTY'}"`)
         renderSessions()
         render()
       }
@@ -2422,18 +3962,38 @@ async function switchSession(sessionId) {
 }
 
 function renderUserFooter() {
-  const plan = state?.account?.plan || state?.usage?.plan
-  // plan 缺失时 fallback 到 model name，再不行用 session 标题
-  const modelShort = state?.model?.name ? state.model.name.split('/').pop() : null
-  const fallback = modelShort || state?.sessionTitle || t('user_default')
-  const name = plan ? plan.split(/\s+/)[0] : fallback
-  const avatar = (name[0] || 'M').toUpperCase()
+  // v0.5.ak: 完全改用动态有效信息
+  // 第 1 行（粗体）：实时状态 + 短 session id（mcode session 而不是 webui session）
+  //   不显示 model name（已在右栏）+ 不显示 sessionTitle（已在左栏最近会话）
+  // 第 2 行（灰）：当前时间 + 累计 chat lines 数（实时变）
+  const running = state?.running?.active
+  const tps = state?.running?.tps || 0
+  const thinkingStatus = state?.context?.thinkingStatus || 'Idle'
+  let status, dot
+  if (running && thinkingStatus === 'Running') { status = '运行中'; dot = '🔵' }
+  else if (running && thinkingStatus === 'Loading') { status = '加载中'; dot = '🟡' }
+  else if (thinkingStatus && thinkingStatus !== 'Idle') { status = thinkingStatus; dot = '🟡' }
+  else { status = '空闲'; dot = '🟢' }
+  // mcode session 短 hash（12 字符）— 让用户知道现在用哪个 mcode 会话
+  const mcodeSid = state?.mcodeSessionId || ''
+  const sidShort = mcodeSid ? mcodeSid.substring(0, 12) : '—'
+  const tpsSuffix = running && tps > 0 ? ` · ${tps}tps` : ''
+  const name = `${dot} ${status} · ${sidShort}${tpsSuffix}`
+  const avatar = (state?.context?.thinkingStatus === 'Running') ? '⋯' : 'M'
   document.getElementById('user-avatar').textContent = avatar
   document.getElementById('user-name').textContent = name
-  // plan 行：plan 有就显示完整 plan 名，否则显示 model name 或 "Mcode Web"
-  const planLine = plan || modelShort || t('user_loading')
+  // 第 2 行：当前时间 + 累计 chat 行数（实时变）
+  const chatLines = (state?.chat || []).filter(l => l && l.trim()).length
+  const now = new Date()
+  const hh = String(now.getHours()).padStart(2, '0')
+  const mm = String(now.getMinutes()).padStart(2, '0')
+  const timeStr = `${hh}:${mm}`
+  const planLine = `${timeStr} · ${chatLines} 行`
   document.getElementById('user-plan').textContent = planLine
 }
+
+// v0.5.ak: User footer 已改为静态 GitHub 链接，renderUserFooter / startUserFooterTicker 不再需要
+// 保留 renderUserFooter 旧定义兼容（CSS 已 hide 其内容），但不再被调用
 
 function renderChat() {
   const inner = document.getElementById('chat-inner')
@@ -2458,61 +4018,679 @@ function renderChat() {
     if (empty) empty.style.display = ''
     // v0.5.x: 切到空 chat 的 session 时必须清空 inner，否则会残留上一个 session 的 messages
     if (inner) inner.innerHTML = ''
+    // v0.5.ae: 空 chat 时清空 right panel todo
+    if (state) { state.todo = []; renderTodo() }
+    // v0.5.ax: 欢迎页时隐藏右侧栏
+    hideRightForWelcome(true)
+    // v0.5.bd: 切到欢迎页布局（chat-empty + input-area 居中堆叠）
+    const chatArea = document.getElementById('chat-area')
+    if (chatArea) chatArea.classList.add('is-welcome')
+    // v0.5.bx: 欢迎页才显示"选工作区"chip，已有对话时整个 row 隐藏
+    const wsRow = document.getElementById('input-workspace-row')
+    if (wsRow) wsRow.hidden = false
+    // v0.5.bx-2: mcode session 切过来 + chatLen=0（acp session/load 不带 chat 历史）→ 显示"已切到 mcode session,没历史"空状态
+    // 区别于 welcome 页（无 mcodeSessionId）
+    if (state && state.mcodeSessionId && state.sessionTitle) {
+      if (inner) {
+        inner.innerHTML = `<div class="chat-empty-mcode">
+          <div class="chat-empty-mcode-icon">📭</div>
+          <div class="chat-empty-mcode-title">${escapeHtml(state.sessionTitle)}</div>
+          <div class="chat-empty-mcode-text">已切到这个 mcode session，但 webui 没有它的历史 chat。</div>
+          <div class="chat-empty-mcode-hint">mcode acp <code>session/load</code> 协议不返回历史消息，只在 mcode TUI 里能看。发新消息会续接这个 mcode session。</div>
+        </div>`
+      }
+      return
+    }
     return
   }
   if (empty) empty.style.display = 'none'
+  // v0.5.ax: 欢迎页隐藏右侧栏（chat-area 居中）
+  hideRightForWelcome(false)
+  // v0.5.bd: 退出欢迎页布局（恢复 input-area 吸底）
+  const chatArea2 = document.getElementById('chat-area')
+  // v0.5.bx: 有对话时隐藏"选工作区"chip — 已选工作区不让改，要改点 sidebar "New Chat"
+  const wsRow2 = document.getElementById('input-workspace-row')
+  if (wsRow2) wsRow2.hidden = true
+  if (chatArea2) chatArea2.classList.remove('is-welcome')
 
   // Parse chat lines into messages
   const messages = parseChatLines(lines)
   inner.innerHTML = messages.map(renderMessage).join('')
+  // v0.5.ab: 绑定 Ask/Plan 块的点击事件（事件委托）
+  attachStructuredBlockHandlers(inner)
+  // v0.5.ae: 把 chat 内的 todo block 实时同步到 state.todo（right panel 用）
+  // dedup by text：同一个 todo 在多轮里可能重复，最后一次状态生效
+  if (state) {
+    const todos = []
+    const seen = new Set()
+    for (const m of messages) {
+      if (m.role === 'todo' && Array.isArray(m.items)) {
+        for (const it of m.items) {
+          if (it && it.text && !seen.has(it.text)) {
+            seen.add(it.text)
+            todos.push(it)
+          }
+        }
+      }
+    }
+    state.todo = todos
+    renderTodo()
+  }
   // scroll to bottom
   const scroll = document.getElementById('chat-scroll')
   scroll.scrollTop = scroll.scrollHeight
 }
 
+// v0.5.ab: 事件委托 — Ask 选项点击发送 / Plan 选项点击发送 / "查看完整计划" 打开弹窗
+function attachStructuredBlockHandlers(root) {
+  if (!root) return
+  // Ask 选项
+  root.querySelectorAll('.ask-option').forEach(el => {
+    el.addEventListener('click', () => {
+      const label = el.getAttribute('data-ask-opt') || ''
+      const isOther = el.getAttribute('data-ask-other') === '1'
+      if (isOther) {
+        // "Other" 自由输入：弹个小输入框在 chat 里
+        const input = prompt('请输入自定义回答：', '')
+        if (input == null) return
+        sendAskAnswer(input)
+      } else {
+        sendAskAnswer(label)
+      }
+    })
+  })
+  // Plan 选项（Agree/Skip/Revise）
+  root.querySelectorAll('[data-plan-opt]').forEach(el => {
+    el.addEventListener('click', () => {
+      const text = el.getAttribute('data-plan-opt') || ''
+      sendPlanAnswer(text)
+    })
+  })
+  // Plan 弹窗
+  root.querySelectorAll('[data-plan-view]').forEach(el => {
+    el.addEventListener('click', () => {
+      const title = el.getAttribute('data-plan-view') || ''
+      // 从 messages 中找到这个 plan 的 content
+      const planMsg = (state?.chat ? parseChatLines(state.chat) : []).find(m => m.role === 'plan' && m.title === title)
+      if (planMsg) openPlanModal(planMsg)
+    })
+  })
+  // v0.5.bx-6: tool 涉及的本地文件路径 — 点击复制到剪贴板
+  root.querySelectorAll('.msg-tool-loc').forEach(el => {
+    el.addEventListener('click', async () => {
+      const p = el.getAttribute('data-path') || ''
+      if (!p) return
+      try {
+        await navigator.clipboard.writeText(p)
+        el.classList.add('copied')
+        setTimeout(() => el.classList.remove('copied'), 800)
+      } catch (e) {
+        // fallback: 用 textarea 选中文本
+        const ta = document.createElement('textarea')
+        ta.value = p
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        try { document.execCommand('copy') } catch {}
+        document.body.removeChild(ta)
+      }
+    })
+  })
+  // v0.5.bx-7: ask_user 问卷选项 — 点击 label 作为下一次 prompt 发给 mcode
+  // v0.5.bx-8: 单 step 模式选项 click 自动 send; 多 step 模式选项 click 只 highlight, 等底部"发送"按钮模板化发
+  //   状态持久化到 state.askUserAnswers (跨 render 保留, 不被 parseChatLines 重建对象丢)
+  root.querySelectorAll('.ask-questionnaire').forEach(questionnaire => {
+    const mode = questionnaire.getAttribute('data-mode') || 'single'
+
+    // 选项 click
+    questionnaire.querySelectorAll('.ask-opt').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (btn.disabled) return
+        const label = btn.getAttribute('data-ask-label') || ''
+        const q = btn.getAttribute('data-ask-q') || ''
+        if (!label) return
+        if (!state.askUserAnswers) state.askUserAnswers = {}
+        if (state.askUserAnswers[q]) return  // 已答过
+        // 持久化 (state + localStorage)
+        setAskUserAnswer(q, { answer: label, mode: 'answered' })
+        // 清 pending (只清 single step 模式的)
+        if (mode === 'single' && state?.pendingAskUser) {
+          state.pendingAskUser = null
+        }
+        if (mode === 'single') {
+          // 单 step: 选项 click 自动 send
+          const prompt = `Q: ${q}\nA: ${label}`
+          try {
+            const r = await fetch('/api/send' + API_SUFFIX, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...HEADERS },
+              body: JSON.stringify({ content: prompt, command: 'prompt' })
+            })
+            if (!r.ok) console.warn('[ask-opt] send failed', r.status)
+            console.log(`[ask-opt] sent: q="${q.slice(0, 30)}" → a="${label}"`)
+          } catch (e) { console.error('[ask-opt] send error', e) }
+        } else {
+          // 多 step: 只 highlight, 不发
+          console.log(`[ask-opt] highlight: q="${q.slice(0, 30)}" → a="${label}" (点发送才发)`)
+        }
+        renderAskUserToolIfChanged()
+      })
+    })
+
+    // 跳过按钮 (单 step 模式)
+    if (mode === 'single') {
+      const skipBtn = questionnaire.querySelector('.ask-skip')
+      if (skipBtn) {
+        skipBtn.addEventListener('click', async () => {
+          if (skipBtn.disabled) return
+          // v0.5.bx-8: .ask-skip 自身有 data-ask-q, 直接读
+          const q = skipBtn.getAttribute('data-ask-q') || ''
+          if (!q) return
+          if (!state.askUserAnswers) state.askUserAnswers = {}
+          if (state.askUserAnswers[q]) return
+          setAskUserAnswer(q, { answer: '未回答', mode: 'skipped' })
+          if (state?.pendingAskUser) state.pendingAskUser = null
+          // 自动 send "Q: ... A: 未回答"
+          const prompt = `Q: ${q}\nA: 未回答`
+          try {
+            const r = await fetch('/api/send' + API_SUFFIX, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...HEADERS },
+              body: JSON.stringify({ content: prompt, command: 'prompt' })
+            })
+            if (!r.ok) console.warn('[ask-skip] send failed', r.status)
+            console.log(`[ask-skip] sent: q="${q.slice(0, 30)}" → a="未回答"`)
+          } catch (e) { console.error('[ask-skip] send error', e) }
+          renderAskUserToolIfChanged()
+        })
+      }
+    }
+
+    // "其他"输入框 input 监听 — 设 state.askUserAnswers (highlight 当前 step 的回答为"其他")
+    questionnaire.querySelectorAll('.ask-step-other-input').forEach(input => {
+      const update = () => {
+        const step = input.closest('.ask-step')
+        const firstOpt = step?.querySelector('.ask-opt')
+        const q = firstOpt ? firstOpt.getAttribute('data-ask-q') : ''
+        if (!q) return
+        if (!state.askUserAnswers) state.askUserAnswers = {}
+        const text = input.value.trim()
+        if (text) {
+          setAskUserAnswer(q, { answer: text, mode: 'answered-other' })
+        } else {
+          // 清空 = 清除"其他"回答 (回到未答)
+          if (state.askUserAnswers[q]?.mode === 'answered-other') {
+            setAskUserAnswer(q, null)  // null = 删除
+          }
+        }
+        // 只 highlight, 不发 (也不重渲染 — input 事件触发太频繁, 直接改 class)
+        // 重渲染只更新样式, 不发请求
+        if (mode === 'single') {
+          // 单 step: 清除其他选项的 .clicked
+          step.querySelectorAll('.ask-opt').forEach(o => o.classList.remove('clicked'))
+        }
+        renderAskUserToolIfChanged()
+      }
+      input.addEventListener('input', update)
+      input.addEventListener('change', update)
+      // Enter 键 — 单 step 模式自动 send, 多 step 模式只 highlight (再点发送才发)
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          if (mode === 'single') {
+            const text = input.value.trim()
+            if (!text) return
+            // 走 sendAskUserAnswer
+            const step = input.closest('.ask-step')
+            const firstOpt = step?.querySelector('.ask-opt')
+            const q = firstOpt ? firstOpt.getAttribute('data-ask-q') : ''
+            if (!q) return
+            if (!state.askUserAnswers) state.askUserAnswers = {}
+            setAskUserAnswer(q, { answer: text, mode: 'answered-other' })
+            if (state?.pendingAskUser) state.pendingAskUser = null
+            const prompt = `Q: ${q}\nA: ${text}`
+            fetch('/api/send' + API_SUFFIX, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...HEADERS },
+              body: JSON.stringify({ content: prompt, command: 'prompt' })
+            }).then(r => {
+              if (!r.ok) console.warn('[ask-other] send failed', r.status)
+              console.log(`[ask-other] sent: q="${q.slice(0, 30)}" → a="${text}"`)
+            }).catch(e => console.error('[ask-other] send error', e))
+            renderAskUserToolIfChanged()
+          }
+        }
+      })
+    })
+
+    // 发送按钮 (多 step 模式)
+    if (mode === 'multi') {
+      const submitBtn = questionnaire.querySelector('.ask-submit')
+      if (submitBtn) {
+        submitBtn.addEventListener('click', async () => {
+          // 收集所有 step 的 answer (没答的 = "未回答")
+          const stepEls = questionnaire.querySelectorAll('.ask-step')
+          const blocks = []
+          for (const stepEl of stepEls) {
+            const firstOpt = stepEl.querySelector('.ask-opt')
+            const q = firstOpt ? firstOpt.getAttribute('data-ask-q') : ''
+            if (!q) continue
+            const ans = state?.askUserAnswers?.[q]
+            const otherInput = stepEl.querySelector('.ask-step-other-input')
+            const otherText = otherInput?.value.trim() || ''
+            // 优先用 state.askUserAnswers, 其次从 input 读 (实时未触发 input 事件的情况)
+            let finalAnswer
+            if (ans && ans.mode === 'skipped') {
+              finalAnswer = '未回答'
+            } else if (otherText) {
+              finalAnswer = otherText
+            } else if (ans) {
+              finalAnswer = ans.answer
+            } else {
+              finalAnswer = '未回答'
+            }
+            blocks.push(`Q: ${q}\nA: ${finalAnswer}`)
+            // 持久化到 state + localStorage
+            if (!state.askUserAnswers) state.askUserAnswers = {}
+            setAskUserAnswer(q, { answer: finalAnswer, mode: otherText ? 'answered-other' : (ans?.mode === 'skipped' ? 'skipped' : 'answered') })
+          }
+          if (blocks.length === 0) return
+          // 清 pending
+          if (state?.pendingAskUser) state.pendingAskUser = null
+          // 模板化发
+          const prompt = blocks.join('\n')
+          try {
+            const r = await fetch('/api/send' + API_SUFFIX, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...HEADERS },
+              body: JSON.stringify({ content: prompt, command: 'prompt' })
+            })
+            if (!r.ok) console.warn('[ask-submit] send failed', r.status)
+            console.log(`[ask-submit] sent: ${blocks.length} blocks, ${prompt.length} chars`)
+          } catch (e) { console.error('[ask-submit] send error', e) }
+          renderAskUserToolIfChanged()
+        })
+      }
+    }
+  })
+}
+
+async function sendAskAnswer(text) {
+  // 走 /api/send 通路（跟正常发消息一致）
+  const r = await fetch('/api/send' + API_SUFFIX, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...HEADERS },
+    body: JSON.stringify({ content: text, command: 'prompt' })
+  })
+  if (!r.ok) console.warn('sendAskAnswer failed', r.status)
+}
+
+// ============================================================
+// Ask User Tool (v0.5.bx-8: mcode 0.1.4 ask_user 工具 — 内嵌选项 + 跳过)
+// 选项 click → 自动 send "Q: <q> A: <label>"
+// 跳过 click → 自动 send "Q: <q> A: 未回答"
+// 弹窗外的 chat 消息 → send() 入口检测 state.pendingAskUser, 模板化
+// 已答状态持久化: state.askUserAnswers[question] (跨 render 保留, 不被 parseChatLines 重建对象丢)
+// v0.5.bx-8 (持久化): state.askUserAnswers 也写 localStorage, 刷新后能恢复
+// ============================================================
+
+// 模板化: 把 user answer 包装成 "Q: <question> A: <answer>" 发给 mcode
+// mcode/LLM 看到这是 ask_user 工具的 result 上下文
+function buildAskUserPrompt(question, answer) {
+  return `Q: ${question}\nA: ${answer}`
+}
+
+// 重渲染 chat (让已答状态 ✓ 立刻显示)
+function renderAskUserToolIfChanged() {
+  if (typeof renderChat === 'function') renderChat()
+  else if (typeof render === 'function') render()
+}
+
+// localStorage 持久化 — 刷新页面后能恢复已答状态, 避免按钮重新可点
+const ASK_ANSWERS_LS_KEY = 'webui-askUserAnswers'
+function loadAskUserAnswers() {
+  try {
+    const raw = localStorage.getItem(ASK_ANSWERS_LS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return (parsed && typeof parsed === 'object') ? parsed : {}
+  } catch (e) {
+    console.warn('[ask-user] loadAskUserAnswers failed', e)
+    return {}
+  }
+}
+function saveAskUserAnswers(answers) {
+  try {
+    localStorage.setItem(ASK_ANSWERS_LS_KEY, JSON.stringify(answers || {}))
+  } catch (e) {
+    console.warn('[ask-user] saveAskUserAnswers failed', e)
+  }
+}
+// 包装函数: 设 state.askUserAnswers[q] = entry 时同步写 localStorage
+//   注意: 不会覆盖整个 state.askUserAnswers, 只 set/delete 单个 key
+function setAskUserAnswer(question, entry) {
+  if (!state) return
+  if (!state.askUserAnswers) state.askUserAnswers = loadAskUserAnswers()
+  if (entry === null || entry === undefined) {
+    delete state.askUserAnswers[question]
+  } else {
+    state.askUserAnswers[question] = entry
+  }
+  saveAskUserAnswers(state.askUserAnswers)
+}
+
+async function sendPlanAnswer(text) {
+  // Plan 选项发送（同样走 /api/send）
+  const r = await fetch('/api/send' + API_SUFFIX, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...HEADERS },
+    body: JSON.stringify({ content: text, command: 'prompt' })
+  })
+  if (!r.ok) console.warn('sendPlanAnswer failed', r.status)
+}
+
+function openPlanModal(planMsg) {
+  const root = document.getElementById('modal-root')
+  if (!root) return
+  // v0.5.ab: 弹窗打开时让 modal-root 接收 pointer-events（之前用 pointer-events:none 防止平时挡点击，
+  // 但子元素没显式 auto 就继承 none，导致 X 按钮、背景点击全失效）
+  root.style.pointerEvents = 'auto'
+  root.innerHTML = `
+    <div class="modal-overlay" id="plan-modal">
+      <div class="modal" role="dialog" aria-label="Plan Review">
+        <div class="modal-header">
+          <span>📋</span>
+          <span class="modal-header-title">${t('plan_review')} · ${escapeHtml(planMsg.title)}</span>
+          <span class="modal-header-meta">Frozen Runtime snapshot</span>
+          <button class="modal-close" id="plan-modal-close" aria-label="关闭">×</button>
+        </div>
+        <div class="modal-body" id="plan-modal-body">${parseMarkdown(planMsg.content || '*（空）*')}</div>
+        <div class="modal-footer">
+          <span>↑↓ select · Enter confirm · Esc skip · PgUp/PgDn scroll</span>
+          <span class="modal-footer-spacer"></span>
+          ${planMsg.options.map(o => `<button class="plan-action ${o.selected ? 'primary' : ''}" data-modal-opt="${escapeHtml(o.text)}">${escapeHtml(o.text)}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+  `
+  const close = () => {
+    root.innerHTML = ''
+    root.style.pointerEvents = 'none'  // 关闭后恢复不挡点击
+  }
+  document.getElementById('plan-modal-close').addEventListener('click', close)
+  document.getElementById('plan-modal').addEventListener('click', (e) => {
+    // 点 overlay 背景（非 modal 内容）关闭
+    if (e.target.id === 'plan-modal') close()
+  })
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc) }
+  })
+  root.querySelectorAll('[data-modal-opt]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const text = el.getAttribute('data-modal-opt')
+      close()
+      await sendPlanAnswer(text)
+    })
+  })
+}
+
 function parseChatLines(lines) {
-  // › user / ● assistant / ○ system / ◎ Goal / ✓ / ○ todo
+  // › user / ● assistant / ○ system / ◎ Goal/Ask / ✓ todo / Plan: 标题 块
   const messages = []
   let current = null
   let currentType = null
+  let i = 0
 
-  for (const line of lines) {
-    if (!line) continue
+  const isNewBlockStart = (l) => /^[›>●•○◯◎✓✔◌✗✘×▲!→]/.test(l) || /^Plan\s*[:：]/i.test(l.trim()) || /^Ask\b/i.test(l.trim())
+
+  while (i < lines.length) {
+    const line = lines[i]
+    if (!line) { i++; continue }
+
+    // Plan block（以 "Plan: 标题" 开头，到 "Plan complete." 之后 + 3 个选项，到下一行 prefix）
+    if (/^Plan\s*[:：]\s*.+/i.test(line.trim())) {
+      if (current) { messages.push(current); current = null; currentType = null }
+      const plan = collectPlanBlock(lines, i)
+      messages.push({ role: 'plan', ...plan })
+      i = plan.endIdx
+      continue
+    }
+
+    // Ask block（以 ◎ Ask / Ask 开头，到下一行 prefix 或 footer hint）
+    if (/^[\u25ce]\s*Ask\b/i.test(line.trim()) || /^Ask\b\s*[:：]?/i.test(line.trim())) {
+      if (current) { messages.push(current); current = null; currentType = null }
+      const ask = collectAskBlock(lines, i)
+      messages.push({ role: 'ask', ...ask })
+      i = ask.endIdx
+      continue
+    }
+
+    // Goal block
+    if (/^[\u25ce]\s*Goal\b/i.test(line.trim())) {
+      if (current) { messages.push(current); current = null; currentType = null }
+      const goal = { role: 'goal', text: line, items: [] }
+      let j = i + 1
+      while (j < lines.length) {
+        const l = lines[j]
+        if (!l) break
+        if (isNewBlockStart(l)) break
+        goal.text += '\n' + l
+        j++
+      }
+      messages.push(goal)
+      i = j
+      current = null; currentType = null
+      continue
+    }
+
+    // User message
     if (/^[›>]\s+/.test(line)) {
       if (current) messages.push(current)
       current = { role: 'user', text: line.replace(/^[›>]\s+/, '') }
       currentType = 'user'
-    } else if (/^[●•]\s+/.test(line)) {
+      i++
+      continue
+    }
+
+    // Assistant message
+    if (/^[●•]\s+/.test(line)) {
       if (current) messages.push(current)
       current = { role: 'assistant', text: line.replace(/^[●•]\s+/, '') }
       currentType = 'assistant'
-    } else if (/^[○◯]\s+/.test(line)) {
-      if (current) messages.push(current)
-      current = { role: 'system', text: line.replace(/^[○◯]\s+/, '') }
-      currentType = 'system'
-    } else if (/^[\u25ce]\s*Goal/.test(line)) {
-      // 块级 Goal 信息
-      if (current) messages.push(current)
-      current = { role: 'goal', text: line, items: [] }
-      currentType = 'goal'
-    } else if (/^[✓✔]\s+/.test(line) || /^[○◌◯]\s+/.test(line) || /^[✗✘×]\s+/.test(line)) {
-      // todo item
+      i++
+      continue
+    }
+
+    // Todo item（v0.5.ab: 必须放在 system 前面，否则 ○ 会被先匹配成 system）
+    // v0.5.ag: 之前会吞掉 system 错误（[error] / Questionnaire）— 提到 todo 之前先排除
+    if (/^[✓✔○◌◯✗✘×]\s+/.test(line)) {
+      const tm = line.match(/^([✓✔○◌◯✗✘×])\s+(.+)$/)
+      const ttext = tm ? tm[2] : ''
+      // 看起来像 system 的（!前缀 [新] / ○ [error|warning|info] [旧] / ○ Questionnaire/requires [旧]）→ 走 system 分支
+      if (tm && (/^\[(error|warning|info|system)\]/i.test(ttext) || /Questionnaire|requires.*user input|requires.*interactive/i.test(ttext))) {
+        if (current) messages.push(current)
+        current = { role: 'system', text: ttext }
+        currentType = 'system'
+        i++
+        continue
+      }
       if (currentType !== 'todo' || !current) {
         if (current) messages.push(current)
         current = { role: 'todo', text: '', items: [] }
         currentType = 'todo'
       }
-      const m = line.match(/^([✓✔○◌◯✗✘×])\s+(.+)$/)
+      const m = tm
       if (m) {
         const status = m[1] === '✓' || m[1] === '✔' ? 'done' : m[1] === '✗' || m[1] === '✘' || m[1] === '×' ? 'failed' : 'pending'
         current.items.push({ status, text: m[2] })
       }
-    } else if (current) {
+      i++
+      continue
+    }
+
+    // System message
+    if (/^[○◯]\s+/.test(line)) {
+      if (current) messages.push(current)
+      current = { role: 'system', text: line.replace(/^[○◯]\s+/, '') }
+      currentType = 'system'
+      i++
+      continue
+    }
+
+    // v0.5.ag: 错误/系统提示（! 前缀，避免与 todo 的 ○ 冲突）
+    if (/^!\s+/.test(line)) {
+      if (current) messages.push(current)
+      current = { role: 'system', text: line.replace(/^!\s+/, '') }
+      currentType = 'system'
+      i++
+      continue
+    }
+
+    // v0.5.ac: Thinking block（▲ 前缀）。连续多行 ▲ 聚成单个 thinking 块
+    if (/^▲\s+/.test(line)) {
+      if (currentType !== 'thinking' || !current) {
+        if (current) messages.push(current)
+        current = { role: 'thinking', text: line.replace(/^▲\s+/, '') }
+        currentType = 'thinking'
+      } else {
+        current.text += '\n' + line.replace(/^▲\s+/, '')
+      }
+      i++
+      continue
+    }
+
+    // v0.5.bw: Tool call block（→ 前缀）。
+    //   格式：→ toolName  {input}     ← tool 块头
+    //         [status]                 ← server v0.5.bs 写的 `  [completed]`
+    //         output line 1            ← server v0.5.bs 写的 `  text`
+    //         output line 2
+    //         @ /path/to/file          ← server v0.5.bx-6 写的 tool locations
+    //         ! error text             ← server v0.5.bs 写的 `  ! ...`
+    // 收集直到下一个非 `  ` 缩进行
+    if (/^→\s+/.test(line)) {
+      if (current) { messages.push(current); current = null; currentType = null }
+      // 解析 → toolName [input]
+      const tm = line.match(/^→\s+(\S+?)(?:\s{2}(.+))?$/)
+      const tool = {
+        role: 'tool',
+        name: tm ? tm[1] : 'tool',
+        input: (tm && tm[2]) ? tm[2] : '',
+        status: 'pending',
+        output: [],
+        locations: [],   // v0.5.bx-6: tool 涉及的本地文件路径
+        error: null,
+        streaming: false,  // v0.5.bw: 流式中默认展开
+      }
+      let j = i + 1
+      while (j < lines.length) {
+        const l = lines[j]
+        if (l == null) { j++; continue }
+        // 2+ 空格缩进 = 属于本 tool 块
+        if (/^\s{2,}\S/.test(l)) {
+          const stripped = l.replace(/^\s{2,}/, '')
+          const statusMatch = stripped.match(/^\[([^\]]+)\]$/)
+          if (statusMatch) {
+            tool.status = statusMatch[1]
+            // v0.5.bw: status=in_progress 时默认展开
+            if (statusMatch[1] === 'in_progress') tool.streaming = true
+          } else if (/^!\s+/.test(stripped)) {
+            tool.error = stripped.replace(/^!\s+/, '')
+          } else if (/^@\s+/.test(stripped)) {
+            // v0.5.bx-6: 路径行 — 跟输出分开存
+            const p = stripped.replace(/^@\s+/, '').trim()
+            if (p && !tool.locations.includes(p)) tool.locations.push(p)
+          } else {
+            tool.output.push(stripped)
+          }
+          j++
+        } else {
+          break
+        }
+      }
+      messages.push(tool)
+      i = j
+      current = null; currentType = null
+      continue
+    }
+
+    // Continuation of current message
+    if (current) {
       current.text += (current.text ? '\n' : '') + line
     }
+    i++
   }
   if (current) messages.push(current)
   return messages
+}
+
+// v0.5.ab: 收集 Plan 块（"Plan: 标题" → Summary/目标/非目标 → "Plan complete." → 选项）
+function collectPlanBlock(lines, startIdx) {
+  const titleMatch = lines[startIdx].trim().match(/^Plan\s*[:：]\s*(.+)$/i)
+  const title = titleMatch ? titleMatch[1].trim() : ''
+  const contentLines = []
+  const options = []
+  let phase = 'content'  // 'content' | 'options'
+  let i = startIdx + 1
+
+  while (i < lines.length) {
+    const l = lines[i]
+    if (!l) { i++; continue }
+    const trimmed = l.trim()
+    // 遇新块：用户/助手/系统/todo/新 ask/新 plan → 停
+    // 注意：在 options 阶段，" > 1. xxx" 形式不能算 user message，要继续
+    const isOptionLine = phase === 'options' && /^[>\s]*\d+\.\s+/.test(l)
+    if (!isOptionLine) {
+      if (/^[›>●•○◯◎✓✔◌✗✘×]/.test(l)) break
+      if (/^Plan\s*[:：]/i.test(trimmed)) break
+      if (/^Ask\b/i.test(trimmed)) break
+    }
+
+    if (/^Plan complete\./i.test(trimmed)) {
+      phase = 'options'
+      i++
+      // 跳过 "What would you like to do?" 一行
+      if (i < lines.length && /what would you like to do/i.test(lines[i])) i++
+      continue
+    }
+
+    if (phase === 'options') {
+      // 形如 "  1. Agree and start implementation" 或 "> 1. Agree ..." 或 "> Agree ..."
+      const optMatch = l.match(/^[>\s]*(\d+)\.\s+(.+)$/) || l.match(/^>\s+(.+)$/) || l.match(/^\s*[-*]\s+(.+)$/)
+      if (optMatch) {
+        options.push({ num: (optMatch[1] || '1').toString(), text: optMatch[2].trim(), selected: l.trimStart().startsWith('>') })
+      } else if (trimmed) {
+        // 兜底：非空行也作为选项
+        options.push({ num: String(options.length + 1), text: trimmed, selected: false })
+      }
+    } else {
+      contentLines.push(l)
+    }
+    i++
+  }
+  return { title, content: contentLines.join('\n'), options, endIdx: i }
+}
+
+// v0.5.ab: 收集 Ask 块（"◎ Ask" / "Ask" → 标签/问题/编号选项）
+function collectAskBlock(lines, startIdx) {
+  const blockLines = []
+  let i = startIdx
+  while (i < lines.length) {
+    const l = lines[i]
+    if (!l) { i++; continue }
+    // tab 行（含 ● 和 ○，如 "● 故事类型  ○ 长度"）是 ask 的多问题标签，不能算新消息
+    const isTabLine = /[●•].*[○◯]|[○◯].*[●•]/.test(l)
+    if (!isTabLine) {
+      if (/^[›>●•○◯◎✓✔◌✗✘×]/.test(l) && !/^[\u25ce]\s*Ask\b/i.test(l.trim())) break
+      if (/^Plan\s*[:：]/i.test(l.trim())) break
+      // 底部快捷键提示 "↑↓ move" / "1-5 select" / "Esc cancel" / "Tab/←/→" → 停
+      if (/^↑↓\s/.test(l.trim()) || /^\d+-\d+\s+select/i.test(l.trim()) ||
+          /^Esc\s+(cancel|back|deny)/i.test(l.trim()) || /^Tab\//i.test(l.trim())) break
+    }
+    blockLines.push(l)
+    i++
+  }
+  return { raw: blockLines, endIdx: i }
 }
 
 function renderMessage(msg) {
@@ -2522,6 +4700,182 @@ function renderMessage(msg) {
       <div class="goal-block-text">${escapeHtml(msg.text)}</div>
     </div>`
   }
+  // v0.5.bw: 工具调用块（→ toolName + output/status/error）
+  // 模仿 mcode TUI 的样式：tool 块独立成块，header 显示 tool name + status
+  // 默认折叠（点开看 input/output），流式中（status=in_progress）默认展开
+  if (msg.role === 'tool') {
+    const statusClass = msg.status === 'completed' ? 'done'
+      : msg.status === 'failed' ? 'failed'
+      : msg.status === 'in_progress' ? 'running'
+      : 'pending'
+    const statusLabel = msg.status === 'completed' ? '✓'
+      : msg.status === 'failed' ? '✗'
+      : msg.status === 'in_progress' ? '…'
+      : '○'
+    // input 尝试 JSON 解析（pretty）— 失败就原样显示
+    let inputHtml = ''
+    if (msg.input) {
+      let pretty = msg.input
+      try {
+        const parsed = JSON.parse(msg.input)
+        pretty = JSON.stringify(parsed, null, 2)
+      } catch {}
+      inputHtml = `<div class="msg-tool-input"><span class="msg-tool-label">input</span><pre>${escapeHtml(pretty)}</pre></div>`
+    }
+    const outputText = msg.output.join('\n')
+    let outputHtml = ''
+    // v0.5.bx-7: ask_user 工具的特殊渲染 — 检测 INPUT 里的 questionnaire JSON
+    //   mcode 0.1.4 调 ask_user 时 INPUT 是 { mode: "questionnaire", ... }（output 是 "waiting" 文本）
+    //   解析成 question + options，渲染成可点击按钮 (内嵌在 tool 块里)
+    // v0.5.bx-8: 选项 click → 自动 send (不走输入框); 加 .ask-skip 跳过按钮 → 发 "Q: ... A: 未回答";
+    //   加 .ask-answered 状态条; 设 state.pendingAskUser 让 send() 模板化后续 chat 消息
+    let questionnaireHtml = ''
+    if (msg.name === 'ask_user' && msg.input && !msg.parsedQuestionnaire) {
+      try {
+        let inputStr = msg.input
+        if (typeof inputStr === 'string') {
+          const jsonStart = inputStr.indexOf('{')
+          if (jsonStart >= 0) inputStr = inputStr.slice(jsonStart)
+        }
+        const q = typeof inputStr === 'string' ? JSON.parse(inputStr) : inputStr
+        if (q && (q.mode === 'questionnaire' || q.steps)) {
+          const rawSteps = Array.isArray(q.steps) ? q.steps : [q]
+          // v0.5.bx-8: 存所有 step, 区分单/多模式
+          //   单 step (rawSteps.length === 1): 选项 click 自动 send, 跳过按钮自动发 — 跟之前一致
+          //   多 step (rawSteps.length > 1): 选项 click 只 highlight, 底部"发送"按钮模板化发, 没选 = 未回答
+          const steps = rawSteps.map(step => ({
+            question: step.question || step.title || '',
+            options: (Array.isArray(step.options) ? step.options : []).map((o, oi) => ({
+              label: (o && (o.label || o.text)) || `Option ${oi + 1}`,
+              desc: (o && o.description) || '',
+            })),
+          }))
+          msg.parsedQuestionnaire = {
+            steps,
+            mode: steps.length > 1 ? 'multi' : 'single',
+          }
+        }
+      } catch {}
+    }
+    if (msg.parsedQuestionnaire) {
+      const pq = msg.parsedQuestionnaire
+      const isMulti = pq.mode === 'multi'
+      const allAnswered = isMulti
+        ? pq.steps.every(s => state?.askUserAnswers?.[s.question])
+        : !!state?.askUserAnswers?.[pq.steps[0].question]
+      // 字母 A/B/C/D 标识
+      const letter = i => String.fromCharCode(65 + i)  // 65='A'
+      // i18n helper — 用模板字面量支持 {n}/{answer} 占位符
+      const i18nFmt = (key, vars) => {
+        let s = t(key) || key
+        if (vars) for (const k in vars) s = s.replace(`{${k}}`, vars[k])
+        return s
+      }
+
+      questionnaireHtml = `<div class="ask-questionnaire" data-mode="${pq.mode}">` +
+        pq.steps.map((step, si) => {
+          const qText = step.question
+          const stepAns = state?.askUserAnswers?.[qText]
+          const isStepAnswered = !!stepAns
+          const isOtherPicked = isStepAnswered && stepAns.mode === 'answered-other'
+          // "其他"输入框当前 value (用户自己输入的回答)
+          const otherVal = isOtherPicked ? stepAns.answer : ''
+          // 学弹窗: 步数指示 (多 step 才显示)
+          const stepHead = isMulti
+            ? `<div class="ask-step-head">
+                <div class="ask-q">${escapeHtml(qText)}</div>
+                <div class="ask-step-counter">${si + 1} / ${escapeHtml(i18nFmt('ask_user_step_count', { n: pq.steps.length }))}</div>
+              </div>`
+            : `<div class="ask-q ask-q-single">${escapeHtml(qText)}</div>`
+          return `<div class="ask-step" data-step-idx="${si}">
+            ${stepHead}
+            <div class="ask-opts">
+              ${step.options.map((o, oi) => {
+                const isPicked = isStepAnswered && !isOtherPicked && stepAns.answer === o.label
+                // v0.5.bx-8: 已答后所有按钮 (含选中的) 都 disabled — 防止重复 click 触发
+                const optDisabled = isStepAnswered ? ' disabled' : ''
+                // 学弹窗: 字母方块 + 文字
+                return `<button class="ask-opt${isPicked ? ' clicked' : ''}" data-ask-q="${escapeHtml(qText)}" data-ask-label="${escapeHtml(o.label)}" data-ask-letter="${letter(oi)}"${optDisabled}>
+                  <span class="ask-opt-letter">${letter(oi)}</span>
+                  <span class="ask-opt-label">${escapeHtml(o.label)}</span>
+                </button>`
+              }).join('')}
+              ${isStepAnswered ? `<div class="ask-answered ${stepAns.mode === 'skipped' ? 'skipped' : ''}">
+                <span class="ask-answered-mark">${stepAns.mode === 'skipped' ? '–' : '✓'}</span>
+                ${stepAns.mode === 'skipped' ? escapeHtml(t('ask_user_skipped')) : escapeHtml(i18nFmt('ask_user_answered', { answer: stepAns.answer }))}
+              </div>` : ''}
+            </div>
+            <!-- v0.5.bx-8: "其他"输入框 + 跳过按钮 (单 step 模式) — 横排, 不被选项容器拉宽 -->
+            <div class="ask-step-actions">
+              <div class="ask-step-other">
+                <span class="ask-step-other-icon">✎</span>
+                <input type="text" class="ask-step-other-input" data-ask-q="${escapeHtml(qText)}" placeholder="${escapeHtml(t('ask_user_other_placeholder'))}" value="${escapeHtml(otherVal)}"${isStepAnswered ? ' disabled' : ''} />
+                <button class="ask-step-other-clear" title="${escapeHtml(t('ask_user_clear'))}">×</button>
+              </div>
+              ${isMulti ? '' : `<button class="ask-skip" data-ask-q="${escapeHtml(qText)}" data-ask-skip="1"${isStepAnswered ? ' disabled' : ''}>${escapeHtml(t('ask_user_skip'))}</button>`}
+            </div>
+          </div>`
+        }).join('') +
+        // 多 step 模式: 底部统一"发送"按钮 (收集所有 step 模板化发)
+        (isMulti ? `<div class="ask-step-foot">
+          <button class="ask-submit primary" data-submit-tool-idx="${msg.toolIdx ?? ''}"${allAnswered ? ' disabled' : ''}>
+            ${allAnswered
+              ? escapeHtml(i18nFmt('ask_user_resend_count', { n: pq.steps.length }))
+              : escapeHtml(i18nFmt('ask_user_send_count', { n: pq.steps.length }))}
+          </button>
+        </div>` : '') +
+        `</div>`
+      // v0.5.bx-8: 设 state.pendingAskUser (在没答过时, 让 send() 知道有 ask 在等)
+      //   多 step 时取第一题 (user 在 chat 输入框发消息时, 模板化成第一题的 Q/A)
+      if (!allAnswered && state && (!state.pendingAskUser || state.pendingAskUser.firstQuestion !== pq.steps[0].question)) {
+        state.pendingAskUser = {
+          firstQuestion: pq.steps[0].question,
+          steps: pq.steps.map(s => s.question),
+          answered: null,
+          toolRef: msg,
+        }
+      }
+    }
+    if (outputText) {
+      outputHtml = `<div class="msg-tool-output"><span class="msg-tool-label">output</span><pre>${escapeHtml(outputText)}</pre></div>`
+    }
+    // v0.5.bx-6: tool 涉及的本地文件路径 — 点击复制到剪贴板，hover 显示完整路径
+    let locationsHtml = ''
+    if (Array.isArray(msg.locations) && msg.locations.length > 0) {
+      const items = msg.locations.map(p => {
+        const safe = escapeHtml(p)
+        return `<div class="msg-tool-loc" data-path="${safe}" title="点击复制：${safe}">
+          <span class="msg-tool-loc-icon">📄</span><span class="msg-tool-loc-path">${safe}</span>
+        </div>`
+      }).join('')
+      locationsHtml = `<div class="msg-tool-locations"><span class="msg-tool-label">files</span>${items}</div>`
+    }
+    let errorHtml = ''
+    if (msg.error) {
+      errorHtml = `<div class="msg-tool-error">${escapeHtml(msg.error)}</div>`
+    }
+    // 默认展开规则：completed (看 output) / streaming / 有 error → 展开；pending + 无 output → 折叠
+    const hasContent = !!(msg.input || outputText || msg.error || questionnaireHtml || (msg.locations && msg.locations.length))
+    const open = msg.streaming || msg.status === 'in_progress' || msg.status === 'failed' || hasContent
+    // v0.5.bx-7: 问卷模式下隐藏 raw input + output（避免重复显示 JSON + 按钮）
+    const finalInputHtml = msg.parsedQuestionnaire ? '' : inputHtml
+    const finalOutputHtml = msg.parsedQuestionnaire ? '' : outputHtml
+    return `<details class="msg-tool"${open ? ' open' : ''}>
+      <summary>
+        <span class="msg-tool-toggle">▸</span>
+        <span class="msg-tool-icon">🔧</span>
+        <span class="msg-tool-name">${escapeHtml(msg.name)}</span>
+        <span class="msg-tool-status ${statusClass}">${statusLabel} ${escapeHtml(msg.status)}</span>
+      </summary>
+      <div class="msg-tool-body">
+        ${finalInputHtml}
+        ${questionnaireHtml}
+        ${finalOutputHtml}
+        ${locationsHtml}
+        ${errorHtml}
+      </div>
+    </details>`
+  }
   if (msg.role === 'todo') {
     return `<div class="todo-block">
       ${msg.items.map(i => `<div class="todo-item ${i.status}">
@@ -2530,56 +4884,165 @@ function renderMessage(msg) {
       </div>`).join('')}
     </div>`
   }
-  const avatar = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'M' : 'i'
+  if (msg.role === 'plan') return renderPlanBlock(msg)
+  if (msg.role === 'ask')  return renderAskBlock(msg)
+  // v0.5.ad: 检测末尾 ▍ 流式光标 — 拆出 text 和光标 span 单独渲染
+  let body = msg.text
+  let cursorHtml = ''
+  if (body && body.endsWith(' ▍')) {
+    body = body.slice(0, -2)
+    cursorHtml = '<span class="msg-cursor">▍</span>'
+  }
+  // v0.5.af: 思考内容 — 紧凑内联 toggle，无 avatar 无双层标题
+  if (msg.role === 'thinking') {
+    const isStreaming = !!cursorHtml
+    const lineCount = body.split('\n').filter(l => l.trim()).length
+    const lineHint = lineCount > 1 ? ` <span class="msg-thinking-count">${lineCount} ${t('lines') || '行'}</span>` : ''
+    return `<details class="msg-thinking-inline"${isStreaming ? ' open' : ''}>
+      <summary>
+        <span class="msg-thinking-toggle">▸</span>
+        <span>${t('section_thinking') || '思考'}</span>${lineHint}
+      </summary>
+      <div class="msg-thinking">${parseMarkdown(body)}${cursorHtml}</div>
+    </details>`
+  }
+  // v0.5.bs: assistant 消息的 avatar 改成 brand logo 图（user/system 仍是字母）
+  const avatar = msg.role === 'user' ? 'You' : msg.role === 'assistant'
+    ? '<img class="msg-avatar-img" src="/brand-logo.png" alt="MiniMax Code" />'
+    : 'i'
   const role = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Mcode' : 'System'
   return `<div class="msg ${msg.role}">
     <div class="msg-avatar">${avatar}</div>
     <div class="msg-content">
       <div class="msg-role">${role}</div>
-      <div class="msg-body">${parseMarkdown(msg.text)}</div>
+      <div class="msg-body">${parseMarkdown(body)}${cursorHtml}</div>
     </div>
   </div>`
 }
 
+// v0.5.ab: 渲染 Plan 块（内联 + "查看完整计划" 按钮触发弹窗）
+function renderPlanBlock(msg) {
+  const optsHtml = msg.options.map(o => `
+    <div class="plan-action ${o.selected ? 'primary' : ''}" data-plan-opt="${escapeHtml(o.text)}">
+      ${escapeHtml(o.text)}
+    </div>`).join('')
+  return `<div class="plan-block" data-plan-id="${msg.title}">
+    <div class="plan-block-header">
+      <span>📋</span>
+      <span class="plan-block-title">Plan: ${escapeHtml(msg.title)}</span>
+      <span class="plan-block-meta">${msg.content.split('\n').length} 行</span>
+    </div>
+    <div class="plan-block-summary">${parseMarkdown(msg.content || '*（无内容预览）*')}</div>
+    ${msg.options.length > 0 ? `<div class="plan-block-actions">${optsHtml}</div>` : ''}
+    <div class="plan-block-actions" style="margin-top:6px">
+      <button class="plan-action" data-plan-view="${escapeHtml(msg.title)}">查看完整计划（弹窗）</button>
+    </div>
+  </div>`
+}
+
+// v0.5.ab: 渲染 Ask 块（内联 + 点击选项触发 send）
+function renderAskBlock(msg) {
+  // 解析 raw 行：① header (◎ Ask / Ask) ② 标签行 (● X  ○ Y) ③ 问题 ④ 选项 1..N
+  const raw = msg.raw
+  let headerText = ''
+  let tabsText = ''
+  let question = ''
+  const options = []
+  let hasOther = false
+
+  for (const line of raw) {
+    const t = line.trim()
+    if (/^[\u25ce]\s*Ask\b/i.test(t) || /^Ask\s*[:：]?/i.test(t)) {
+      if (!headerText) headerText = t
+      continue
+    }
+    // 标签行: "● 故事类型  ○ 长度"（含 ● 和 ○）
+    if (/[●•]/.test(t) && /[○◯]/.test(t) && !/^\d+\./.test(t)) {
+      tabsText = t
+      continue
+    }
+    // 编号选项: "  1  温暖治愈（生活/友情）  贴近日常..." 或 "  1. xxx"
+    const optMatch = t.match(/^(\d+)\s+(.+)$/) || t.match(/^(\d+)\.\s+(.+)$/)
+    if (optMatch) {
+      const num = optMatch[1]
+      // 剩余部分可能含 label + description
+      const rest = optMatch[2]
+      // 检测 Other
+      if (/^Other\b/i.test(rest) || /^Others\b/i.test(rest)) {
+        hasOther = true
+        options.push({ num, label: rest.split(/\s{2,}|\s+/)[0] || 'Other', desc: rest, isOther: true })
+      } else {
+        // label 和 description 用 2+ 空格或 description 里常见词分割
+        const parts = rest.split(/\s{2,}/)
+        if (parts.length >= 2) {
+          options.push({ num, label: parts[0], desc: parts.slice(1).join('  ') })
+        } else {
+          // 单段就当 label
+          options.push({ num, label: rest, desc: '' })
+        }
+      }
+      continue
+    }
+    // 其它行作为问题（直到编号选项出现）
+    if (options.length === 0) {
+      question = question ? question + '\n' + t : t
+    }
+  }
+
+  const total = options.length || 1
+  const optsHtml = options.map(o => `
+    <div class="ask-option" data-ask-opt="${escapeHtml(o.label)}" data-ask-other="${o.isOther ? '1' : '0'}">
+      <span class="ask-option-num">${o.num}</span>
+      <span class="ask-option-label">${escapeHtml(o.label)}</span>
+      ${o.desc ? `<span class="ask-option-desc">${escapeHtml(o.desc)}</span>` : ''}
+    </div>`).join('')
+
+  return `<div class="ask-block">
+    <div class="ask-block-header">
+      <span>◎</span>
+      <span>${t('ask_title') || 'Ask'}</span>
+      <span class="ask-block-progress">0/${total}</span>
+    </div>
+    ${tabsText ? `<div class="ask-block-tabs" style="margin-bottom:8px;color:var(--text-tertiary);font-size:12px">${escapeHtml(tabsText)}</div>` : ''}
+    ${question ? `<div class="ask-block-question">${escapeHtml(question)}</div>` : ''}
+    ${optsHtml}
+  </div>`
+}
+
 // ============================================================
-// Markdown (minimal inline parser)
+// Markdown (v0.5.ab: 用 marked + highlight.js 替换原 inline parser)
 // ============================================================
+// 注：bash.min.js / javascript.min.js / json.min.js 加载时已经自动调
+// window.hljs.registerLanguage(...)，所以这里不用再手动注册。
+if (window.marked) {
+  marked.setOptions({
+    gfm: true,
+    breaks: true,
+    headerIds: false,
+    mangle: false,
+    highlight(code, lang) {
+      if (window.hljs && lang && hljs.getLanguage(lang)) {
+        try { return hljs.highlight(code, { language: lang }).value } catch {}
+      }
+      return window.escapeHtml ? escapeHtml(code) : code
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    }
+  })
+}
 function parseMarkdown(text) {
   if (!text) return ''
-  // Escape HTML first
-  let html = escapeHtml(text)
-  // Code blocks ```...```
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => `<pre><code class="lang-${lang}">${code}</code></pre>`)
-  // Inline code `...`
-  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>')
-  // Headers
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-  // Bold **...**
-  html = html.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
-  // Italic *...* (avoid conflict with bold)
-  html = html.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<i>$1</i>')
-  // Links [text](url)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-  // Blockquote
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-  // HR
-  html = html.replace(/^---+$/gm, '<hr>')
-  // Unordered list
-  html = html.replace(/^[*\-+] (.+)$/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>')
-  // Ordered list
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-  // Tables (simple)
-  // Paragraphs (split by blank lines)
-  const blocks = html.split(/\n{2,}/)
-  html = blocks.map(b => {
-    if (/^<(h[1-6]|ul|ol|pre|blockquote|hr)/.test(b.trim())) return b
-    if (b.includes('<li>') && !b.includes('<ul>')) return '<ul>' + b + '</ul>'
-    return '<p>' + b.replace(/\n/g, '<br>') + '</p>'
-  }).join('\n')
-  return html
+  if (window.marked) {
+    try {
+      const html = marked.parse(text)
+      // 链接外链化 + 中文化 title
+      return html.replace(/<a\s+href="([^"]+)"/g, (m, href) =>
+        `<a href="${href}" target="_blank" rel="noopener"`)
+    } catch (e) {
+      console.error('marked error', e)
+      return `<pre>${escapeHtml(text)}</pre>`
+    }
+  }
+  return `<pre>${escapeHtml(text)}</pre>`  // 库没加载时的降级
 }
 
 function escapeHtml(s) {
@@ -2668,7 +5131,7 @@ function hideMode() { modeOpen = false; modePopover.hidden = true }
 async function setMode(mode) {
   hideMode()
   try {
-    await fetch('/api/permissions' + TOKEN_QUERY, {
+    await fetch('/api/permissions' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ mode })
@@ -2677,14 +5140,11 @@ async function setMode(mode) {
 }
 
 // ============================================================
-// Settings menu
+// v0.5.aq: 旧 settings menu / modal 已全部废弃，chip-lan 自带开关
 // ============================================================
-const settingsMenu = document.getElementById('settings-menu')
-function toggleSettings() {
-  settingsOpen = !settingsOpen
-  settingsMenu.hidden = !settingsOpen
-}
-function hideSettings() { settingsOpen = false; settingsMenu.hidden = true }
+const settingsMenu = null  // 旧元素已删除，置 null 防止任何残留引用报错
+function toggleSettings() {}  // 旧 API no-op
+function hideSettings() {}
 
 // ============================================================
 // v0.5.z: 套餐用量（btn-menu 按钮 + 右侧 popover，mmx quota + 本机时间自算）
@@ -2784,7 +5244,7 @@ function renderUsagePopover() {
   const g = getGeneralQuota()
   const now = new Date()
   if (!g) {
-    body.innerHTML = `<div class="usage-empty" data-i18n="usage_loading">点击套餐用量加载...</div>`
+    body.innerHTML = `<div class="usage-empty">${t('quota_loading_idle')}</div>`
     return
   }
   const ip = g.current_interval_remaining_percent
@@ -2795,17 +5255,22 @@ function renderUsagePopover() {
   const nextWk = nextWeeklyReset(now)
   body.innerHTML = `
     <div class="usage-row">
-      <span class="usage-row-label">5 小时限额</span>
-      <span class="usage-row-value${ipClass}">${ip ?? '—'}% 剩余</span>
+      <span class="usage-row-label">${t('quota_5h_limit')}</span>
+      <span class="usage-row-value${ipClass}">${ip ?? '—'}% ${t('quota_remaining')}</span>
     </div>
-    <div class="usage-reset">下次重置 ${escapeHtml(formatResetTime(next5h))}（${escapeHtml(formatTimeUntil(next5h, now))}）</div>
+    <div class="usage-reset">${t('quota_next_reset')} ${escapeHtml(formatResetTime(next5h))}（${escapeHtml(formatTimeUntil(next5h, now))}）</div>
     <div class="usage-row">
-      <span class="usage-row-label">每周限额</span>
-      <span class="usage-row-value${wpClass}">${wp ?? '—'}% 剩余</span>
+      <span class="usage-row-label">${t('quota_weekly_limit')}</span>
+      <span class="usage-row-value${wpClass}">${wp ?? '—'}% ${t('quota_remaining')}</span>
     </div>
-    <div class="usage-reset">下次重置 ${escapeHtml(formatResetTime(nextWk))}（${escapeHtml(formatTimeUntil(nextWk, now))}）</div>
+    <div class="usage-reset">${t('quota_next_reset')} ${escapeHtml(formatResetTime(nextWk))}（${escapeHtml(formatTimeUntil(nextWk, now))}）</div>
   `
-  if (btn) btn.classList.remove('loading')
+  if (btn) {
+    btn.classList.remove('loading')
+    // v0.5.av: 恢复 "Refresh" 文案
+    const txt = btn.querySelector('.usage-popover-refresh-text')
+    if (txt) txt.textContent = t('refresh')
+  }
 }
 
 function renderUsageValue() {
@@ -2820,7 +5285,7 @@ function renderUsageValue() {
   }
   const ip = g.current_interval_remaining_percent
   // v0.5.aa: 加 "剩余" 后缀让"已用"和"剩余"语义明确（用户反馈）
-  val.textContent = `${ip}% 剩余`
+  val.textContent = `${ip}% ${t('quota_remaining')}`
   if (ip < 20) val.classList.add('low')
   else val.classList.remove('low')
 }
@@ -2848,30 +5313,64 @@ function toggleUsagePopover(forceState) {
 async function refreshUsage(opts = {}) {
   const isManual = opts.manual === true
   const btn = document.getElementById('usage-popover-refresh')
-  if (btn) btn.classList.add('loading')
-  // v0.5.bb: 记录触发时的 fetchedAt，渲染时如果变了就停转 + 弹 toast
-  const beforeFetchedAt = state?.usage?.fetchedAt
-  try {
-    await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS })
-    // v0.5.bb: 等真实数据到来（fetchedAt 变化 或 弹层刷新）才停转 + toast
-    // 用轮询兜底：最长 5s，超时也算失败
-    const deadline = Date.now() + 5000
-    while (Date.now() < deadline) {
-      if (state?.usage?.fetchedAt && state.usage.fetchedAt !== beforeFetchedAt) break
-      await new Promise((r) => setTimeout(r, 80))
+  if (btn) {
+    btn.classList.add('loading')
+    // v0.5.av: loading 态显示 i18n 文案（避开 CSS ::before content 难 i18n）
+    const txt = btn.querySelector('.usage-popover-refresh-text')
+    if (txt) {
+      txt.textContent = t('quota_loading_idle') === '点击套餐用量加载…' ? '加载中…' : 'Loading…'
     }
-    if (state?.usage?.fetchedAt === beforeFetchedAt) {
+  }
+  // v0.5.au: 改用 postTime 标记（Date.now()），避免 initial /api/state 提前 break wait loop
+  // 之前用 beforeFetchedAt 比较的 bug：state 加载完成后 fetchedAt 任意变化都会 break，可能误判
+  const postTime = Date.now()
+  try {
+    await fetch('/api/usage' + API_SUFFIX, { method: 'POST', headers: HEADERS })
+    // 等真实数据到来（fetchedAt 必须 > postTime）才停转 + toast
+    // v0.5.bb: deadline 18s > server 端 mmx quota 15s 超时（确保 mmx 跑完后 pushStateFor 的 fetchedAt > postTime）
+    const deadline = Date.now() + 18_000
+    let gotSseUpdate = false
+    while (Date.now() < deadline) {
+      const fetchedAt = state?.usage?.fetchedAt
+      if (typeof fetchedAt === 'number' && fetchedAt > postTime) { gotSseUpdate = true; break }
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    if (!gotSseUpdate) {
+      // SSE 没收到（典型场景：init 时 EventSource 还在 CONNECTING）
+      // 兜底轮询 /api/state（每 1.5s 一次直到 deadline）— 避免 mmx 慢的情况下拿不到数据
+      const fallbackDeadline = Date.now() + 8_000
+      while (Date.now() < fallbackDeadline) {
+        try {
+          const r2 = await fetch('/api/state' + API_SUFFIX, { headers: HEADERS })
+          if (r2.ok) {
+            state = await r2.json()
+            const fa = state?.usage?.fetchedAt
+            if (typeof fa === 'number' && fa > postTime) { gotSseUpdate = true; break }
+          }
+        } catch {}
+        await new Promise((r) => setTimeout(r, 1500))
+      }
+    }
+    // 兜底 render
+    render()
+    const fetchedAt = state?.usage?.fetchedAt
+    if (!(typeof fetchedAt === 'number' && fetchedAt > postTime)) {
       // 没拿到新数据
-      if (isManual) showToast('刷新超时，请重试')
+      if (isManual) showToast(t('quota_loading_fail') + '（超时）')
     } else if (isManual) {
-      showToast('用量已刷新')
+      showToast(t('usage_refreshed'))
     }
   } catch (e) {
     const body = document.getElementById('usage-popover-body')
-    if (body) body.innerHTML = `<div class="usage-error">加载失败：${escapeHtml(e.message || String(e))}</div>`
-    if (isManual) showToast('刷新失败：' + (e.message || String(e)))
+    if (body) body.innerHTML = `<div class="usage-error">${t('quota_loading_fail')}：${escapeHtml(e.message || String(e))}</div>`
+    if (isManual) showToast(t('quota_loading_fail') + '：' + (e.message || String(e)))
   } finally {
-    if (btn) btn.classList.remove('loading')
+    if (btn) {
+      btn.classList.remove('loading')
+      // v0.5.av: 恢复 "Refresh" 文案
+      const txt = btn.querySelector('.usage-popover-refresh-text')
+      if (txt) txt.textContent = t('refresh')
+    }
   }
 }
 
@@ -2896,7 +5395,7 @@ async function uploadFiles(files) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const r = await fetch('/api/upload' + TOKEN_QUERY, { method: 'POST', body: fd, headers: HEADERS })
+      const r = await fetch('/api/upload' + API_SUFFIX, { method: 'POST', body: fd, headers: HEADERS })
       if (!r.ok) { alert(`Upload failed: ${r.status}`); continue }
       const data = await r.json()
       if (data.ok) {
@@ -2938,6 +5437,19 @@ async function send() {
   const btn = document.getElementById('btn-send')
   btn.disabled = true
   try {
+    // v0.5.ax: welcome 态（无 session）发消息时先创建 session，用当前 workspace
+    if (!state?.sessionId) {
+      const ws = state?.workspace?.dir || undefined
+      const cr = await fetch('/api/sessions' + API_SUFFIX, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ workspace: ws })
+      })
+      const cd = await cr.json()
+      if (!cd.ok) { alert('创建会话失败: ' + (cd.error || '未知错误')); return }
+      // 等 SSE 推 state（含新 sessionId + mcodeSessionId）
+      await new Promise(r => setTimeout(r, 300))
+    }
     // v0.4.2: 用 mavis comm send 真正发消息到 mcode session（替代 M11 stdin 注入）
     // 附件先注入 @file 前缀（如果 mcode 端能处理）
     let content = text
@@ -2945,7 +5457,32 @@ async function send() {
       const atPaths = attachedFiles.map(p => `@${p}`).join(' ')
       content = `${atPaths} ${content}`.trim()
     }
-    const r = await fetch('/api/send' + TOKEN_QUERY, {
+    // v0.5.bx-8: 如果有 pendingAskUser (mcode ask_user 工具在等回答), 把用户消息模板化成
+    //   "Q: <question> A: <text>" — 让 mcode/LLM 知道这是 ask_user 工具的 result
+    //   同时写 state.askUserAnswers 让下次 render 显示 ✓
+    if (state?.pendingAskUser && state.pendingAskUser.firstQuestion && !state.pendingAskUser.answered) {
+      const pau = state.pendingAskUser
+      const answer = text || '未回答'
+      // 单 step: pau.firstQuestion 是当前题; 多 step: 模板化成"全部题目" (没答的填"未回答")
+      if (Array.isArray(pau.steps) && pau.steps.length > 1) {
+        // 多 step: 模板化所有 step
+        const blocks = pau.steps.map(q => {
+          const a = state.askUserAnswers?.[q]
+          return `Q: ${q}\nA: ${a ? a.answer : '未回答'}`
+        })
+        content = blocks.join('\n')
+      } else {
+        content = buildAskUserPrompt(pau.firstQuestion, answer)
+      }
+      // 持久化已答 (state + localStorage) — 只持久化 firstQuestion (其它题等点发送按钮再写)
+      if (!state.askUserAnswers) state.askUserAnswers = {}
+      setAskUserAnswer(pau.firstQuestion, { answer, mode: text ? 'answered' : 'skipped' })
+      // 标记已答 + 清 pending
+      pau.answered = { answer, mode: text ? 'answered' : 'skipped' }
+      state.pendingAskUser = null
+      console.log(`[ask-user] send() template: "${content.replace(/\n/g, ' / ').slice(0, 80)}"`)
+    }
+    const r = await fetch('/api/send' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ content, command: 'prompt' })
@@ -2962,6 +5499,26 @@ async function send() {
   finally { isSending = false; btn.disabled = false }
 }
 
+// v0.5.aa: 停止按钮 — POST /api/stop，server kill 子进程
+async function stopExec() {
+  const btn = document.getElementById('btn-send')
+  if (btn) btn.disabled = true
+  try {
+    const r = await fetch('/api/stop' + API_SUFFIX, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({})
+    })
+    const data = await r.json()
+    if (!data.ok) console.warn('stop failed', data)
+    // 状态由 server pushState 推送回来（state.running.active 变 false，render 切回 send）
+  } catch (e) {
+    console.error('stop', e)
+  } finally {
+    if (btn) btn.disabled = false
+  }
+}
+
 function autoResize() {
   const ta = document.getElementById('input-textarea')
   if (!ta) return
@@ -2975,10 +5532,17 @@ function autoResize() {
 function init() {
   applyTheme()
   applyI18n()
+  // v0.5.bx-8: 从 localStorage 恢复已答状态, 避免刷新后按钮重新可点
+  if (!state) state = {}
+  state.askUserAnswers = loadAskUserAnswers()
+  // v0.5.bh: 标记当前是不是本机（仅本机显示 chip-lan，LAN 设备上隐藏）
+  const host = location.hostname
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '' || host === '0.0.0.0'
+  if (!isLocal) document.body.classList.add('is-remote')
   connect()
   attachEvents()
   // Fetch initial state
-  fetch('/api/state' + TOKEN_QUERY, { headers: HEADERS })
+  fetch('/api/state' + API_SUFFIX, { headers: HEADERS })
     .then(r => r.json())
     .then(s => { state = s; render() })
     .catch(e => console.error('initial state', e))
@@ -3034,7 +5598,11 @@ function attachEvents() {
   })
 
   // Send button
-  document.getElementById('btn-send').addEventListener('click', send)
+  // v0.5.aa: send 按钮根据 is-running 切 send / stop
+  document.getElementById('btn-send').addEventListener('click', () => {
+    if (state?.running?.active) stopExec()
+    else send()
+  })
 
   // Refresh sessions button
   document.getElementById('btn-refresh-sessions')?.addEventListener('click', refreshSessions)
@@ -3078,19 +5646,6 @@ function attachEvents() {
   //   e.stopPropagation()
   //   toggleSettings()
   // })
-  document.getElementById('menu-toggle-theme').addEventListener('click', () => { toggleTheme(); hideSettings() })
-  document.getElementById('menu-toggle-lang').addEventListener('click', () => { toggleLang(); hideSettings() })
-  document.getElementById('menu-network').addEventListener('click', () => {
-    fetch('/api/network' + TOKEN_QUERY, { headers: HEADERS })
-      .then(r => r.json())
-      .then(info => {
-        const msg = `本机: ${info.localhost}\n` +
-          (info.ips || []).map(ip => `局域网: http://${ip}:${info.port}/${info.token_required ? '?token=...' : ''}`).join('\n') +
-          (info.token_required ? '\n\n⚠️ 局域网访问需带 token' : '\n\n✅ 局域网访问无需 token（仅本机受信）')
-        alert(msg)
-      })
-    hideSettings()
-  })
 
   // Appearance / Language buttons
   document.getElementById('btn-appearance').addEventListener('click', () => { toggleTheme() })
@@ -3102,16 +5657,720 @@ function attachEvents() {
     toggleUsagePopover()
   })
 
-  // New chat
-  document.getElementById('btn-new-chat').addEventListener('click', async () => {
+  // v0.5.ak: 模型切换 — btn-model click 弹 model-picker popover
+  // v0.5.bh: 拉 /api/models 显示可选列表，点一个直接切（用户反馈：不想手输）
+  const modelPicker = document.getElementById('model-picker')
+  const modelPickerInput = document.getElementById('model-picker-input')
+  const modelPickerList = document.getElementById('model-picker-list')
+  async function loadModelList() {
+    if (!modelPickerList) return
+    modelPickerList.innerHTML = '<div class="model-picker-loading">' + t('model_picker_loading') + '</div>'
     try {
-      await fetch('/api/cmd' + TOKEN_QUERY, {
+      const r = await fetch('/api/models' + API_SUFFIX, { headers: HEADERS })
+      const d = await r.json()
+      if (!d.ok || !Array.isArray(d.models) || d.models.length === 0) {
+        // v0.5.bj: TUI 没配 model — 显示 server hint（提示用户手输）
+        const hint = d.hint || t('model_picker_empty')
+        modelPickerList.innerHTML = '<div class="model-picker-empty">' + hint + '</div>'
+        return
+      }
+      const currentName = (d.current || '').toLowerCase()
+      modelPickerList.innerHTML = d.models.map(m => {
+        const isCurrent = (m.id || '').toLowerCase() === currentName
+        return '<button class="model-picker-item-btn' + (isCurrent ? ' current' : '') + '" data-model-id="' + (m.id || '').replace(/"/g, '&quot;') + '">' +
+               '<span>' + (m.label || m.id) + '</span>' +
+               '<span class="provider">' + (m.provider || '') + '</span>' +
+               '</button>'
+      }).join('')
+      // 绑定 click — 直接调 /api/set-model（v0.5.bk: 不再发 /model 命令，避免 mcode 报 invalid params + 新开对话）
+      modelPickerList.querySelectorAll('.model-picker-item-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-model-id') || ''
+          modelPickerInput.value = id
+          modelPickerInput.dataset.fullName = id
+          modelPicker.hidden = true
+          try {
+            await fetch('/api/set-model' + API_SUFFIX, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...HEADERS },
+              body: JSON.stringify({ model: id }),
+            })
+            // 服务端 pushStateFor 自动更新 state，render() 会被 SSE 推过来触发
+            // 但保险起见主动 fetch 一次
+            const r = await fetch('/api/state' + API_SUFFIX, { headers: HEADERS })
+            if (r.ok) { state = await r.json(); render() }
+            showToast && showToast(t('model_switched') + ' ' + id, 1500)
+          } catch (e) { console.error('[set-model]', e) }
+        })
+      })
+    } catch (e) {
+      console.error('[models] load failed', e)
+      modelPickerList.innerHTML = '<div class="model-picker-empty">' + t('model_picker_empty') + '</div>'
+    }
+  }
+  document.getElementById('btn-model').addEventListener('click', (e) => {
+    e.stopPropagation()
+    const wasHidden = modelPicker.hidden
+    // 关掉其他 popover
+    document.querySelectorAll('.mode-popover, .settings-menu, .model-picker, .workspace-picker').forEach(el => { if (el !== modelPicker) el.hidden = true })
+    modelPicker.hidden = !wasHidden
+    if (!modelPicker.hidden) {
+      // 预填当前 model（只显示短名，去掉 provider/ 前缀）
+      const fullName = (state && state.model && state.model.name) || ''
+      const shortName = fullName.includes('/') ? fullName.split('/').pop() : fullName
+      modelPickerInput.value = shortName
+      modelPickerInput.dataset.fullName = fullName  // 保留完整路径作 fallback
+      // v0.5.bh: 拉可选模型列表
+      loadModelList()
+      setTimeout(() => modelPickerInput.focus(), 0)
+    }
+  })
+  document.getElementById('model-picker-cancel').addEventListener('click', (e) => {
+    e.stopPropagation()
+    modelPicker.hidden = true
+  })
+  modelPickerInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const v = modelPickerInput.value.trim()
+      if (!v) return
+      modelPicker.hidden = true
+      // 直接调 /api/send 发 "/model <v>" 给 mcode acp
+      try {
+        await fetch('/api/send' + API_SUFFIX, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...HEADERS },
+          body: JSON.stringify({ content: '/model ' + v }),
+        })
+      } catch (e) { console.error(e) }
+    } else if (e.key === 'Escape') {
+      modelPicker.hidden = true
+    }
+  })
+  // 点击 popover 外关掉
+  document.addEventListener('click', (e) => {
+    if (modelPicker && !modelPicker.hidden && !modelPicker.contains(e.target) && e.target.id !== 'btn-model') {
+      modelPicker.hidden = true
+    }
+  })
+
+  // v0.5.al: workspace 切换 — chip-workspace click 弹 popover
+  const wsPicker = document.getElementById('workspace-picker')
+  const wsInput = document.getElementById('workspace-picker-input')
+  const wsCurrent = document.getElementById('workspace-picker-current')
+  const wsChip = document.getElementById('chip-workspace')
+  const wsRecentsEl = document.getElementById('workspace-picker-recents')
+  const wsRecentsList = document.getElementById('workspace-picker-recents-list')
+  const wsSyncCheckbox = document.getElementById('workspace-picker-sync')
+
+  // localStorage 工具：保存/读取 recents
+  const WS_RECENTS_KEY = 'webui_workspace_recents_v1'
+  const WS_LAST_KEY = 'webui_workspace_last_v1'
+  function loadWsRecents() {
+    try { return JSON.parse(localStorage.getItem(WS_RECENTS_KEY) || '[]') } catch { return [] }
+  }
+  function saveWsRecents(arr) {
+    try { localStorage.setItem(WS_RECENTS_KEY, JSON.stringify(arr.slice(0, 5))) } catch {}
+  }
+  function pushWsRecent(dir) {
+    if (!dir) return
+    const cur = loadWsRecents().filter(d => d !== dir)
+    cur.unshift(dir)
+    saveWsRecents(cur)
+  }
+  function renderWsRecents() {
+    const recents = loadWsRecents()
+    if (recents.length === 0) {
+      wsRecentsEl.hidden = true
+      return
+    }
+    wsRecentsEl.hidden = false
+    wsRecentsList.innerHTML = ''
+    for (const dir of recents) {
+      const btn = document.createElement('div')
+      btn.className = 'workspace-picker-recent'
+      btn.textContent = dir
+      btn.title = dir
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        wsInput.value = dir
+        submitWorkspaceChange({ dir })
+      })
+      wsRecentsList.appendChild(btn)
+    }
+  }
+
+  function positionWsPicker() {
+    // v0.5.bg: 用户反馈"显示不全" — 改成屏幕居中显示（fixed + 50% translate），不再跟 chip
+    if (!wsPicker) return
+    // 居中定位（fixed + transform）
+    wsPicker.style.top = '50%'
+    wsPicker.style.left = '50%'
+    wsPicker.style.transform = 'translate(-50%, -50%)'
+  }
+
+  async function submitWorkspaceChange(payload) {
+    try {
+      const r = await fetch('/api/workspace' + API_SUFFIX, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...HEADERS },
-        body: JSON.stringify({ cmd: '/new' })
+        body: JSON.stringify(payload),
       })
-    } catch (e) { console.error(e) }
+      const data = await r.json()
+      if (data.ok) {
+        if (payload && payload.dir) {
+          pushWsRecent(data.workspace.dir)
+          try { localStorage.setItem(WS_LAST_KEY, data.workspace.dir) } catch {}
+        }
+        wsPicker.hidden = true
+        // server 会 push state，render() 自动更新 chip + 输入区
+        // 立即本地 fallback（不等 SSE）
+        if (state) {
+          state.workspace = data.workspace
+          render()
+        }
+      } else {
+        alert('切换失败: ' + (data.error || '未知错误'))
+      }
+    } catch (e) {
+      console.error('[ws] submit failed', e)
+      alert('切换失败: ' + e.message)
+    }
+  }
+
+  wsChip?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    openWsPicker()
   })
+
+  // v0.5.ax: 欢迎页的工作区 chip 也触发同样的 popover
+  const emptyWsBtn = document.getElementById('chat-empty-workspace')
+  if (emptyWsBtn) {
+    emptyWsBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      // v0.5.ax: 仅在 welcome 态（无消息）允许改工作区
+      const hasMessages = (state?.chat?.length || 0) > 0
+      if (hasMessages) {
+        showToast(t('workspace_locked_in_chat'))
+        return
+      }
+      openWsPicker()
+    })
+  }
+
+  function openWsPicker() {
+    const wasHidden = wsPicker.hidden
+    // 关掉其他 popover
+    document.querySelectorAll('.mode-popover, .settings-menu, .model-picker, .workspace-picker').forEach(el => { if (el !== wsPicker) el.hidden = true })
+    wsPicker.hidden = !wasHidden
+    if (!wsPicker.hidden) {
+      // 显示当前工作区全路径
+      const cur = (state && state.workspace && state.workspace.dir) || ''
+      wsCurrent.textContent = cur || t('workspace_unset')
+      wsInput.value = cur
+      renderWsRecents()
+      // 探测 TUI cwd，让 "跟随 TUI" 按钮显示真实路径（tooltip）
+      fetch('/api/workspace' + API_SUFFIX, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ action: 'detect' }),
+      }).then(r => r.json()).then(data => {
+        if (data && data.tuiCwd) {
+          const tuiBtn = document.getElementById('workspace-picker-tui')
+          if (tuiBtn) tuiBtn.title = 'mcode TUI 当前在: ' + data.tuiCwd
+        }
+      }).catch(() => {})
+      setTimeout(() => {
+        positionWsPicker()
+        wsInput.focus()
+        wsInput.select()
+      }, 0)
+    }
+  }
+
+  // 输入框回车 = 切换
+  wsInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const dir = wsInput.value.trim()
+      if (!dir) return
+      submitWorkspaceChange({ dir, syncTui: wsSyncCheckbox.checked })
+    } else if (e.key === 'Escape') {
+      e.stopPropagation()
+      wsPicker.hidden = true
+    }
+  })
+
+  document.getElementById('workspace-picker-confirm').addEventListener('click', (e) => {
+    e.stopPropagation()
+    const dir = wsInput.value.trim()
+    if (!dir) { alert('请输入目录路径'); return }
+    submitWorkspaceChange({ dir, syncTui: wsSyncCheckbox.checked })
+  })
+  document.getElementById('workspace-picker-tui').addEventListener('click', (e) => {
+    e.stopPropagation()
+    submitWorkspaceChange({ action: 'useTui', syncTui: false })
+  })
+  document.getElementById('workspace-picker-reset').addEventListener('click', (e) => {
+    e.stopPropagation()
+    submitWorkspaceChange({ action: 'reset' })
+  })
+
+  // v0.5.am: 可视化目录树浏览（懒加载）
+  const browseToggle = document.getElementById('workspace-picker-browse-toggle')
+  const browsePanel = document.getElementById('workspace-picker-browse-panel')
+  const browseChevron = document.getElementById('workspace-picker-browse-chevron')
+  const breadcrumb = document.getElementById('workspace-picker-breadcrumb')
+  const treeEl = document.getElementById('workspace-picker-tree')
+  const treeLoading = document.getElementById('workspace-picker-tree-loading')
+  // 内存缓存：path -> {ok, children, roots}  避免重复请求
+  const browseCache = new Map()
+  // 当前浏览的目录
+  let browseCurrent = null  // absolute path or null (= roots)
+  let browseOpen = false
+
+  function fetchBrowse(path) {
+    const key = path || '__roots__'
+    if (browseCache.has(key)) return Promise.resolve(browseCache.get(key))
+    const url = '/api/workspace/browse' + API_SUFFIX + (path ? '&path=' + encodeURIComponent(path) : '')
+    return fetch(url, { headers: HEADERS })
+      .then(r => r.json())
+      .then(data => { browseCache.set(key, data); return data })
+  }
+
+  function renderBreadcrumb(dir) {
+    breadcrumb.innerHTML = ''
+    if (!dir) {
+      // 根盘符视图
+      const span = document.createElement('span')
+      span.className = 'workspace-picker-breadcrumb-item'
+      span.textContent = '盘符'
+      span.title = '根盘符'
+      breadcrumb.appendChild(span)
+      return
+    }
+    // 拆路径：["C:", "Users", "mjc39", ...]
+    const sep = dir.includes('\\') ? '\\' : '/'
+    const isWin = dir.match(/^[A-Z]:/i)
+    const parts = dir.split(/[\\\/]/).filter(Boolean)
+    let acc = ''
+    if (isWin) {
+      acc = parts.shift() + sep  // "C:\"
+    } else {
+      acc = sep  // "/"
+    }
+    const firstCrumb = document.createElement('span')
+    firstCrumb.className = 'workspace-picker-breadcrumb-item'
+    firstCrumb.textContent = acc
+    firstCrumb.title = isWin ? '回到根盘符' : '/'
+    // 关键修复：firstCrumb 始终跳回根盘符视图（Windows = loadBrowse(null)，Linux = loadBrowse('/')）
+    firstCrumb.addEventListener('click', (e) => {
+      e.stopPropagation()
+      loadBrowse(isWin ? null : '/')
+    })
+    breadcrumb.appendChild(firstCrumb)
+    // 关键修复：第一个 part 之前不加 sep1（firstCrumb 已经以 sep 结尾，否则会出现 "C:\\" 双反斜杠）
+    let isFirst = true
+    for (const p of parts) {
+      if (!isFirst) {
+        const sep1 = document.createElement('span')
+        sep1.className = 'workspace-picker-breadcrumb-sep'
+        sep1.textContent = sep
+        breadcrumb.appendChild(sep1)
+      }
+      isFirst = false
+      acc = joinPath(acc, p, sep)
+      const item = document.createElement('span')
+      item.className = 'workspace-picker-breadcrumb-item'
+      item.textContent = p
+      item.title = acc
+      item.addEventListener('click', (e) => { e.stopPropagation(); loadBrowse(acc) })
+      breadcrumb.appendChild(item)
+    }
+  }
+  function joinPath(base, part, sep) {
+    if (base.endsWith(sep)) return base + part
+    return base + sep + part
+  }
+
+  function renderTreeNodes(parent, children, currentDir) {
+    parent.innerHTML = ''
+    if (!children || children.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'workspace-picker-tree-empty'
+      empty.textContent = '（无子目录）'
+      parent.appendChild(empty)
+      return
+    }
+    for (const c of children) {
+      const node = document.createElement('div')
+      node.className = 'workspace-tree-node'
+      if (c.path === currentDir) node.classList.add('current')
+      const chev = document.createElement('span')
+      chev.className = 'workspace-tree-chevron'
+      chev.textContent = '▶'
+      const name = document.createElement('span')
+      name.className = 'workspace-tree-name'
+      name.textContent = c.name
+      name.title = c.path
+      const setBtn = document.createElement('button')
+      setBtn.className = 'workspace-tree-set-btn'
+      setBtn.textContent = '选'
+      setBtn.title = '切换到此目录'
+      const childrenBox = document.createElement('div')
+      childrenBox.className = 'workspace-tree-children'
+      childrenBox.hidden = true
+
+      // 展开 / 收起
+      chev.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        if (childrenBox.hidden) {
+          // 展开
+          if (!childrenBox.dataset.loaded) {
+            chev.classList.add('loading')
+            chev.textContent = '…'
+            const data = await fetchBrowse(c.path)
+            chev.classList.remove('loading')
+            chev.textContent = '▶'
+            if (data.ok) {
+              childrenBox.innerHTML = ''
+              // 递归：子节点也用同样渲染（但要传入 currentDir 包含关系判断）
+              renderTreeNodes(childrenBox, data.children, currentDir)
+              childrenBox.dataset.loaded = '1'
+            } else {
+              const err = document.createElement('div')
+              err.className = 'workspace-picker-tree-error'
+              err.textContent = '加载失败: ' + (data.error || '未知')
+              childrenBox.innerHTML = ''
+              childrenBox.appendChild(err)
+            }
+          }
+          childrenBox.hidden = false
+          chev.classList.add('open')
+        } else {
+          childrenBox.hidden = true
+          chev.classList.remove('open')
+        }
+      })
+      // 点击 name = 进入该目录（重渲染树为该目录的子目录）
+      name.addEventListener('click', (e) => {
+        e.stopPropagation()
+        loadBrowse(c.path)
+      })
+      // 选 = 切换工作区
+      setBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        submitWorkspaceChange({ dir: c.path, syncTui: wsSyncCheckbox.checked })
+      })
+
+      node.appendChild(chev)
+      node.appendChild(name)
+      node.appendChild(setBtn)
+      parent.appendChild(node)
+      parent.appendChild(childrenBox)
+    }
+  }
+
+  async function loadBrowse(path) {
+    browseCurrent = path
+    renderBreadcrumb(path)
+    treeEl.innerHTML = '<div class="workspace-picker-tree-loading">加载中…</div>'
+    const data = await fetchBrowse(path)
+    if (!data.ok) {
+      treeEl.innerHTML = `<div class="workspace-picker-tree-error">加载失败: ${data.error || '未知'}</div>`
+      return
+    }
+    treeEl.innerHTML = ''
+    if (data.roots) {
+      // 根盘符视图
+      const cur = (state && state.workspace && state.workspace.dir) || ''
+      renderTreeNodes(treeEl, data.roots.map(r => ({ name: r, path: r })), cur)
+    } else {
+      const cur = (state && state.workspace && state.workspace.dir) || ''
+      renderTreeNodes(treeEl, data.children, cur)
+    }
+  }
+
+  browseToggle.addEventListener('click', async (e) => {
+    e.stopPropagation()
+    browseOpen = !browseOpen
+    browsePanel.hidden = !browseOpen
+    browseToggle.classList.toggle('open', browseOpen)
+    if (browseOpen) {
+      // 初始：从当前工作区（或根盘符）开始
+      const cur = (state && state.workspace && state.workspace.dir) || null
+      await loadBrowse(cur)
+    }
+  })
+
+  // 点击 popover 外关掉
+  document.addEventListener('click', (e) => {
+    if (wsPicker && !wsPicker.hidden && !wsPicker.contains(e.target) && e.target.id !== 'chip-workspace' && !(wsChip && wsChip.contains(e.target))) {
+      wsPicker.hidden = true
+    }
+  })
+  // 窗口 resize / scroll 重新定位
+  window.addEventListener('resize', () => { if (!wsPicker.hidden) positionWsPicker() })
+
+  // v0.5.bh: 监听网络状态变化，实时更新顶栏在线指示
+  window.addEventListener('online',  () => { try { render() } catch (e) {} })
+  window.addEventListener('offline', () => { try { render() } catch (e) {} })
+
+  // v0.5.al: 启动时恢复 localStorage 保存的工作区
+  try {
+    const last = localStorage.getItem(WS_LAST_KEY)
+    if (last) {
+      // 等首屏 render 完再切（state 已有 workspace 时不覆盖）—— 但 server 端默认 workspace 跟 saved 不同才切
+      fetch('/api/workspace' + API_SUFFIX, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ action: 'detect' }),
+      }).then(r => r.json()).then(data => {
+        if (data && data.current !== last) {
+          // server 默认跟 saved 不一样 → 恢复
+          return fetch('/api/workspace' + API_SUFFIX, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...HEADERS },
+            body: JSON.stringify({ dir: last, syncTui: false }),
+          })
+        }
+      }).catch(() => {})
+    }
+  } catch {}
+
+  // v0.5.aq: chip-lan toggle — 点 chip 切换 LAN 访问，hover 看访问 URL
+  const chipLan = document.getElementById('chip-lan')
+  const lanPopover = document.getElementById('lan-url-popover')
+  const lanUrlLocal = document.getElementById('lan-url-local')
+  const lanUrlLan = document.getElementById('lan-url-lan')
+  // v0.5.bp: 顶栏 LAN 访问链接 chip（LAN on 时显示当前 IP，点复制完整 URL）
+  const chipLanLink = document.getElementById('chip-lan-link')
+  const chipLanLinkText = document.getElementById('chip-lan-link-text')
+
+  async function loadLanInfo() {
+    try {
+      const r = await fetch('/api/settings' + API_SUFFIX, { headers: HEADERS })
+      const d = await r.json()
+      console.log('[lan] loadLanInfo response:', JSON.stringify(d).slice(0, 300))
+      console.log('[lan] chipLanLink element exists:', !!chipLanLink, 'chipLanLinkText exists:', !!chipLanLinkText)
+      if (!d.ok) return
+      if (lanUrlLocal) lanUrlLocal.textContent = d.localUrl || '—'
+      if (lanUrlLan) lanUrlLan.textContent = d.lanUrl || '—'
+      // v0.5.bp: 顶栏链接 chip 始终更新 URL（data-lan-url 留着点复制时用），可见性由 render() 决定
+      if (chipLanLink) {
+        chipLanLink.setAttribute('data-lan-url', d.lanUrl || '')
+        if (chipLanLinkText) {
+          // 只显示 host:port（去掉 http:// 前缀，紧凑）
+          const u = (d.lanUrl || '').replace(/^https?:\/\//, '')
+          chipLanLinkText.textContent = u || '—'
+        }
+        console.log('[lan] chipLanLink updated: data-lan-url=', chipLanLink.getAttribute('data-lan-url'), 'text=', chipLanLinkText?.textContent, 'hidden=', chipLanLink.hidden)
+      } else {
+        console.warn('[lan] chipLanLink NOT found in DOM — element missing?')
+      }
+    } catch (e) { console.error('[lan] load failed', e) }
+  }
+  loadLanInfo()  // 启动时拉一次（hover 时再刷新一次也 OK）
+
+  // v0.5.bp: 顶栏 LAN 链接点击 = 复制完整 URL 到剪贴板（data-lan-url 由 loadLanInfo 填入，URL 来自 server 的 detectLanIp()，非硬编码）
+  if (chipLanLink) {
+    chipLanLink.addEventListener('click', async (e) => {
+      e.preventDefault()
+      const url = chipLanLink.getAttribute('data-lan-url') || ''
+      if (!url) return
+      try {
+        await navigator.clipboard.writeText(url)
+        showToast(t('copy_success') + ': ' + url, 1500)
+      } catch (err) {
+        showToast(t('copy_failed') + ': ' + err.message, 2000)
+      }
+    })
+  }
+
+  // 点击 chip = 切换 LAN 访问 on/off
+  if (chipLan) {
+    chipLan.addEventListener('click', async (e) => {
+    e.stopPropagation()
+    const wasOn = chipLan.getAttribute('data-lan') === 'on'
+    const enabled = !wasOn
+    console.log('[lan] click chip-lan: wasOn=', wasOn, '→ enabled=', enabled)
+    try {
+      const r = await fetch('/api/settings' + API_SUFFIX, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ lanBroadcast: enabled }),
+      })
+      const d = await r.json()
+      console.log('[lan] toggle response:', JSON.stringify(d).slice(0, 300))
+      if (!d.ok) { alert('切换失败: ' + (d.error || '未知错误')); return }
+      if (state) state.lanBroadcast = enabled
+      render()
+      showToast(enabled ? t('lan_title_on') : t('lan_title_off'))
+    } catch (e) {
+      console.error('[lan] toggle failed', e)
+      alert('切换失败: ' + e.message)
+    }
+  })
+  }
+
+  // hover chip = 显示 popover（带本机/局域网 URL，点 URL 复制）
+  function positionLanPopover() {
+    if (!chipLan || !lanPopover) return
+    const rect = chipLan.getBoundingClientRect()
+    lanPopover.style.top = (rect.bottom + 6) + 'px'
+    lanPopover.style.right = Math.max(8, window.innerWidth - rect.right) + 'px'
+  }
+  if (chipLan) {
+    chipLan.addEventListener('mouseenter', () => {
+      positionLanPopover()
+      if (lanPopover) lanPopover.hidden = false
+    })
+  }
+  if (chipLan && lanPopover) {
+    chipLan.addEventListener('mouseleave', () => {
+      // 延迟关闭：允许鼠标从 chip 滑到 popover 上
+      setTimeout(() => {
+        if (!lanPopover.matches(':hover')) lanPopover.hidden = true
+      }, 150)
+    })
+    lanPopover.addEventListener('mouseleave', () => { lanPopover.hidden = true })
+  }
+  // 点 URL 复制
+  ;[lanUrlLocal, lanUrlLan].forEach(el => {
+    if (!el) return
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      const text = el.textContent
+      if (text === '—') return
+      try {
+        await navigator.clipboard.writeText(text)
+        showToast(t('copy_success') + ': ' + text, 1500)
+      } catch (err) {
+        alert(t('copy_failed_manual') + ': ' + text)
+      }
+    })
+  })
+
+  // New chat
+  // v0.5.ar: 新建会话 → 弹工作区选择 popover（选完工作区再调 /api/sessions）
+  const newChatPicker = document.getElementById('new-chat-ws-picker')
+  const newChatCurrent = document.getElementById('new-chat-current-ws')
+  const newChatList = document.getElementById('new-chat-ws-list')
+  const newChatCancel = document.getElementById('new-chat-ws-cancel')
+  const newChatOther = document.getElementById('new-chat-ws-other')
+  function positionNewChatPicker() {
+    const btn = document.getElementById('btn-new-chat')
+    if (!btn) return
+    const rect = btn.getBoundingClientRect()
+    newChatPicker.style.top = (rect.bottom + 6) + 'px'
+    newChatPicker.style.left = rect.left + 'px'
+  }
+  function openNewChatPicker() {
+    // 收集所有已知 workspace（当前 + 所有 session 所属 workspace，去重）
+    const currentWs = (state && state.workspace && state.workspace.dir) || ''
+    const wsSet = new Set()
+    if (currentWs) wsSet.add(currentWs)
+    ;(state && state.sessions || []).forEach(s => { if (s.workspace) wsSet.add(s.workspace) })
+    const wsList = [...wsSet]
+    newChatCurrent.textContent = currentWs || '—'
+    // 渲染列表（按当前工作区在顶 + 字母序）
+    wsList.sort((a, b) => {
+      if (a === currentWs) return -1
+      if (b === currentWs) return 1
+      return a.localeCompare(b)
+    })
+    newChatList.innerHTML = wsList.map(ws => {
+      const count = (state.sessions || []).filter(s => s.workspace === ws).length
+      const isCurrent = ws === currentWs
+      const folderSvg = '<svg class="icon ws-picker-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+      return `<button class="ws-picker-item${isCurrent ? ' current' : ''}" data-ws="${escapeHtml(ws)}">
+        ${folderSvg}
+        <span class="ws-picker-item-text" title="${escapeHtml(ws)}">${escapeHtml(ws)}</span>
+        <span class="ws-picker-item-count">${count}</span>
+      </button>`
+    }).join('')
+    newChatList.querySelectorAll('.ws-picker-item').forEach(it => {
+      it.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        const ws = it.getAttribute('data-ws')
+        newChatPicker.hidden = true
+        await createNewSession(ws)
+      })
+    })
+    positionNewChatPicker()
+    newChatPicker.hidden = false
+  }
+  newChatCancel.addEventListener('click', () => { newChatPicker.hidden = true })
+  newChatOther.addEventListener('click', async () => {
+    // 走现有的 workspace-picker 流程：调 /api/workspace set 后再创建
+    const dir = prompt('输入工作区路径（例如 D:\\\\projects\\\\myapp）')
+    if (!dir || !dir.trim()) return
+    newChatPicker.hidden = true
+    try {
+      const r = await fetch('/api/workspace' + API_SUFFIX, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ dir: dir.trim(), syncTui: true }),
+      })
+      const d = await r.json()
+      if (!d.ok) { alert('切换工作区失败: ' + (d.error || '未知错误')); return }
+    } catch (e) { alert('切换工作区失败: ' + e.message); return }
+    await createNewSession(dir.trim())
+  })
+  // 点击 popover 外关闭
+  document.addEventListener('click', (e) => {
+    if (newChatPicker.hidden) return
+    if (!newChatPicker.contains(e.target) && e.target.id !== 'btn-new-chat' && !e.target.closest('#btn-new-chat')) {
+      newChatPicker.hidden = true
+    }
+  })
+
+  async function createNewSession(workspace) {
+    // v0.5.ak: mcode 还在跑时禁止清空 chat
+    if (state && state.running && state.running.active) {
+      alert('AI 还在回复中，请先等回复完成或点 ⏹ 停止。\n\n如果要开启新话题，先停止当前任务。')
+      return
+    }
+    try {
+      const r = await fetch('/api/sessions' + API_SUFFIX, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ workspace: workspace || undefined })
+      })
+      const d = await r.json()
+      if (!d.ok) { alert('创建会话失败: ' + (d.error || '未知错误')); return }
+      // 触发 SSE 拉取 state（server 端会推）
+      if (typeof loadState === 'function') loadState()
+    } catch (e) { console.error(e) }
+  }
+
+  document.getElementById('btn-new-chat').addEventListener('click', (e) => {
+    e.stopPropagation()
+    if (state && state.running && state.running.active) {
+      alert('AI 还在回复中，请先等回复完成或点 ⏹ 停止。\n\n如果要开启新话题，先停止当前任务。')
+      return
+    }
+    // v0.5.ax: "新建会话" = 切回 welcome 状态（清空当前 sessionId + chat 数组）
+    // 真正的 session 创建推迟到用户发第一条消息时（带当前 workspace）
+    clearCurrentSession()
+  })
+
+  // v0.5.ax: 清空当前 session，回到 welcome 页（不创建新 session，等用户发消息时再创建）
+  function clearCurrentSession() {
+    if (state) {
+      state.sessionId = null
+      state.mcodeSessionId = null
+      state.sessionTitle = 'Untitled'
+      state.chat = []
+      state.goal = { active: false, text: null, status: null, duration: null }
+      state.todo = []
+      // 不改 state.workspace — 保留当前工作区（welcome 页显示短名）
+    }
+    // 关掉所有 popover
+    document.querySelectorAll('.mode-popover, .settings-menu, .model-picker, .workspace-picker, .new-chat-picker').forEach(el => { el.hidden = true })
+    newChatPicker.hidden = true
+    render()
+  }
 
   // Mobile toggles
   document.getElementById('btn-toggle-left').addEventListener('click', () => {
@@ -3135,7 +6394,7 @@ function attachEvents() {
   document.querySelectorAll('.chat-hint').forEach(h => {
     h.addEventListener('click', () => {
       const cmd = h.getAttribute('data-cmd')
-      fetch('/api/cmd' + TOKEN_QUERY, {
+      fetch('/api/cmd' + API_SUFFIX, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...HEADERS },
         body: JSON.stringify({ cmd })
@@ -3192,16 +6451,13 @@ function attachEvents() {
     if (modeOpen && !modePopover.contains(e.target) && e.target.id !== 'btn-mode' && !document.getElementById('btn-mode').contains(e.target)) {
       hideMode()
     }
-    if (settingsOpen && !settingsMenu.contains(e.target)) {
-      const bs = document.getElementById('btn-settings')
-      if (!bs || (e.target.id !== 'btn-settings' && !bs.contains(e.target))) hideSettings()
-    }
     // v0.5.z: 点 popover 外面就关（btn-usage click 用 stopPropagation 自己处理开关）
     const up = document.getElementById('usage-popover')
     const ub = document.getElementById('btn-usage')
     if (up && !up.hidden && ub && !up.contains(e.target) && !ub.contains(e.target)) {
       toggleUsagePopover(false)
     }
+    // v0.5.aq: settings modal 已删，不再需要这层 backdrop 检查
   })
 
   // Keyboard shortcuts
@@ -3276,7 +6532,6 @@ function attachEvents() {
     if (e.key === 'Escape') {
       if (slashOpen) hideSlash()
       else if (modeOpen) hideMode()
-      else if (settingsOpen) hideSettings()
       else { const up2 = document.getElementById('usage-popover'); if (up2 && !up2.hidden) toggleUsagePopover(false) }
     }
     // Ctrl+K / Cmd+K 聚焦输入
@@ -3400,7 +6655,7 @@ async function sendAskAnswer(optIdx, customText) {
   askSending = true
   const isOther = customText != null
   try {
-    await fetch('/api/answer' + TOKEN_QUERY, {
+    await fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ type: 'ask', option: isOther ? 'other' : (optIdx + 1), text: customText || '' })
@@ -3472,7 +6727,7 @@ async function sendPlanAnswer(action) {
   try {
     const ta = document.getElementById('plan-add-context')
     const extra = (action === 'add' && ta?.value) ? `\n${ta.value}` : ''
-    await fetch('/api/answer' + TOKEN_QUERY, {
+    await fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ type: 'plan', option: action })
@@ -3499,7 +6754,7 @@ function hidePlanMode() {
 }
 async function sendPlanModeAnswer(choice) {
   try {
-    await fetch('/api/answer' + TOKEN_QUERY, {
+    await fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ type: 'planmode', option: choice })
@@ -3528,7 +6783,7 @@ function renderPerm() {
 }
 async function sendPermAnswer(choice) {
   try {
-    await fetch('/api/answer' + TOKEN_QUERY, {
+    await fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ type: 'permission', option: choice })
@@ -3586,7 +6841,7 @@ function attachModalEvents() {
   document.getElementById('ask-close').addEventListener('click', () => {
     // Ask 不允许 Esc 跳过答案 — 但用户可以手动关（等同于 Esc）
     // 我们发送 Esc 码
-    fetch('/api/answer' + TOKEN_QUERY, {
+    fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ type: 'ask', option: 'esc' })
@@ -3598,7 +6853,7 @@ function attachModalEvents() {
   })
   // Plan
   document.getElementById('plan-close').addEventListener('click', () => {
-    fetch('/api/answer' + TOKEN_QUERY, {
+    fetch('/api/answer' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ type: 'plan', option: 'skip' })
@@ -3641,5 +6896,19 @@ attachModalEvents()
 </script>
 <!-- v0.5.bb: 全局 toast 通知（用量刷新等用） -->
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- v0.5.ap: LAN URL tooltip 浮层（点 chip-lan 显示本机/局域网 URL） -->
+<div class="lan-url-popover" id="lan-url-popover" hidden>
+  <div class="lan-url-title">访问地址</div>
+  <div class="lan-url-row">
+    <span class="lan-url-label">本机</span>
+    <code class="lan-url-value" id="lan-url-local">—</code>
+  </div>
+  <div class="lan-url-row">
+    <span class="lan-url-label">局域网</span>
+    <code class="lan-url-value" id="lan-url-lan">—</code>
+  </div>
+  <div class="lan-url-hint">手机/其他电脑用局域网 URL 访问（需在同一 WiFi）</div>
+</div>
 </body>
 </html>

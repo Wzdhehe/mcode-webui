@@ -1,10 +1,27 @@
 # runtime / cache
 *.log
 .DS_Store
+.server.log
+.server.err
 
-# local probe artifacts (kept out of repo — they belong in /acp-probe/)
+# local probe artifacts (kept out of repo — they belong in /acp-probe/ or ad-hoc)
 probes/.cache/
 probes/*.log
+acp-probe.cjs
+acp-probe-*
+acp-probe-stderr.err
+acp-probe-stdout.out
+goal-plan-probe.cjs
+probe-acp.mjs
+probe-result.log
+.env-debug
+alive-test.txt
+check-dict.mjs
+i18n-shim.mjs
+test-install-regex.mjs
+validate-dict.mjs
+start-with-debug.cjs
+probes/
 
 # node
 node_modules/
