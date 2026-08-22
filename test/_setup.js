@@ -46,6 +46,12 @@ const _acpMock = {
   getMcodeSessionsCacheSync: () => null,
   getMcodeSessionTitle: async () => null,
   deleteMcodeSessionFromDb: () => ({ ok: true }),
+  // v0.5.bx 系列 patch: 补 mcode-rpc.js 需要的 export(REFACTORING.md §3.2 坑 4)
+  getMcodeAcpClient: async () => null,
+  listAllMcodeSessions: async () => [],
+  getMcodeServerInfo: () => null,
+  invalidateMcodeSessionsCache: () => {},
+  shutdownMcodeAcpSingleton: () => {},
 };
 
 let _sessionsStore = [];
@@ -117,6 +123,14 @@ export async function setupMocks(t, overrides = {}) {
       getMcodeSessionTitle: (...a) => _acpMock.getMcodeSessionTitle(...a),
       deleteMcodeSessionFromDb: (...a) =>
         _acpMock.deleteMcodeSessionFromDb(...a),
+      // v0.5.bx 系列 patch: mcode-rpc.js 也 import 这俩
+      getMcodeAcpClient: (...a) => _acpMock.getMcodeAcpClient(...a),
+      listAllMcodeSessions: (...a) => _acpMock.listAllMcodeSessions(...a),
+      getMcodeServerInfo: (...a) => _acpMock.getMcodeServerInfo(...a),
+      invalidateMcodeSessionsCache: (...a) =>
+        _acpMock.invalidateMcodeSessionsCache(...a),
+      shutdownMcodeAcpSingleton: (...a) =>
+        _acpMock.shutdownMcodeAcpSingleton(...a),
     },
   });
 
@@ -201,10 +215,25 @@ export async function setupMocks(t, overrides = {}) {
   t.mock.module(absPath("lib/mcode-rpc.js"), {
     namedExports: {
       cancelSession: async () => ({ ok: false, code: "unsupported" }),
+      // v0.5.bx 系列 patch: routes/model.js 也 import 这俩
+      mcodePermissionToWebui: () => "Full access",
+      PERMISSION_MODES: ["default", "bypassPermissions", "auto", "off"],
+      MCODE_ACP_CAPABILITIES: { set_mode: false, set_config_option: false },
+      // 其他导出存在即可,默认 no-op
+      setMode: async () => ({ ok: false, code: "unsupported" }),
+      setConfigOption: async () => ({ ok: false, code: "unsupported" }),
+      loadSession: async () => ({ ok: false, code: "unsupported" }),
+      activateSession: async () => ({ ok: false, code: "unsupported" }),
+      listSessions: async () => ({ sessions: [] }),
+      webuiPermissionToMcode: () => "bypassPermissions",
     },
   });
   t.mock.module(absPath("lib/models.js"), {
-    namedExports: { getMcodeModelLimit: async () => ({ context: 512000 }) },
+    namedExports: {
+      getMcodeModelLimit: async () => ({ context: 512000 }),
+      // v0.5.bx 系列 patch: routes/model.js 也 import 这俩
+      getBuiltinModelsFromMcode: () => ["MiniMax-M3", "MiniMax-M2"],
+    },
   });
   t.mock.module(absPath("lib/slash.js"), {
     namedExports: {
