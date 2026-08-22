@@ -314,8 +314,21 @@
       <div class="right-section">
         <div class="right-section-title" data-i18n="section_workspace">WORKSPACE</div>
         <div class="kv-row"><span class="kv-label" data-i18n="r_dir">目录</span><span class="kv-value muted" id="r-dir">—</span></div>
-        <div class="kv-row"><span class="kv-label" data-i18n="r_branch">分支</span><span class="kv-value muted" id="r-branch">—</span></div>
-        <div class="kv-row"><span class="kv-label" data-i18n="r_tree">状态</span><span class="kv-value muted" id="r-tree">—</span></div>
+        <!-- v0.5.ca: 暂时隐藏 r-branch (分支) / r-tree (状态) 两行 (隐藏不删除, 等修好再恢复)
+             原因: 整 server/ grep `.branch\s*[:=]|\.tree\s*[:=]` 只命中 3 处, 全是 `null`:
+               - server/lib/state-bus.js:18 初始 state
+               - server/lib/workspace.js:37 切 workspace 时
+               - server/routes/sessions.js:44 切 session 时
+             0 处真实赋值. server/ 也没有任何 git 命令调用
+             (没 spawn / execSync git, 没 rev-parse / status 子进程)
+             所以 r-branch / r-tree 永远显示 HTML 默认 "—", 跟权限弹窗、模型按钮同一种"假 UI"
+             修复方向: server/lib/workspace.js 在 cs.workspace.dir 写完后调
+               spawnSync('git', ['-C', absDir, 'rev-parse', '--abbrev-ref', 'HEAD'])
+               spawnSync('git', ['-C', absDir, 'status', '--porcelain'])
+             写到 cs.workspace.branch / .tree, push state
+             想临时恢复: 把下面两行 kv-row 的 hidden 去掉即可 -->
+        <div class="kv-row" hidden><span class="kv-label" data-i18n="r_branch">分支</span><span class="kv-value muted" id="r-branch">—</span></div>
+        <div class="kv-row" hidden><span class="kv-label" data-i18n="r_tree">状态</span><span class="kv-value muted" id="r-tree">—</span></div>
       </div>
 
       <!-- CONTEXT (real-time usage + TPS) -->
