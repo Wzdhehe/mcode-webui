@@ -181,6 +181,12 @@ const I18N = {
     workspace_picker_select: '选择工作区',
     workspace_picker_current: '当前：',
     session_delete: '删除此会话',
+    session_delete_confirm: '删除?',
+    session_delete_yes: '删',
+    session_delete_cancel: '×',
+    btn_send_title: '发送 (Enter)',
+    btn_stop_title: '停止 (/stop)',
+    workspace_unset_text: '未选择（点击选择）',
     chip_online_title: '当前连到 webui server 的 tab 数',
     chip_online_single: '1 台',
     chip_online_plural: '{n} 台',
@@ -188,6 +194,7 @@ const I18N = {
     workspace_use_tui: '切换到 mcode TUI 当前的工作区',
     workspace_reset: '恢复 webui 启动时检测到的默认工作区',
     workspace_locked_in_chat: '对话已开始，工作区已锁定。点击左侧「新建会话」可重新选择工作区。',
+    workspace_picker_hint: '点击选择工作区',
     // v0.5.bx-8: ask_user 工具 (mcode 0.1.4 ask_user) — 学 mavis 桌面端弹窗布局文案
     ask_user_other_placeholder: '其他...',
     ask_user_clear: '清空',
@@ -307,6 +314,12 @@ const I18N = {
     workspace_picker_select: 'Select Workspace',
     workspace_picker_current: 'Current: ',
     session_delete: 'Delete this session',
+    session_delete_confirm: 'Delete?',
+    session_delete_yes: 'Delete',
+    session_delete_cancel: '×',
+    btn_send_title: 'Send (Enter)',
+    btn_stop_title: 'Stop (/stop)',
+    workspace_unset_text: 'Unset (click to select)',
     chip_online_title: 'WebUI tabs currently connected to server',
     chip_online_single: '1 dev',
     chip_online_plural: '{n} devs',
@@ -314,6 +327,7 @@ const I18N = {
     workspace_use_tui: 'Use mcode TUI\'s current workspace',
     workspace_reset: 'Reset to default workspace detected at startup',
     workspace_locked_in_chat: 'Chat already started — workspace locked. Click "New Chat" in the sidebar to pick a new workspace.',
+    workspace_picker_hint: 'Click to select workspace',
     // v0.5.bx-8: ask_user 工具 (mcode 0.1.4 ask_user) — 学 mavis 桌面端弹窗布局文案
     ask_user_other_placeholder: 'Other...',
     ask_user_clear: 'Clear',
@@ -529,11 +543,11 @@ function render() {
   if (btn) {
     if (isRunning) {
       btn.classList.add('is-stop')
-      btn.title = '停止 (/stop)'
+      btn.title = t('btn_stop_title')
       btn.disabled = false
     } else {
       btn.classList.remove('is-stop')
-      btn.title = '发送 (Enter)'
+      btn.title = t('btn_send_title')
     }
   }
 
@@ -552,14 +566,14 @@ function render() {
   const wsDir = state.workspace?.dir
   const wsText = wsDir
     ? (() => { const parts = wsDir.split(/[\\\/]/).filter(Boolean); return parts[parts.length - 1] || wsDir })()
-    : '未选择（点击选择）'
+    : t('workspace_unset_text')
   const wsEl = document.getElementById('workspace-text')
   if (wsEl) wsEl.textContent = wsText
   const emptyWs = document.getElementById('chat-empty-ws-text')
   if (emptyWs) {
     emptyWs.textContent = wsText
     const btn = document.getElementById('chat-empty-workspace')
-    if (btn) btn.title = wsDir || '点击选择工作区'
+    if (btn) btn.title = wsDir || t('workspace_picker_hint')
   }
 
   // Right panel
@@ -943,7 +957,7 @@ function renderSessions() {
       item.classList.add('confirming')
       const bar = document.createElement('div')
       bar.className = 'session-confirm'
-      bar.innerHTML = `<span>删除?</span><button class="session-confirm-yes" data-id="${btn.getAttribute('data-id')}">删</button><button class="session-confirm-no">×</button>`
+      bar.innerHTML = `<span>${t('session_delete_confirm')}</span><button class="session-confirm-yes" data-id="${btn.getAttribute('data-id')}">${t('session_delete_yes')}</button><button class="session-confirm-no" title="${t('session_delete_cancel')}">×</button>`
       item.appendChild(bar)
       const timer = setTimeout(() => cancelConfirm(item), 5000)
       item._confirmTimer = timer
