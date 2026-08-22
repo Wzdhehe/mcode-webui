@@ -1,684 +1,3299 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mcode WebUI</title>
-  <style>
-    /* ============================================================
-       Theme variables (borrowed from webui.html — light + dark)
-       ============================================================ */
-    :root[data-theme="light"] {
-      --bg: #ffffff;
-      --bg-elevated: #ffffff;
-      --bg-sidebar: #f9fafb;
-      --bg-hover: #f3f4f6;
-      --bg-input: #ffffff;
-      --text: #1f2937;
-      --text-secondary: #6b7280;
-      --text-tertiary: #9ca3af;
-      --border: #e5e7eb;
-      --border-light: #f3f4f6;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-      --accent-bg: #dbeafe;
-      --accent-text: #1d4ed8;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-      --shadow: 0 4px 12px rgba(0,0,0,0.08);
-      --shadow-lg: 0 10px 30px rgba(0,0,0,0.12);
-      --user-accent: #3b82f6;
-    }
-    :root[data-theme="dark"] {
-      --bg: #0f1115;
-      --bg-elevated: #1a1d23;
-      --bg-sidebar: #13161b;
-      --bg-hover: #1f2329;
-      --bg-input: #1a1d23;
-      --text: #e5e7eb;
-      --text-secondary: #9ca3af;
-      --text-tertiary: #6b7280;
-      --border: #2a2f36;
-      --border-light: #1f2329;
-      --accent: #60a5fa;
-      --accent-hover: #3b82f6;
-      --accent-bg: #1e3a8a;
-      --accent-text: #93c5fd;
-      --success: #34d399;
-      --warning: #fbbf24;
-      --danger: #f87171;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-      --shadow: 0 4px 12px rgba(0,0,0,0.4);
-      --shadow-lg: 0 10px 30px rgba(0,0,0,0.5);
-      --user-accent: #60a5fa;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<title>mcode Web UI</title>
+<style>
+/* ============================================================
+   主题变量
+   ============================================================ */
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-sidebar: #f9fafb;
+  --bg-hover: #f3f4f6;
+  --bg-active: #e5e7eb;
+  --bg-input: #ffffff;
+  --bg-quota-expand: #f9fafb;
+  --text: #1f2937;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border: #e5e7eb;
+  --border-light: #f3f4f6;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-bg: #dbeafe;
+  --accent-text: #1d4ed8;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.12);
+  --user-accent: #3b82f6;
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115;
+  --bg-elevated: #1a1d23;
+  --bg-sidebar: #13161b;
+  --bg-hover: #1f2329;
+  --bg-active: #2a2f36;
+  --bg-input: #1a1d23;
+  --bg-quota-expand: #13161b;
+  --text: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --text-tertiary: #6b7280;
+  --border: #2a2f36;
+  --border-light: #1f2329;
+  --accent: #60a5fa;
+  --accent-hover: #3b82f6;
+  --accent-bg: #1e3a8a;
+  --accent-text: #93c5fd;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.5);
+  --user-accent: #60a5fa;
+}
 
-    /* ============================================================
-       Reset
-       ============================================================ */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; overflow: hidden; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
-        "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      color: var(--text);
-      background: var(--bg);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      transition: background 0.2s, color 0.2s;
-    }
-    button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; text-align: left; }
-    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    input, textarea { font: inherit; color: inherit; }
-    input:focus, textarea:focus { outline: none; }
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
-    [hidden] { display: none !important; }
+/* ============================================================
+   Reset
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background 0.2s, color 0.2s;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; padding: 0; text-align: left; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input, textarea { font: inherit; color: inherit; }
+input:focus, textarea:focus { outline: none; }
+a { color: var(--accent); text-decoration: none; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+[hidden] { display: none !important; }
 
-    /* ============================================================
-       App layout
-       ============================================================ */
-    .app {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      height: 100vh;
-      position: relative;
-    }
-    .topbar {
-      height: 44px;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg-elevated);
-      display: flex;
-      align-items: center;
-      padding: 0 16px;
-      gap: 12px;
-      z-index: 10;
-    }
-    .topbar-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
-    .topbar-logo {
-      width: 24px; height: 24px;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      border-radius: 6px;
-      display: grid; place-items: center;
-      color: white; font-weight: 700; font-size: 12px;
-      letter-spacing: -0.5px;
-    }
-    .topbar-version {
-      font-size: 11px; color: var(--text-tertiary);
-      background: var(--bg-sidebar); padding: 2px 6px; border-radius: 4px;
-    }
-    .topbar-meta { font-size: 12px; color: var(--text-secondary); margin-left: 8px; }
-    .topbar-spacer { flex: 1; }
-    .topbar-status {
-      font-size: 12px; color: var(--text-secondary);
-      display: flex; align-items: center; gap: 6px;
-    }
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--text-tertiary);
-    }
-    .status-dot.running { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
-    .status-dot.ok { background: var(--success); }
-    .status-dot.err { background: var(--danger); }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
+/* ============================================================
+   App layout
+   ============================================================ */
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  position: relative;
+}
+.topbar {
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  z-index: 10;
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.topbar-logo {
+  width: 24px; height: 24px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  border-radius: 6px;
+  display: grid; place-items: center;
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: -0.5px;
+}
+.topbar-version {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: -2px;
+}
+.topbar-status {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-hover);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.chip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.chip[data-status="running"] .chip-dot { background: var(--accent); animation: pulse 1.5s infinite; }
+.chip[data-status="loading"] .chip-dot { background: var(--warning); animation: pulse 1s infinite; }
+.chip[data-status="completed"] .chip-dot { background: var(--success); }
+.chip[data-status="error"] .chip-dot { background: var(--danger); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
 
-    /* ============================================================
-       Chat area
-       ============================================================ */
-    .main {
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-      padding: 24px;
-    }
-    .chat-inner {
-      max-width: 820px; margin: 0 auto; width: 100%;
-      display: flex; flex-direction: column;
-      gap: 16px;
-    }
-    .chat-empty {
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      text-align: center;
-      margin-top: 20vh;
-    }
-    .chat-empty-logo {
-      font-size: 64px;
-      font-weight: 900;
-      letter-spacing: -3px;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      margin-bottom: 24px;
-      line-height: 1;
-    }
-    .chat-empty-subtitle {
-      font-size: 16px; color: var(--text-secondary);
-      margin-bottom: 24px;
-    }
-    .chat-empty-hints {
-      display: flex; flex-wrap: wrap; gap: 8px;
-      justify-content: center; max-width: 600px;
-    }
-    .chat-empty-hint {
-      padding: 8px 14px; border-radius: 8px;
-      background: var(--bg-hover); color: var(--text-secondary);
-      font-size: 13px; cursor: pointer;
-      transition: background 0.15s;
-    }
-    .chat-empty-hint:hover { background: var(--bg-active); color: var(--text); }
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
 
-    /* ============================================================
-       Message bubble
-       ============================================================ */
-    .msg {
-      display: flex;
-      gap: 12px;
-      padding: 12px 0;
-    }
-    .msg.user { flex-direction: row-reverse; }
-    .msg-avatar {
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      display: grid; place-items: center;
-      color: white; font-weight: 600; font-size: 14px;
-      flex-shrink: 0;
-    }
-    .msg.user .msg-avatar { background: linear-gradient(135deg, var(--user-accent), #8b5cf6); }
-    .msg.assistant .msg-avatar { background: linear-gradient(135deg, #3b82f6, #8b5cf6); }
-    .msg-body {
-      flex: 1; min-width: 0;
-      max-width: calc(100% - 44px);
-    }
-    .msg.user .msg-body { display: flex; justify-content: flex-end; }
-    .msg-meta {
-      font-size: 12px; color: var(--text-tertiary);
-      margin-bottom: 4px;
-      display: flex; gap: 8px; align-items: center;
-    }
-    .msg.user .msg-meta { justify-content: flex-end; }
-    .msg-bubble {
-      padding: 10px 14px;
-      border-radius: 12px;
-      line-height: 1.6;
-      word-break: break-word;
-      white-space: pre-wrap;
-    }
-    .msg.user .msg-bubble {
-      background: var(--accent-bg);
-      color: var(--accent-text);
-      max-width: 80%;
-    }
-    .msg.assistant .msg-bubble {
-      background: var(--bg-sidebar);
-      color: var(--text);
-    }
-    .msg-thinking {
-      margin: 8px 0;
-      padding: 8px 12px;
-      background: var(--bg-hover);
-      border-left: 2px solid var(--text-tertiary);
-      color: var(--text-secondary);
-      font-size: 13px;
-      font-style: italic;
-      border-radius: 0 6px 6px 0;
-      cursor: pointer;
-      white-space: pre-wrap;
-    }
-    .msg-thinking.collapsed { color: var(--text-tertiary); }
-    .msg-thinking.collapsed .thinking-content { display: none; }
-    .msg-thinking::before {
-      content: "💭 思考";
-      font-style: normal; font-weight: 600; margin-right: 6px;
-    }
-    .msg-thinking.collapsed::before { content: "💭 思考(点击展开)"; }
-    .msg-meta-tokens { color: var(--text-tertiary); font-size: 11px; }
+/* ============================================================
+   Left panel
+   ============================================================ */
+.left-panel {
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  position: relative;
+  z-index: 20;
+  min-width: 0;
+}
+.left-section {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-light);
+}
+.btn-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text);
+  transition: all 0.15s;
+}
+.btn-new:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
+.search-box {
+  position: relative;
+  margin-top: 8px;
+}
+.search-input {
+  width: 100%;
+  padding: 7px 10px 7px 32px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--text-tertiary); }
+.search-icon {
+  position: absolute;
+  left: 10px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
+.workspace-item, .session-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.workspace-item:hover, .session-item:hover { background: var(--bg-hover); }
+.workspace-item.active, .session-item.active { background: var(--bg-active); }
+.workspace-icon, .session-icon {
+  width: 16px; height: 16px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.workspace-text, .session-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.session-title-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 12px 8px;
+  text-align: center;
+  font-style: italic;
+}
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.session-item:hover { background: var(--bg-hover); }
+.session-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.session-info { flex: 1; min-width: 0; }
+.session-name {
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-id {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: ui-monospace, monospace;
+  margin-top: 1px;
+}
+.btn-refresh-sessions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.btn-refresh-sessions:hover { background: var(--bg-hover); color: var(--text); }
+.btn-refresh-sessions:disabled { opacity: 0.5; cursor: wait; }
+.btn-refresh-sessions.loading svg { animation: spin 0.8s linear infinite; }
+.btn-refresh-sessions svg { width: 12px; height: 12px; }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
-    /* ============================================================
-       Input bar
-       ============================================================ */
-    .input-bar {
-      border-top: 1px solid var(--border);
-      background: var(--bg-elevated);
-      padding: 12px 16px;
-    }
-    .input-inner {
-      max-width: 820px; margin: 0 auto;
-      display: flex; flex-direction: column; gap: 8px;
-    }
-    .input-row {
-      display: flex; gap: 8px; align-items: flex-end;
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 8px;
-      transition: border-color 0.15s;
-    }
-    .input-row:focus-within { border-color: var(--accent); }
-    textarea#prompt {
-      flex: 1;
-      border: none; background: transparent;
-      padding: 8px; min-height: 24px; max-height: 200px;
-      resize: none; font-size: 14px; line-height: 1.5;
-    }
-    .send-btn {
-      width: 36px; height: 36px;
-      display: grid; place-items: center;
-      border-radius: 8px;
-      background: var(--accent);
-      color: white;
-      transition: background 0.15s, opacity 0.15s;
-    }
-    .send-btn:hover:not(:disabled) { background: var(--accent-hover); }
-    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .input-hints {
-      display: flex; gap: 8px; align-items: center;
-      padding: 0 8px;
-      font-size: 12px; color: var(--text-tertiary);
-    }
-    .input-hints .spacer { flex: 1; }
+/* Sessions list (scrollable middle area) */
+.sessions-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 100px;
+}
+.sessions-section {
+  padding: 8px 0;
+}
+.sessions-section .section-title { padding: 4px 12px 6px; }
 
-    /* ============================================================
-       Usage card (bottom-right, fixed)
-       ============================================================ */
-    .usage-card {
-      position: fixed;
-      bottom: 96px;
-      right: 20px;
-      width: 240px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 12px;
-      box-shadow: var(--shadow-lg);
-      z-index: 5;
-    }
-    .usage-card h3 {
-      font-size: 11px; color: var(--text-tertiary);
-      margin-bottom: 8px; font-weight: 500;
-      letter-spacing: 0.5px; text-transform: uppercase;
-    }
-    .usage-row {
-      display: flex; justify-content: space-between;
-      padding: 3px 0;
-    }
-    .usage-row .label { color: var(--text-secondary); }
-    .usage-row .value { color: var(--text); font-variant-numeric: tabular-nums; }
-    .usage-row.turn-tally .value { color: var(--accent); }
-    .usage-divider { height: 1px; background: var(--border-light); margin: 8px 0; }
-    .usage-empty { color: var(--text-tertiary); font-style: italic; }
-  </style>
+/* Bottom: quota + settings + user */
+.left-bottom {
+  border-top: 1px solid var(--border);
+  background: var(--bg-sidebar);
+}
+.quota-card {
+  position: relative;
+  border-bottom: 1px solid var(--border-light);
+}
+.quota-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.quota-toggle:hover { background: var(--bg-hover); }
+.quota-toggle-icon { color: var(--text-tertiary); width: 16px; height: 16px; }
+.quota-toggle-text { flex: 1; }
+.quota-toggle-arrow {
+  color: var(--text-tertiary);
+  transition: transform 0.2s;
+}
+.quota-card.expanded .quota-toggle-arrow { transform: rotate(90deg); }
+/* 套餐用量右向展开浮层（覆盖 chat 区） */
+.quota-expand {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  bottom: 0;
+  width: 360px;
+  background: var(--bg-quota-expand);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 50;
+  box-shadow: var(--shadow-lg);
+  animation: slideInRight 0.18s ease-out;
+}
+.quota-expand::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 0; bottom: 0;
+  width: 8px;
+  pointer-events: none;
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.quota-expand-loading {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+  padding: 12px 0;
+}
+.quota-item {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.quota-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.quota-item-title { font-size: 13px; font-weight: 500; }
+.quota-item-percent { font-size: 13px; font-weight: 600; color: var(--accent-text); }
+.quota-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-active);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.quota-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.quota-bar-fill.high { background: var(--warning); }
+.quota-bar-fill.danger { background: var(--danger); }
+.quota-item-reset {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.quota-usage-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+.quota-usage-summary b { color: var(--text); }
+
+.btn-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.btn-menu:hover { background: var(--bg-hover); }
+.btn-menu .btn-icon { color: var(--text-tertiary); width: 16px; height: 16px; }
+.btn-menu .btn-text { flex: 1; }
+.btn-menu .btn-value { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; }
+.btn-menu .btn-chevron { color: var(--text-tertiary); }
+
+/* User footer (bottom-left, plan name) */
+.user-footer {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+.user-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--user-accent), #8b5cf6);
+  color: white;
+  display: grid; place-items: center;
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.user-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-plan {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-chevron { color: var(--text-tertiary); }
+
+/* ============================================================
+   Chat area
+   ============================================================ */
+.chat-area {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  position: relative;
+}
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 0;
+}
+.chat-inner {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 40px 24px;
+  text-align: center;
+}
+.chat-empty-logo {
+  font-size: 64px;
+  font-weight: 900;
+  letter-spacing: -3px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 24px;
+  line-height: 1;
+}
+.chat-empty-subtitle {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+.chat-empty-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 600px;
+}
+.chat-hint {
+  padding: 8px 14px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chat-hint:hover { background: var(--bg-active); color: var(--text); }
+
+.msg {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+}
+.msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: white;
+}
+.msg.user .msg-avatar { background: linear-gradient(135deg, #6b7280, #4b5563); }
+.msg.assistant .msg-avatar { background: linear-gradient(135deg, #3b82f6, #8b5cf6); }
+.msg.system .msg-avatar { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.msg-content { flex: 1; min-width: 0; }
+.msg-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+.msg-body { font-size: 14px; line-height: 1.65; word-wrap: break-word; }
+.msg-body p { margin: 6px 0; }
+.msg-body p:first-child { margin-top: 0; }
+.msg-body p:last-child { margin-bottom: 0; }
+.msg-body h1, .msg-body h2, .msg-body h3 { margin: 12px 0 6px; font-weight: 600; }
+.msg-body h1 { font-size: 18px; }
+.msg-body h2 { font-size: 16px; }
+.msg-body h3 { font-size: 14px; }
+.msg-body ul, .msg-body ol { margin: 6px 0; padding-left: 22px; }
+.msg-body li { margin: 2px 0; }
+.msg-body code { background: var(--bg-hover); padding: 1px 5px; border-radius: 3px; font-family: "SF Mono", Consolas, "Liberation Mono", monospace; font-size: 12.5px; }
+.msg-body pre { background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin: 8px 0; overflow-x: auto; font-size: 12.5px; }
+.msg-body pre code { background: none; padding: 0; }
+.msg-body blockquote { border-left: 3px solid var(--border); padding-left: 12px; color: var(--text-secondary); margin: 6px 0; }
+.msg-body table { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.msg-body table th, .msg-body table td { border: 1px solid var(--border); padding: 4px 8px; }
+.msg-body table th { background: var(--bg-hover); }
+.msg-body a { color: var(--accent); }
+.msg-body hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.msg-body img { max-width: 100%; border-radius: 6px; }
+.msg-thinking {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.msg-thinking-label { color: var(--accent); font-weight: 600; font-style: normal; }
+
+.goal-block, .todo-block {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.goal-block-label {
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.goal-block-text { color: var(--text); margin-bottom: 4px; }
+.goal-block-meta { font-size: 11px; color: var(--text-tertiary); }
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.todo-marker { color: var(--text-tertiary); width: 14px; text-align: center; }
+.todo-item.done .todo-marker { color: var(--success); }
+.todo-item.pending .todo-marker { color: var(--text-tertiary); }
+.todo-item.done .todo-text { text-decoration: line-through; color: var(--text-tertiary); }
+
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.thinking-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Input area
+   ============================================================ */
+.input-area {
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+  padding: 12px 16px 16px;
+}
+.input-inner {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+.attachment-chip .remove {
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}
+.attachment-chip .remove:hover { color: var(--danger); }
+
+.input-box {
+  position: relative;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.input-textarea {
+  width: 100%;
+  min-height: 36px;
+  max-height: 200px;
+  background: transparent;
+  border: none;
+  resize: none;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  padding: 6px 8px;
+}
+.input-textarea::placeholder { color: var(--text-tertiary); }
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 0;
+}
+.btn-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: all 0.1s;
+}
+.btn-tool:hover { background: var(--bg-hover); color: var(--text); }
+.btn-tool .icon { width: 14px; height: 14px; }
+.btn-tool.active { background: var(--accent-bg); color: var(--accent-text); }
+.input-spacer { flex: 1; }
+.btn-send {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  color: white;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  transition: background 0.1s;
+}
+.btn-send:hover { background: var(--accent-hover); }
+.btn-send:disabled { background: var(--text-tertiary); cursor: not-allowed; }
+.btn-send .icon { width: 16px; height: 16px; }
+.input-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 6px 8px 0;
+}
+.input-hint kbd {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* Drop zone overlay */
+.dropzone-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(59, 130, 246, 0.1);
+  border: 2px dashed var(--accent);
+  border-radius: 8px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--accent);
+  font-weight: 600;
+  z-index: 50;
+  pointer-events: none;
+}
+.dropzone-overlay.show { display: flex; }
+
+/* ============================================================
+   Right panel
+   ============================================================ */
+.right-panel {
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+}
+.right-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.right-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  gap: 8px;
+}
+.kv-label { color: var(--text-secondary); }
+.kv-value { color: var(--text); font-family: "SF Mono", Consolas, monospace; font-size: 11.5px; text-align: right; word-break: break-all; }
+.kv-value.muted { color: var(--text-tertiary); }
+
+.context-bar {
+  margin: 8px 0;
+  width: 100%;
+  height: 6px;
+  background: var(--bg-active);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.context-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.context-bar-fill.high { background: var(--warning); }
+.context-bar-fill.danger { background: var(--danger); }
+.tps-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+.tps-display .icon { width: 12px; height: 12px; color: var(--warning); }
+
+.goal-content, .todo-content {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.goal-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 6px;
+}
+.goal-status-badge.complete { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+.goal-status-badge.paused { background: var(--bg-active); color: var(--text-secondary); }
+
+/* ============================================================
+   Slash command overlay
+   ============================================================ */
+.slash-overlay {
+  position: fixed;
+  left: 50%;
+  bottom: 100px;
+  transform: translateX(-50%);
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: 400px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100;
+  animation: slideUp 0.15s ease-out;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.slash-input {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text);
+  background: transparent;
+  border-radius: 0;
+}
+.slash-input::placeholder { color: var(--text-tertiary); }
+.slash-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+.slash-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.slash-item:hover, .slash-item.active { background: var(--bg-hover); }
+.slash-item.active { background: var(--accent-bg); color: var(--accent-text); }
+.slash-item-cmd {
+  font-family: "SF Mono", Consolas, monospace;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+  min-width: 110px;
+}
+.slash-item-desc { color: var(--text-secondary); flex: 1; }
+.slash-item.empty { color: var(--text-tertiary); justify-content: center; padding: 20px; }
+
+/* ============================================================
+   Mode popover
+   ============================================================ */
+.mode-popover {
+  position: absolute;
+  bottom: 60px;
+  left: 12px;
+  width: 220px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: 50;
+  animation: slideUp 0.12s ease-out;
+}
+.mode-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+}
+.mode-popover-item:hover { background: var(--bg-hover); }
+.mode-popover-item.active { background: var(--accent-bg); color: var(--accent-text); }
+.mode-popover-item .icon { color: var(--text-tertiary); width: 16px; height: 16px; }
+.mode-popover-item.active .icon { color: var(--accent); }
+.mode-popover-item-desc { font-size: 11px; color: var(--text-tertiary); margin-left: auto; }
+.mode-popover-item.active .mode-popover-item-desc { color: var(--accent-text); }
+.mode-popover-item.warn { color: var(--warning); }
+.mode-popover-item.warn .icon { color: var(--warning); }
+
+/* ============================================================
+   Settings menu
+   ============================================================ */
+.settings-menu {
+  position: absolute;
+  bottom: 50px;
+  left: 12px;
+  right: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: 50;
+  animation: slideUp 0.12s ease-out;
+}
+.settings-menu-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 6px 10px 4px;
+}
+.settings-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* ============================================================
+   Mobile responsive
+   ============================================================ */
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 220px 1fr 300px; }
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .left-panel, .right-panel {
+    position: fixed;
+    top: 44px;
+    bottom: 0;
+    width: 300px;
+    z-index: 30;
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.2s;
+  }
+  .left-panel { left: 0; transform: translateX(-100%); }
+  .left-panel.open { transform: translateX(0); }
+  .right-panel { right: 0; transform: translateX(100%); border-left: 1px solid var(--border); }
+  .right-panel.open { transform: translateX(0); }
+  .chat-area { width: 100%; }
+  .btn-mobile-toggle { display: inline-flex !important; }
+  .topbar-status { display: none; }
+}
+@media (max-width: 600px) {
+  .chat-inner { padding: 0 12px; }
+  .input-area { padding: 8px 12px 12px; }
+  .quota-expand { width: calc(100vw - 240px); }
+  .msg-body { font-size: 13.5px; }
+  .slash-overlay { left: 16px; right: 16px; width: auto; transform: none; bottom: 80px; }
+  .slash-overlay { animation: none; }
+  .chat-empty-logo { font-size: 48px; }
+}
+.btn-mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+.btn-mobile-toggle:hover { background: var(--bg-hover); }
+
+/* Drawer backdrop (mobile) */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 25;
+  display: none;
+}
+.drawer-backdrop.show { display: block; }
+
+/* SVG icon helpers */
+.icon { display: inline-block; vertical-align: middle; }
+
+/* ============================================================
+   Modal overlay (Ask / Plan Review / Permission / EnterPlanMode)
+   ============================================================ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-backdrop.show { display: flex; }
+.modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalIn 0.18s ease-out;
+}
+.modal.wide { max-width: 760px; }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-light);
+}
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  flex: 1;
+  font-family: "SF Mono", Consolas, monospace;
+}
+.modal-counter {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-right: 8px;
+}
+.modal-close {
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  transition: all 0.1s;
+}
+.modal-close:hover { background: var(--bg-hover); color: var(--text); }
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+.modal-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-light);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.modal-footer kbd {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 10px;
+}
+
+/* Ask modal: question tabs */
+.ask-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ask-tab {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+  border: 1px solid transparent;
+}
+.ask-tab.active {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.ask-tab.done::before {
+  content: '✓ ';
+  color: var(--success);
+}
+.ask-question {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+.ask-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ask-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.1s;
+  text-align: left;
+  width: 100%;
+}
+.ask-option:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
+.ask-option.selected {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+.ask-option-num {
+  font-family: "SF Mono", Consolas, monospace;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+.ask-option-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ask-option-label {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+.ask-option-desc {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.ask-other-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: inherit;
+  margin-top: 6px;
+}
+.ask-other-input:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-bg); }
+.ask-sending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+.ask-sending-spinner {
+  width: 12px; height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Plan Review modal */
+.plan-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.plan-summary {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 12px;
+}
+.plan-summary-empty {
+  font-style: italic;
+  color: var(--text-tertiary);
+  padding: 24px;
+  text-align: center;
+}
+.plan-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plan-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: all 0.1s;
+}
+.plan-option:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
+.plan-option.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.plan-option.primary:hover { background: var(--accent-hover); }
+.plan-option-num {
+  font-family: "SF Mono", Consolas, monospace;
+  font-weight: 700;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.plan-option-label { font-size: 13px; font-weight: 500; }
+.plan-add-context {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+  color: var(--text);
+}
+.plan-add-context:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+
+/* Permission / EnterPlanMode */
+.choice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.choice-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: all 0.1s;
+}
+.choice-option:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
+.choice-option-num {
+  font-family: "SF Mono", Consolas, monospace;
+  font-weight: 700;
+  color: var(--accent);
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.choice-option-text { flex: 1; }
+.choice-option-label { font-size: 13px; font-weight: 600; }
+.choice-option-desc { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+.choice-current {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Skill section in slash */
+.slash-section-label {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: var(--bg-sidebar);
+}
+.slash-skill {
+  font-style: italic;
+}
+.slash-skill .slash-item-cmd::before {
+  content: '⚡';
+  margin-right: 4px;
+}
+</style>
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
-      <div class="topbar-brand">
-        <div class="topbar-logo">M</div>
-        <span>mcode WebUI</span>
-        <span class="topbar-version" id="versionTag">v0.1.2</span>
-      </div>
-      <span class="topbar-meta" id="modelDisplay">model: …</span>
-      <span class="topbar-spacer"></span>
-      <div class="topbar-status">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusLabel">idle</span>
-      </div>
-    </header>
+<div class="app" id="app">
 
-    <main class="main" id="main">
-      <div class="chat-inner" id="chatInner">
-        <div class="chat-empty" id="chatEmpty">
-          <div class="chat-empty-logo">MCODE</div>
-          <div class="chat-empty-subtitle">还没消息 — 在下方输入开始对话</div>
-          <div class="chat-empty-hints" id="emptyHints">
-            <div class="chat-empty-hint" data-prompt="一句话介绍你自己">一句话介绍你自己</div>
-            <div class="chat-empty-hint" data-prompt="用三句话描述你的主要能力">用三句话描述你的主要能力</div>
-            <div class="chat-empty-hint" data-prompt="我应该怎么向你提问最有效?">我应该怎么向你提问最有效?</div>
-            <div class="chat-empty-hint" data-prompt="给我讲个冷笑话">给我讲个冷笑话</div>
+  <!-- ============================ Top bar ============================ -->
+  <header class="topbar">
+    <button class="btn-mobile-toggle" id="btn-toggle-left" title="菜单">
+      <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="topbar-brand">
+      <span class="topbar-logo">M</span>
+      <span data-i18n="title">mcode Web UI</span>
+      <span class="topbar-version" id="version">v0.1.2</span>
+    </div>
+    <div class="topbar-status" id="topbar-status">
+      <span class="chip" data-status="idle" id="chip-status">
+        <span class="chip-dot"></span>
+        <span data-i18n="status_idle">空闲</span>
+      </span>
+      <span class="chip" data-status="idle" id="chip-thinking" hidden>
+        <span class="chip-dot"></span>
+        <span data-i18n="status_thinking">思考中</span>
+      </span>
+      <span class="chip" id="chip-tps" hidden>
+        <span data-i18n="tps_label">tok/s</span>
+        <b id="tps-value">—</b>
+      </span>
+    </div>
+    <button class="btn-mobile-toggle" id="btn-toggle-right" title="详情" style="margin-left:auto">
+      <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>
+    </button>
+  </header>
+
+  <!-- ============================ Layout ============================ -->
+  <div class="layout">
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+    <!-- ============================ Left Panel ============================ -->
+    <aside class="left-panel" id="left-panel">
+      <div class="left-section">
+        <button class="btn-new" id="btn-new-chat">
+          <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span data-i18n="new_chat">新建会话</span>
+        </button>
+        <div class="search-box">
+          <svg class="icon search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search-input" id="search-input" data-i18n-placeholder="search_placeholder" placeholder="搜索会话...">
+        </div>
+      </div>
+
+      <div class="sessions-scroll" id="sessions-scroll">
+        <div class="sessions-section">
+          <div class="section-title" data-i18n="workspace">工作区</div>
+          <div class="workspace-item active" id="workspace-item">
+            <svg class="icon workspace-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="workspace-text" id="workspace-text">—</span>
+          </div>
+        </div>
+        <div class="sessions-section">
+          <div class="section-title" data-i18n="recent">最近会话</div>
+          <div id="sessions-list">
+            <div class="session-title-empty" data-i18n="no_sessions">暂无会话记录</div>
+          </div>
+          <button class="btn-refresh-sessions" id="btn-refresh-sessions" title="刷新会话列表">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <span>刷新</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="left-bottom">
+        <!-- 套餐用量卡（右向展开） -->
+        <div class="quota-card" id="quota-card">
+          <button class="quota-toggle" id="quota-toggle">
+            <svg class="icon quota-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span class="quota-toggle-text" data-i18n="usage">套餐用量</span>
+            <svg class="icon quota-toggle-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <div class="quota-expand" id="quota-expand" hidden>
+            <div id="quota-content">
+              <div class="quota-expand-loading" data-i18n="usage_loading">点击套餐用量加载...</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-menu" id="btn-appearance">
+          <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <span class="btn-text" data-i18n="appearance">外观</span>
+          <span class="btn-value" id="appearance-value">—</span>
+          <svg class="icon btn-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button class="btn-menu" id="btn-language">
+          <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span class="btn-text" data-i18n="language">语言</span>
+          <span class="btn-value" id="language-value">—</span>
+          <svg class="icon btn-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <!-- v0.4.0: 设置按钮暂时不需要（外观/语言/局域网在主栏已暴露） -->
+
+        <!-- 用户 plan 名（最底部） -->
+        <div class="user-footer" id="user-footer">
+          <div class="user-avatar" id="user-avatar">M</div>
+          <div class="user-info">
+            <div class="user-name" id="user-name" data-i18n="user_loading">加载中...</div>
+            <div class="user-plan" id="user-plan">—</div>
+          </div>
+          <svg class="icon user-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============================ Chat Area ============================ -->
+    <main class="chat-area" id="chat-area">
+      <div class="chat-scroll" id="chat-scroll">
+        <div class="chat-inner" id="chat-inner">
+          <div class="chat-empty" id="chat-empty">
+            <div class="chat-empty-logo">MCODE</div>
+            <div class="chat-empty-subtitle" data-i18n="empty_hint_1">还没有消息</div>
+            <div class="chat-empty-hints">
+              <button class="chat-hint" data-cmd="/help" data-i18n="hint_help">查看命令</button>
+              <button class="chat-hint" data-cmd="/status" data-i18n="hint_status">查看状态</button>
+              <button class="chat-hint" data-cmd="/sessions" data-i18n="hint_sessions">会话列表</button>
+              <button class="chat-hint" data-cmd="/usage" data-i18n="hint_usage">套餐用量</button>
+            </div>
           </div>
         </div>
       </div>
+
+      <div class="input-area">
+        <div class="input-inner">
+          <div class="attachment-list" id="attachment-list"></div>
+          <div class="input-box" id="input-box">
+            <textarea
+              class="input-textarea"
+              id="input-textarea"
+              rows="1"
+              data-i18n-placeholder="input_placeholder"
+              placeholder="输入消息... (/ 触发命令, @ 触发文件, Ctrl+V 粘贴图片)"
+            ></textarea>
+            <div class="input-toolbar">
+              <button class="btn-tool" id="btn-attach" title="附件 (Ctrl+V 粘贴)">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <input type="file" id="file-input" multiple hidden>
+              <button class="btn-tool" id="btn-mode" title="权限模式">
+                <span id="mode-label">Default</span>
+                <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <button class="btn-tool" id="btn-folder" title="工作目录">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span id="folder-label">—</span>
+              </button>
+              <div class="input-spacer"></div>
+              <button class="btn-tool" id="btn-model" title="模型">
+                <span id="model-label">—</span>
+                <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <button class="btn-send" id="btn-send" title="发送 (Enter)">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="input-hint" id="input-hint">
+            <span data-i18n="hint_footer">/ 命令 · @ 文件 · Ctrl+V 粘贴图片 · Enter 发送</span>
+          </div>
+        </div>
+      </div>
+      <div class="dropzone-overlay" id="dropzone-overlay" data-i18n="drop_hint">松开上传文件</div>
     </main>
 
-    <div class="input-bar">
-      <div class="input-inner">
-        <div class="input-row">
-          <textarea id="prompt" placeholder="输入消息... (Shift+Enter 换行, Enter 发送)" rows="1"></textarea>
-          <button class="send-btn" id="sendBtn" title="发送 (Enter)">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="19" x2="12" y2="5"/>
-              <polyline points="5 12 12 5 19 12"/>
-            </svg>
-          </button>
+    <!-- ============================ Right Panel ============================ -->
+    <aside class="right-panel" id="right-panel">
+
+      <!-- SESSION -->
+      <div class="right-section">
+        <div class="right-section-title" data-i18n="section_session">SESSION</div>
+        <div class="kv-row"><span class="kv-label">ID</span><span class="kv-value muted" id="r-session-id">—</span></div>
+        <div class="kv-row"><span class="kv-label" data-i18n="r_title">标题</span><span class="kv-value muted" id="r-session-title">—</span></div>
+      </div>
+
+      <!-- MODEL -->
+      <div class="right-section">
+        <div class="right-section-title" data-i18n="section_model">MODEL</div>
+        <div class="kv-row"><span class="kv-label">Model</span><span class="kv-value muted" id="r-model">—</span></div>
+        <div class="kv-row"><span class="kv-label">Thinking</span><span class="kv-value muted" id="r-thinking">—</span></div>
+        <div class="kv-row"><span class="kv-label">Context</span><span class="kv-value muted" id="r-ctx">—</span></div>
+      </div>
+
+      <!-- WORKSPACE -->
+      <div class="right-section">
+        <div class="right-section-title" data-i18n="section_workspace">WORKSPACE</div>
+        <div class="kv-row"><span class="kv-label" data-i18n="r_dir">目录</span><span class="kv-value muted" id="r-dir">—</span></div>
+        <div class="kv-row"><span class="kv-label" data-i18n="r_branch">分支</span><span class="kv-value muted" id="r-branch">—</span></div>
+        <div class="kv-row"><span class="kv-label" data-i18n="r_tree">状态</span><span class="kv-value muted" id="r-tree">—</span></div>
+      </div>
+
+      <!-- CONTEXT (real-time usage + TPS) -->
+      <div class="right-section">
+        <div class="right-section-title" data-i18n="section_context">CONTEXT</div>
+        <div class="kv-row"><span class="kv-label" data-i18n="r_used">已用</span><span class="kv-value muted" id="r-used">—</span></div>
+        <div class="context-bar"><div class="context-bar-fill" id="r-context-bar" style="width:0%"></div></div>
+        <div class="kv-row"><span class="kv-label" data-i18n="r_percent">占比</span><span class="kv-value muted" id="r-percent">—</span></div>
+        <div class="tps-display">
+          <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span data-i18n="r_tps">速度</span>
+          <b id="r-tps">—</b>
+          <span style="color:var(--text-tertiary)">tok/s</span>
         </div>
-        <div class="input-hints">
-          <span>每次请求 = 一个 mcode exec subprocess(无持久会话)</span>
-          <span class="spacer"></span>
-          <span id="lastTurnTokens"></span>
+      </div>
+
+      <!-- GOAL (dynamic, only when active) -->
+      <div class="right-section" id="r-goal-section" hidden>
+        <div class="right-section-title" data-i18n="section_goal">GOAL</div>
+        <div class="goal-content">
+          <span class="goal-status-badge" id="r-goal-status">—</span>
+          <span id="r-goal-text">—</span>
         </div>
+        <div class="goal-content" id="r-goal-duration" style="margin-top:4px;font-size:11px;color:var(--text-tertiary)"></div>
+      </div>
+
+      <!-- TODO (dynamic, only when present) -->
+      <div class="right-section" id="r-todo-section" hidden>
+        <div class="right-section-title" data-i18n="section_todo">TODO</div>
+        <div class="todo-content" id="r-todo-list"></div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- ============================ Slash Command Overlay ============================ -->
+  <div class="slash-overlay" id="slash-overlay" hidden>
+    <input class="slash-input" id="slash-input" placeholder="搜索命令..." autocomplete="off">
+    <div class="slash-results" id="slash-results"></div>
+  </div>
+
+  <!-- ============================ Mode Popover ============================ -->
+  <div class="mode-popover" id="mode-popover" hidden>
+    <button class="mode-popover-item" data-mode="ask">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span data-i18n="mode_ask">询问</span>
+      <span class="mode-popover-item-desc" data-i18n="mode_ask_desc">敏感操作确认</span>
+    </button>
+    <button class="mode-popover-item" data-mode="auto">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <span data-i18n="mode_auto">自动</span>
+      <span class="mode-popover-item-desc" data-i18n="mode_auto_desc">仅高风险询问</span>
+    </button>
+    <button class="mode-popover-item" data-mode="full">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span data-i18n="mode_full">完全 访问</span>
+      <span class="mode-popover-item-desc" data-i18n="mode_full_desc">无需确认</span>
+    </button>
+  </div>
+
+  <!-- ============================ Settings Menu (v0.4.0: 暂时不需要，隐藏) ============================ -->
+  <div class="settings-menu" id="settings-menu" hidden>
+    <div class="settings-menu-title" data-i18n="settings">设置</div>
+    <button class="btn-menu" id="menu-toggle-theme" style="padding:8px 10px">
+      <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <span class="btn-text" data-i18n="toggle_theme">切换主题</span>
+    </button>
+    <button class="btn-menu" id="menu-toggle-lang" style="padding:8px 10px">
+      <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span class="btn-text" data-i18n="toggle_lang">中/English</span>
+    </button>
+    <div class="settings-menu-divider"></div>
+    <button class="btn-menu" id="menu-network" style="padding:8px 10px">
+      <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+      <span class="btn-text" data-i18n="network">局域网访问</span>
+    </button>
+  </div>
+
+  <!-- ============================ Ask Modal (v0.4.0 新增) ============================ -->
+  <div class="modal-backdrop" id="ask-modal">
+    <div class="modal" role="dialog" aria-labelledby="ask-modal-title">
+      <div class="modal-header">
+        <span class="modal-title" id="ask-modal-title">Ask</span>
+        <span class="modal-counter" id="ask-counter">0/0 answered</span>
+        <button class="modal-close" id="ask-close" title="Esc 取消">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="ask-tabs" id="ask-tabs"></div>
+        <div class="ask-question" id="ask-question">—</div>
+        <div class="ask-options" id="ask-options"></div>
+      </div>
+      <div class="modal-footer">
+        <span><kbd>↑↓</kbd> 移动</span>
+        <span><kbd>1-9</kbd> 选择</span>
+        <span><kbd>Tab/←/→</kbd> 切换题目</span>
+        <span><kbd>Esc</kbd> 取消</span>
       </div>
     </div>
   </div>
 
-  <div class="usage-card" id="usageCard">
-    <h3>本页面用量</h3>
-    <div id="usageBody" class="usage-empty">发送一条消息后开始累计</div>
+  <!-- ============================ Plan Review Modal (v0.4.0 新增) ============================ -->
+  <div class="modal-backdrop" id="plan-modal">
+    <div class="modal wide" role="dialog" aria-labelledby="plan-modal-title">
+      <div class="modal-header">
+        <span class="modal-title" id="plan-modal-title">Plan Review</span>
+        <span class="choice-current" id="plan-frozen">Frozen Runtime snapshot</span>
+        <button class="modal-close" id="plan-close" title="Esc 跳过">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="plan-title" id="plan-title">—</div>
+        <div class="plan-summary" id="plan-summary">
+          <div class="plan-summary-empty">没有 Plan 内容</div>
+        </div>
+        <textarea class="plan-add-context" id="plan-add-context" placeholder="Add context to revise（仅 Add 模式生效）" hidden></textarea>
+        <div class="plan-options" id="plan-options"></div>
+      </div>
+      <div class="modal-footer">
+        <span><kbd>↑↓</kbd> 移动</span>
+        <span><kbd>1-3</kbd> 选择</span>
+        <span><kbd>Enter</kbd> 确认</span>
+        <span><kbd>Esc</kbd> 跳过</span>
+      </div>
+    </div>
   </div>
 
-  <script>
-    // ============================================================
-    // State
-    // ============================================================
-    const $ = (id) => document.getElementById(id)
-    const chatInner = $('chatInner')
-    const emptyEl = $('chatEmpty')
-    const promptEl = $('prompt')
-    const sendBtn = $('sendBtn')
-    const statusDot = $('statusDot')
-    const statusLabel = $('statusLabel')
-    const usageBody = $('usageBody')
-    const lastTurnTokensEl = $('lastTurnTokens')
-    const modelDisplay = $('modelDisplay')
-    const versionTag = $('versionTag')
-
-    let inFlight = false
-    let currentAssistantEl = null
-    let currentThinking = ''
-    let currentContent = ''
-    let lastDurationMs = null
-    // session-aggregated usage (sums across all turns on this page)
-    const totalUsage = { in: 0, out: 0, cache: 0, requests: 0, _seenIds: new Set() }
-
-    // ============================================================
-    // Theme (auto by prefers-color-scheme, persisted to localStorage)
-    // ============================================================
-    const savedTheme = localStorage.getItem('webui-theme') ||
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    document.documentElement.setAttribute('data-theme', savedTheme)
-
-    // ============================================================
-    // Helpers
-    // ============================================================
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-      }[c]))
-    }
-    function fmt(n) {
-      if (n == null) return '—'
-      if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M'
-      if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
-      return String(n)
-    }
-    function setStatus(text, kind) {
-      statusLabel.textContent = text
-      statusDot.className = 'status-dot' + (kind ? ' ' + kind : '')
-    }
-    function autoResize() {
-      promptEl.style.height = 'auto'
-      promptEl.style.height = Math.min(200, promptEl.scrollHeight) + 'px'
-    }
-
-    // ============================================================
-    // Render
-    // ============================================================
-    function renderUsage() {
-      if (totalUsage.requests === 0) {
-        usageBody.className = 'usage-empty'
-        usageBody.textContent = '发送一条消息后开始累计'
-        return
-      }
-      usageBody.className = ''
-      const total = totalUsage.in + totalUsage.out
-      const dur = lastDurationMs ? `${lastDurationMs}ms` : '—'
-      usageBody.innerHTML = `
-        <div class="usage-row turn-tally"><span class="label">turns</span><span class="value">${totalUsage.requests}</span></div>
-        <div class="usage-row"><span class="label">input</span><span class="value">${fmt(totalUsage.in)}</span></div>
-        <div class="usage-row"><span class="label">output</span><span class="value">${fmt(totalUsage.out)}</span></div>
-        ${totalUsage.cache ? `<div class="usage-row"><span class="label">cache read</span><span class="value">${fmt(totalUsage.cache)}</span></div>` : ''}
-        <div class="usage-divider"></div>
-        <div class="usage-row"><span class="label">total tokens</span><span class="value">${fmt(total)}</span></div>
-        <div class="usage-row"><span class="label">last turn</span><span class="value">${dur}</span></div>
-      `
-    }
-
-    function appendUserBubble(text) {
-      if (emptyEl) emptyEl.remove()
-      const div = document.createElement('div')
-      div.className = 'msg user'
-      div.innerHTML = `
-        <div class="msg-avatar">你</div>
-        <div class="msg-body">
-          <div class="msg-meta">你</div>
-          <div class="msg-bubble">${escapeHtml(text)}</div>
+  <!-- ============================ EnterPlanMode Modal (v0.4.0 新增) ============================ -->
+  <div class="modal-backdrop" id="planmode-modal">
+    <div class="modal" role="dialog" aria-labelledby="planmode-modal-title" style="max-width:480px">
+      <div class="modal-header">
+        <span class="modal-title" id="planmode-modal-title">Use Plan mode?</span>
+        <button class="modal-close" id="planmode-close" title="Esc 拒绝">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px">Plan mode structures complex tasks before execution.</p>
+        <div class="choice-options" id="planmode-options">
+          <button class="choice-option" data-choice="continue">
+            <span class="choice-option-num">1</span>
+            <div class="choice-option-text">
+              <div class="choice-option-label">Continue with plan</div>
+              <div class="choice-option-desc">进 Plan 模式，先出方案</div>
+            </div>
+          </button>
+          <button class="choice-option" data-choice="deny">
+            <span class="choice-option-num">2</span>
+            <div class="choice-option-text">
+              <div class="choice-option-label">Deny</div>
+              <div class="choice-option-desc">不进 Plan 模式</div>
+            </div>
+          </button>
         </div>
-      `
-      chatInner.appendChild(div)
-      chatInner.scrollTop = chatInner.scrollHeight
-    }
-    function startAssistantBubble() {
-      if (emptyEl) emptyEl.remove()
-      const div = document.createElement('div')
-      div.className = 'msg assistant'
-      div.innerHTML = `
-        <div class="msg-avatar">M</div>
-        <div class="msg-body">
-          <div class="msg-meta">
-            <span>mcode</span>
-            <span class="msg-thinking collapsed"><span class="thinking-content"></span></span>
-          </div>
-          <div class="msg-bubble"></div>
+      </div>
+      <div class="modal-footer">
+        <span><kbd>1-2</kbd> 选择</span>
+        <span><kbd>Enter</kbd> 确认</span>
+        <span><kbd>Esc</kbd> 拒绝</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ Permission Modal (v0.4.0 新增) ============================ -->
+  <div class="modal-backdrop" id="perm-modal">
+    <div class="modal" role="dialog" aria-labelledby="perm-modal-title" style="max-width:520px">
+      <div class="modal-header">
+        <span class="modal-title" id="perm-modal-title">Permission</span>
+        <span class="choice-current" id="perm-current">Current · —</span>
+        <button class="modal-close" id="perm-close" title="Esc 取消">
+          <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px">Choose how MCode handles tool access.</p>
+        <div class="choice-options" id="perm-options">
+          <button class="choice-option" data-choice="ask">
+            <span class="choice-option-num">1</span>
+            <div class="choice-option-text">
+              <div class="choice-option-label">ASK</div>
+              <div class="choice-option-desc">Confirm sensitive actions</div>
+            </div>
+          </button>
+          <button class="choice-option" data-choice="auto">
+            <span class="choice-option-num">2</span>
+            <div class="choice-option-text">
+              <div class="choice-option-label">AUTO</div>
+              <div class="choice-option-desc">Ask only when risk is high</div>
+            </div>
+          </button>
+          <button class="choice-option" data-choice="full">
+            <span class="choice-option-num">3</span>
+            <div class="choice-option-text">
+              <div class="choice-option-label">FULL</div>
+              <div class="choice-option-desc">Run without confirmation</div>
+            </div>
+          </button>
         </div>
-      `
-      chatInner.appendChild(div)
-      chatInner.scrollTop = chatInner.scrollHeight
-      currentAssistantEl = div
-      currentThinking = ''
-      currentContent = ''
-      div.querySelector('.msg-thinking').addEventListener('click', (e) => {
-        e.currentTarget.classList.toggle('collapsed')
-      })
-    }
+      </div>
+      <div class="modal-footer">
+        <span><kbd>1-3</kbd> 选择</span>
+        <span><kbd>Enter</kbd> 确认</span>
+        <span><kbd>Esc</kbd> 取消</span>
+      </div>
+    </div>
+  </div>
 
-    function handleStreamMsg(msg) {
-      if (!currentAssistantEl) return
-      const thinkingEl = currentAssistantEl.querySelector('.msg-thinking')
-      const thinkingContent = thinkingEl.querySelector('.thinking-content')
-      const bubble = currentAssistantEl.querySelector('.msg-bubble')
+</div>
 
-      if (msg.type === 'delta') {
-        if (typeof msg.thinking === 'string') {
-          currentThinking += msg.thinking
-          thinkingContent.textContent = currentThinking
-          thinkingEl.classList.remove('collapsed')
-        }
-        if (typeof msg.content === 'string') {
-          currentContent += msg.content
-          bubble.textContent = currentContent
-        }
-        chatInner.scrollTop = chatInner.scrollHeight
-      } else if (msg.type === 'message' && msg.message) {
-        const m = msg.message
-        if (typeof m.content === 'string') {
-          currentContent = m.content
-          bubble.textContent = currentContent
-        }
-        if (typeof m.thinking === 'string') {
-          currentThinking = m.thinking
-          thinkingContent.textContent = currentThinking
-        }
-        if (m.usage) {
-          // accumulate immediately (don't wait for 'done' event)
-          totalUsage.in += Number(m.usage.inputTokens) || 0
-          totalUsage.out += Number(m.usage.outputTokens) || 0
-          totalUsage.cache += Number(m.usage.cacheReadTokens) || 0
-          if (m.id && !totalUsage._seenIds.has(m.id)) {
-            totalUsage._seenIds.add(m.id)
-            totalUsage.requests += 1
-          }
-          if (m.usage.requestDurationMs) lastDurationMs = m.usage.requestDurationMs
-          lastTurnTokensEl.textContent =
-            `in ${fmt(totalUsage.in)} · out ${fmt(totalUsage.out)} · ${m.usage.requestDurationMs ?? '?'}ms`
-          renderUsage()
-        }
-        chatInner.scrollTop = chatInner.scrollHeight
-      } else if (msg.type === 'session-status') {
-        setStatus(`session: ${msg.status}`,
-          msg.status === 'finished' ? 'ok' :
-          msg.status === 'error' ? 'err' : 'running')
-      } else if (msg.type === 'exec.result') {
-        if (msg.answer) {
-          currentContent = msg.answer
-          bubble.textContent = currentContent
-        }
-        if (msg.status === 'failed') {
-          setStatus('failed: ' + (msg.error?.message || ''), 'err')
-          bubble.textContent = '⚠️ ' + (msg.error?.message || 'failed')
-        } else if (msg.status === 'succeeded') {
-          if (typeof msg.durationMs === 'number') {
-            lastDurationMs = msg.durationMs
-            renderUsage()
-          }
-          setStatus('done · ' + (msg.durationMs ?? '?') + 'ms', 'ok')
-        }
-      }
-      // heartbeat / generic / done: ignore at this layer
-    }
+<script>
+// ============================================================
+// Config
+// ============================================================
+const urlParams = new URLSearchParams(window.location.search)
+const tokenParam = urlParams.get('token') || ''
+const TOKEN = tokenParam  // 给 fetch/SSE 用
+const TOKEN_QUERY = TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : ''
 
-    // ============================================================
-    // Send
-    // ============================================================
-    async function send() {
-      const text = promptEl.value.trim()
-      if (!text || inFlight) return
-      inFlight = true
-      sendBtn.disabled = true
-      promptEl.value = ''
-      autoResize()
-      appendUserBubble(text)
-      startAssistantBubble()
-      setStatus('starting…', 'running')
+const HEADERS = TOKEN ? { 'Authorization': `Bearer ${TOKEN}` } : {}
 
-      let res
-      try {
-        res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: text }),
-        })
-      } catch (e) {
-        setStatus('network error: ' + e.message, 'err')
-        inFlight = false
-        sendBtn.disabled = false
+// ============================================================
+// i18n
+// ============================================================
+const I18N = {
+  zh: {
+    title: 'mcode Web UI',
+    new_chat: '新建会话',
+    search_placeholder: '搜索会话...',
+    workspace: '工作区',
+    recent: '最近会话',
+    no_sessions: '暂无会话记录',
+    usage: '套餐用量',
+    usage_loading: '点击套餐用量加载...',
+    upgrade: '升级',
+    appearance: '外观',
+    language: '语言',
+    settings: '设置',
+    appearance_light: '明亮',
+    appearance_dark: '深色',
+    language_zh: '简体中文',
+    language_en: 'English',
+    empty_hint_1: '还没有消息 — 在下方输入开始对话',
+    empty_hint_2: '按 / 触发命令检索，Ctrl+V 粘贴图片',
+    hint_help: '查看命令',
+    hint_status: '查看状态',
+    hint_sessions: '会话列表',
+    hint_usage: '套餐用量',
+    input_placeholder: '输入消息... (/ 命令 · @ 文件 · Ctrl+V 粘贴图片)',
+    hint_footer: '/ 命令 · @ 文件 · Ctrl+V 粘贴图片 · Enter 发送',
+    section_session: '会话',
+    section_model: '模型',
+    section_workspace: '工作区',
+    section_context: '上下文',
+    section_goal: '目标',
+    section_todo: '待办',
+    r_title: '标题', r_dir: '目录', r_branch: '分支', r_tree: '状态',
+    r_used: '已用', r_percent: '占比', r_tps: '速度',
+    status_idle: '空闲',
+    status_thinking: '思考中',
+    status_running: '运行中',
+    status_completed: '完成',
+    tps_label: 'tok/s',
+    goal_active: '进行中',
+    goal_complete: '完成',
+    goal_paused: '暂停',
+    todo_done: '已完成',
+    todo_pending: '待办',
+    user_loading: 'Mcode Web',
+    user_default: 'Mcode',
+    mode_default: '默认',
+    mode_ask: '询问', mode_ask_desc: '敏感操作确认',
+    mode_auto: '自动', mode_auto_desc: '仅高风险询问',
+    mode_full: '完全 访问', mode_full_desc: '无需确认',
+    drop_hint: '松开上传文件',
+    toggle_theme: '切换主题',
+    toggle_lang: '中 / English',
+    network: '局域网访问',
+    slash_no_results: '没有匹配的命令',
+    slash_section_cmd: '命令',
+    slash_section_skill: '技能',
+    perm_full: '完全 访问',
+    perm_ask: '询问',
+    perm_read: '只读',
+    plan_mode_continue: '继续 plan',
+    plan_mode_deny: '拒绝',
+  },
+  en: {
+    title: 'mcode Web UI',
+    new_chat: 'New Chat',
+    search_placeholder: 'Search sessions...',
+    workspace: 'Workspace',
+    recent: 'Recent',
+    no_sessions: 'No sessions yet',
+    usage: 'Usage',
+    usage_loading: 'Click to load usage...',
+    upgrade: 'Upgrade',
+    appearance: 'Appearance',
+    language: 'Language',
+    settings: 'Settings',
+    appearance_light: 'Light',
+    appearance_dark: 'Dark',
+    language_zh: '中文',
+    language_en: 'English',
+    empty_hint_1: 'No messages yet — start typing below',
+    empty_hint_2: 'Press / for commands, Ctrl+V to paste image',
+    hint_help: 'Show commands',
+    hint_status: 'Show status',
+    hint_sessions: 'Sessions',
+    hint_usage: 'Usage',
+    input_placeholder: 'Type a message... (/ commands · @ files · Ctrl+V images)',
+    hint_footer: '/ commands · @ files · Ctrl+V images · Enter to send',
+    section_session: 'SESSION',
+    section_model: 'MODEL',
+    section_workspace: 'WORKSPACE',
+    section_context: 'CONTEXT',
+    section_goal: 'GOAL',
+    section_todo: 'TODO',
+    r_title: 'Title', r_dir: 'Directory', r_branch: 'Branch', r_tree: 'Status',
+    r_used: 'Used', r_percent: 'Percent', r_tps: 'Speed',
+    status_idle: 'Idle',
+    status_thinking: 'Thinking',
+    status_running: 'Running',
+    status_completed: 'Done',
+    tps_label: 'tok/s',
+    goal_active: 'Active',
+    goal_complete: 'Complete',
+    goal_paused: 'Paused',
+    todo_done: 'Done',
+    todo_pending: 'Pending',
+    user_loading: 'Mcode Web',
+    user_default: 'Mcode',
+    mode_default: 'Default',
+    mode_ask: 'Ask', mode_ask_desc: 'Confirm sensitive',
+    mode_auto: 'Auto', mode_auto_desc: 'Only high-risk',
+    mode_full: 'Full Access', mode_full_desc: 'No confirm',
+    drop_hint: 'Drop file to upload',
+    toggle_theme: 'Toggle theme',
+    toggle_lang: '中 / English',
+    network: 'Network access',
+    slash_no_results: 'No matching commands',
+    slash_section_cmd: 'Commands',
+    slash_section_skill: 'Skills',
+    perm_full: 'Full access',
+    perm_ask: 'Ask',
+    perm_read: 'Read-only',
+  }
+}
+let currentLang = localStorage.getItem('webui-lang') || 'zh'
+function t(key) { return (I18N[currentLang] && I18N[currentLang][key]) || key }
+function applyI18n() {
+  document.documentElement.setAttribute('lang', currentLang)
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n')
+    el.textContent = t(key)
+  })
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder')
+    el.placeholder = t(key)
+  })
+  document.getElementById('language-value').textContent = t(currentLang === 'zh' ? 'language_zh' : 'language_en')
+  document.getElementById('appearance-value').textContent = t(theme === 'light' ? 'appearance_light' : 'appearance_dark')
+}
+
+// ============================================================
+// Theme
+// ============================================================
+let theme = localStorage.getItem('webui-theme') || 'light'
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', theme)
+  document.getElementById('appearance-value').textContent = t(theme === 'light' ? 'appearance_light' : 'appearance_dark')
+}
+function toggleTheme() {
+  theme = theme === 'light' ? 'dark' : 'light'
+  localStorage.setItem('webui-theme', theme)
+  applyTheme()
+}
+
+// ============================================================
+// State
+// ============================================================
+let state = null
+let quotaExpanded = false
+let slashOpen = false
+let slashQuery = ''
+let slashActiveIdx = 0
+let slashFiltered = []
+let modeOpen = false
+let settingsOpen = false
+let attachedFiles = []
+let isSending = false
+let leftOpen = false
+let rightOpen = false
+let lastTpsValue = null
+let lastTpsTime = null
+let spentSinceLastUsage = 0
+
+// Modal state (v0.4.0 新增)
+let askOpen = false
+let askSelectedIdx = 0
+let askSending = false
+let planOpen = false
+let planSending = false
+let planModeOpen = false
+let permOpen = false
+let lastShownAskKey = null  // 防重复弹出
+let lastShownPlanKey = null
+let lastShownPermKey = null
+let lastShownPlanModeKey = null
+
+// ============================================================
+// Slash commands (built-in to mcode)
+// ============================================================
+const SLASH_COMMANDS = [
+  { cmd: '/help', zh: '显示可用命令', en: 'Show available commands' },
+  { cmd: '/new', zh: '开启新会话', en: 'Start a fresh session' },
+  { cmd: '/sessions', zh: '会话列表', en: 'Search/resume sessions' },
+  { cmd: '/goal', zh: '设定/管理目标', en: 'Manage session goal' },
+  { cmd: '/plan', zh: 'Plan 模式', en: 'Switch Plan Mode' },
+  { cmd: '/status', zh: '账户与模型状态', en: 'Account/model status' },
+  { cmd: '/permission', zh: '权限模式', en: 'Runtime permission mode' },
+  { cmd: '/model', zh: '选择模型', en: 'Choose model' },
+  { cmd: '/usage', zh: '会话用量', en: 'Show session usage' },
+  { cmd: '/plugins', zh: '插件管理', en: 'Manage plugins' },
+  { cmd: '/provider', zh: '模型 provider', en: 'Manage providers' },
+  { cmd: '/context', zh: '只读上下文', en: 'Read-only context' },
+  { cmd: '/feedback', zh: '提交反馈', en: 'Send feedback' },
+  { cmd: '/steer', zh: '引导当前回复', en: 'Steer current response' },
+  { cmd: '/init', zh: '初始化当前仓库', en: 'Teach MCode this repo' },
+  { cmd: '/logout', zh: '退出登录', en: 'Sign out' },
+  { cmd: '/quit', zh: '退出 mcode', en: 'Quit mcode' },
+]
+
+const SLASH_SKILLS = [
+  { name: 'plan', zh: 'Plan Mode（先出方案再执行）', en: 'Plan Mode (plan first)' },
+  { name: 'context', zh: '只读当前会话上下文', en: 'Read-only session context' },
+  { name: 'feedback', zh: '提交反馈', en: 'Submit feedback' },
+]
+
+// ============================================================
+// SSE connection
+// ============================================================
+let es = null
+let autoRefreshTimer = null
+function connect() {
+  if (es) { try { es.close() } catch {} }
+  const url = '/api/events' + TOKEN_QUERY
+  es = new EventSource(url)
+  es.onmessage = (ev) => {
+    try { state = JSON.parse(ev.data); render() } catch (e) { console.error('parse', e) }
+  }
+  es.onerror = () => { setTimeout(connect, 3000) }
+
+  // 自动 /api/refresh 触发：页面打开 2s + 每 60s 拉一次
+  // 避免 web UI 一直显示 "—" / "Loading..."
+  const trigger = async () => {
+    try { await fetch('/api/refresh' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
+  }
+  setTimeout(trigger, 2000)
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer)
+  autoRefreshTimer = setInterval(trigger, 60000)
+}
+
+// ============================================================
+// Render
+// ============================================================
+function render() {
+  if (!state) return
+  // Top status
+  const status = state.context?.thinkingStatus || 'Idle'
+  const statusEl = document.getElementById('chip-status')
+  const thinkingEl = document.getElementById('chip-thinking')
+  const tpsEl = document.getElementById('chip-tps')
+
+  if (status === 'Idle') {
+    statusEl.hidden = false
+    statusEl.querySelector('span:last-child').textContent = t('status_idle')
+    statusEl.setAttribute('data-status', 'idle')
+    thinkingEl.hidden = true
+  } else if (status === 'Completed') {
+    statusEl.hidden = false
+    statusEl.querySelector('span:last-child').textContent = t('status_completed')
+    statusEl.setAttribute('data-status', 'completed')
+    thinkingEl.hidden = true
+  } else {
+    statusEl.hidden = true
+    thinkingEl.hidden = false
+    thinkingEl.querySelector('span:last-child').textContent = `${t('status_thinking')} · ${state.context?.thinkingDuration || '—'}`
+    thinkingEl.setAttribute('data-status', status === 'Loading' ? 'loading' : 'running')
+  }
+
+  if (state.context?.tps) {
+    tpsEl.hidden = false
+    document.getElementById('tps-value').textContent = state.context.tps
+  } else {
+    tpsEl.hidden = true
+  }
+
+  // Version
+  if (state.version) document.getElementById('version').textContent = 'v' + state.version
+
+  // Workspace
+  if (state.workspace?.dir) {
+    const parts = state.workspace.dir.split(/[\\\/]/).filter(Boolean)
+    document.getElementById('workspace-text').textContent = parts[parts.length - 1] || state.workspace.dir
+    document.getElementById('folder-label').textContent = parts[parts.length - 1] || '—'
+  }
+
+  // Right panel
+  renderRight()
+
+  // Model + mode in input
+  if (state.model?.name) {
+    const shortName = state.model.name.split('/').pop() || state.model.name
+    document.getElementById('model-label').textContent = shortName
+    document.getElementById('r-model').textContent = state.model.name
+  }
+  if (state.model?.ctx) document.getElementById('r-ctx').textContent = state.model.ctx
+  if (state.model?.thinking) document.getElementById('r-thinking').textContent = state.model.thinking
+
+  // Workspace right
+  if (state.workspace?.dir) document.getElementById('r-dir').textContent = state.workspace.dir
+  if (state.workspace?.branch) document.getElementById('r-branch').textContent = state.workspace.branch
+  if (state.workspace?.tree) document.getElementById('r-tree').textContent = state.workspace.tree
+
+  // Session right
+  if (state.sessionId) document.getElementById('r-session-id').textContent = state.sessionId
+  if (state.sessionTitle) document.getElementById('r-session-title').textContent = state.sessionTitle
+
+  // Permissions → mode label
+  if (state.permissions) {
+    let modeLabel = 'Default'
+    if (/完全|full/i.test(state.permissions)) modeLabel = t('mode_full')
+    else if (/ask|询问/i.test(state.permissions)) modeLabel = t('mode_ask')
+    else if (/read|只读/i.test(state.permissions)) modeLabel = t('mode_read')
+    document.getElementById('mode-label').textContent = modeLabel
+  }
+
+  // Context right (real-time usage + TPS)
+  renderContext()
+
+  // Goal (dynamic)
+  renderGoal()
+
+  // Todo (dynamic)
+  renderTodo()
+
+  // User footer (plan name)
+  renderUserFooter()
+
+  // Sessions list (左栏 RECENT)
+  renderSessions()
+
+  // Chat
+  renderChat()
+
+  // Quota card (在展开时实时刷新)
+  if (quotaExpanded) renderQuota()
+
+  // Modals (v0.4.0)
+  checkModals()
+}
+
+function renderRight() {
+  // SESSION / MODEL / WORKSPACE 已在 render() 里单独处理
+  // 这里只处理 mode popover 的 active 高亮
+  document.querySelectorAll('.mode-popover-item').forEach(el => {
+    const mode = el.getAttribute('data-mode')
+    const perm = (state?.permissions || '').toLowerCase()
+    el.classList.toggle('active',
+      (mode === 'full' && /完全|full/.test(perm)) ||
+      (mode === 'ask' && /ask|询问/.test(perm)) ||
+      (mode === 'auto' && /auto|自动/.test(perm))
+    )
+  })
+}
+
+function renderContext() {
+  const ctx = state?.context || {}
+  const spent = ctx.spent || ctx.tokens || 0
+  const limit = parseInt(ctx.limit || state?.model?.ctx || 0, 10) || 0
+  const percent = ctx.percent || (limit > 0 ? Math.min(100, (spent / limit) * 100) : 0)
+
+  document.getElementById('r-used').textContent = formatNumber(spent)
+  document.getElementById('r-percent').textContent = limit > 0 ? `${percent.toFixed(1)}%` : '—'
+  const bar = document.getElementById('r-context-bar')
+  bar.style.width = `${Math.min(100, percent)}%`
+  bar.classList.remove('high', 'danger')
+  if (percent > 80) bar.classList.add('danger')
+  else if (percent > 50) bar.classList.add('high')
+
+  document.getElementById('r-tps').textContent = ctx.tps || '—'
+}
+
+function renderGoal() {
+  const section = document.getElementById('r-goal-section')
+  const g = state?.goal
+  if (g && g.active) {
+    section.hidden = false
+    const status = g.status || 'Active'
+    const badge = document.getElementById('r-goal-status')
+    badge.textContent = t(status === 'Active' ? 'goal_active' : status === 'Complete' ? 'goal_complete' : status === 'Paused' ? 'goal_paused' : status)
+    badge.classList.toggle('complete', status === 'Complete')
+    badge.classList.toggle('paused', status === 'Paused')
+    document.getElementById('r-goal-text').textContent = g.text || '—'
+    document.getElementById('r-goal-duration').textContent = g.duration ? `已运行 ${g.duration}` : ''
+  } else {
+    section.hidden = true
+  }
+}
+
+function renderTodo() {
+  const section = document.getElementById('r-todo-section')
+  const list = state?.todo || []
+  if (list.length > 0) {
+    section.hidden = false
+    const html = list.map(item => `
+      <div class="todo-item ${item.status}">
+        <span class="todo-marker">${item.status === 'done' ? '✓' : item.status === 'failed' ? '✗' : '○'}</span>
+        <span class="todo-text">${escapeHtml(item.text)}</span>
+      </div>
+    `).join('')
+    document.getElementById('r-todo-list').innerHTML = html
+  } else {
+    section.hidden = true
+  }
+}
+
+function renderSessions() {
+  const list = document.getElementById('sessions-list')
+  const sessions = state?.sessions || []
+  if (sessions.length === 0) {
+    list.innerHTML = `<div class="session-title-empty">${t('no_sessions')}</div>`
+    return
+  }
+  // 取前 8 个，按 raw 顺序
+  const html = sessions.slice(0, 8).map(s => {
+    const title = s.title || s.raw || s.id
+    const short = escapeHtml(title.substring(0, 30))
+    return `<div class="session-item" data-id="${escapeHtml(s.id)}" title="${escapeHtml(title)}">
+      <div class="session-dot"></div>
+      <div class="session-info">
+        <div class="session-name">${short}</div>
+        <div class="session-id">${escapeHtml(s.id.substring(0, 12))}…</div>
+      </div>
+    </div>`
+  }).join('')
+  list.innerHTML = html
+  // 点击 session（占位：复制 id）
+  list.querySelectorAll('.session-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-id')
+      navigator.clipboard?.writeText(id).catch(() => {})
+    })
+  })
+}
+
+async function refreshSessions() {
+  const btn = document.getElementById('btn-refresh-sessions')
+  if (btn) { btn.disabled = true; btn.classList.add('loading') }
+  try {
+    // 双通道：先 mavis CLI（独立、快），再 mcode /sessions（兜底）
+    const r = await fetch('/api/sessions' + TOKEN_QUERY, { method: 'GET', headers: HEADERS })
+    if (r.ok) {
+      const data = await r.json()
+      if (data.ok && data.sessions && data.sessions.length > 0) {
+        state = state || {}
+        state.sessions = data.sessions
+        render()
         return
       }
-      if (!res.ok) {
-        const t = await res.text()
-        setStatus('http ' + res.status + ': ' + t, 'err')
-        inFlight = false
-        sendBtn.disabled = false
-        return
-      }
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        let sep
-        while ((sep = buf.indexOf('\n\n')) !== -1) {
-          const block = buf.slice(0, sep)
-          buf = buf.slice(sep + 2)
-          handleSSE(block)
-        }
-      }
-      inFlight = false
-      sendBtn.disabled = false
-      promptEl.focus()
     }
+  } catch {}
+  // fallback: 触发 mcode /sessions
+  try {
+    await fetch('/api/sessions' + TOKEN_QUERY, { method: 'POST', headers: HEADERS })
+  } catch {}
+  finally {
+    if (btn) { btn.disabled = false; btn.classList.remove('loading') }
+  }
+}
 
-    function handleSSE(block) {
-      let event = 'message'
-      let data = ''
-      for (const line of block.split('\n')) {
-        if (line.startsWith('event:')) event = line.slice(6).trim()
-        else if (line.startsWith('data:')) data += line.slice(5).trim()
+function renderUserFooter() {
+  const plan = state?.account?.plan || state?.usage?.plan
+  // plan 缺失时 fallback 到 model name，再不行用 session 标题
+  const modelShort = state?.model?.name ? state.model.name.split('/').pop() : null
+  const fallback = modelShort || state?.sessionTitle || t('user_default')
+  const name = plan ? plan.split(/\s+/)[0] : fallback
+  const avatar = (name[0] || 'M').toUpperCase()
+  document.getElementById('user-avatar').textContent = avatar
+  document.getElementById('user-name').textContent = name
+  // plan 行：plan 有就显示完整 plan 名，否则显示 model name 或 "Mcode Web"
+  const planLine = plan || modelShort || t('user_loading')
+  document.getElementById('user-plan').textContent = planLine
+}
+
+function renderChat() {
+  const inner = document.getElementById('chat-inner')
+  const empty = document.getElementById('chat-empty')
+  let lines = state?.chat || []
+  // 过滤掉 mcode TUI 的 placeholder / 空 prompt 标记（shim 偶尔会误抓）
+  lines = lines.filter(l => {
+    if (!l) return false
+    const t = l.trim()
+    if (!t) return false
+    if (/^Message\s*·\s*Enter\s*send/i.test(t)) return false
+    if (/Shift\+Enter\s*newline/i.test(t)) return false
+    if (/^Start\s*[·•]/i.test(t)) return false
+    if (/^autocomplete\s*[·•]/i.test(t)) return false
+    if (/^@ file\s*[·•]/i.test(t)) return false
+    if (/^Ready$/i.test(t)) return false
+    // 空 prompt 标记：只有 › / ● / ○ / > 但没内容
+    if (/^[›>●•○◯]\s*$/.test(t)) return false
+    return true
+  })
+  if (lines.length === 0) {
+    empty.style.display = ''
+    return
+  }
+  empty.style.display = 'none'
+
+  // Parse chat lines into messages
+  const messages = parseChatLines(lines)
+  inner.innerHTML = messages.map(renderMessage).join('')
+  // scroll to bottom
+  const scroll = document.getElementById('chat-scroll')
+  scroll.scrollTop = scroll.scrollHeight
+}
+
+function parseChatLines(lines) {
+  // › user / ● assistant / ○ system / ◎ Goal / ✓ / ○ todo
+  const messages = []
+  let current = null
+  let currentType = null
+
+  for (const line of lines) {
+    if (!line) continue
+    if (/^[›>]\s+/.test(line)) {
+      if (current) messages.push(current)
+      current = { role: 'user', text: line.replace(/^[›>]\s+/, '') }
+      currentType = 'user'
+    } else if (/^[●•]\s+/.test(line)) {
+      if (current) messages.push(current)
+      current = { role: 'assistant', text: line.replace(/^[●•]\s+/, '') }
+      currentType = 'assistant'
+    } else if (/^[○◯]\s+/.test(line)) {
+      if (current) messages.push(current)
+      current = { role: 'system', text: line.replace(/^[○◯]\s+/, '') }
+      currentType = 'system'
+    } else if (/^[\u25ce]\s*Goal/.test(line)) {
+      // 块级 Goal 信息
+      if (current) messages.push(current)
+      current = { role: 'goal', text: line, items: [] }
+      currentType = 'goal'
+    } else if (/^[✓✔]\s+/.test(line) || /^[○◌◯]\s+/.test(line) || /^[✗✘×]\s+/.test(line)) {
+      // todo item
+      if (currentType !== 'todo' || !current) {
+        if (current) messages.push(current)
+        current = { role: 'todo', text: '', items: [] }
+        currentType = 'todo'
       }
-      if (!data) return
-      let parsed
-      try { parsed = JSON.parse(data) } catch { return }
-      if (event === 'start') {
-        setStatus('running…', 'running')
-      } else if (event === 'stream') {
-        handleStreamMsg(parsed)
-      } else if (event === 'done') {
-        if (parsed.usage && totalUsage.requests === 0) {
-          totalUsage.in += Number(parsed.usage.inputTokens) || 0
-          totalUsage.out += Number(parsed.usage.outputTokens) || 0
-          totalUsage.cache += Number(parsed.usage.cacheReadTokens) || 0
-          totalUsage.requests += 1
-          if (parsed.usage.requestDurationMs) lastDurationMs = parsed.usage.requestDurationMs
-          renderUsage()
-        } else if (typeof parsed.durationMs === 'number' && !lastDurationMs) {
-          lastDurationMs = parsed.durationMs
-          renderUsage()
-        }
-        if (parsed.code === 0) setStatus('done', 'ok')
-        else setStatus('exit ' + parsed.code, parsed.code === 0 ? 'ok' : 'err')
-      } else if (event === 'stderr') {
-        console.warn('stderr:', parsed.chunk)
-      } else if (event === 'error') {
-        setStatus('error: ' + parsed.message, 'err')
-      } else if (event === 'stdout') {
-        console.log('raw stdout:', parsed.line)
+      const m = line.match(/^([✓✔○◌◯✗✘×])\s+(.+)$/)
+      if (m) {
+        const status = m[1] === '✓' || m[1] === '✔' ? 'done' : m[1] === '✗' || m[1] === '✘' || m[1] === '×' ? 'failed' : 'pending'
+        current.items.push({ status, text: m[2] })
       }
+    } else if (current) {
+      current.text += (current.text ? '\n' : '') + line
     }
+  }
+  if (current) messages.push(current)
+  return messages
+}
 
-    // ============================================================
-    // Event bindings
-    // ============================================================
-    sendBtn.addEventListener('click', send)
-    promptEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+function renderMessage(msg) {
+  if (msg.role === 'goal') {
+    return `<div class="goal-block">
+      <div class="goal-block-label">◎ ${t('section_goal')}</div>
+      <div class="goal-block-text">${escapeHtml(msg.text)}</div>
+    </div>`
+  }
+  if (msg.role === 'todo') {
+    return `<div class="todo-block">
+      ${msg.items.map(i => `<div class="todo-item ${i.status}">
+        <span class="todo-marker">${i.status === 'done' ? '✓' : i.status === 'failed' ? '✗' : '○'}</span>
+        <span class="todo-text">${escapeHtml(i.text)}</span>
+      </div>`).join('')}
+    </div>`
+  }
+  const avatar = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'AI' : 'i'
+  const role = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Mcode' : 'System'
+  return `<div class="msg ${msg.role}">
+    <div class="msg-avatar">${avatar}</div>
+    <div class="msg-content">
+      <div class="msg-role">${role}</div>
+      <div class="msg-body">${parseMarkdown(msg.text)}</div>
+    </div>
+  </div>`
+}
+
+// ============================================================
+// Markdown (minimal inline parser)
+// ============================================================
+function parseMarkdown(text) {
+  if (!text) return ''
+  // Escape HTML first
+  let html = escapeHtml(text)
+  // Code blocks ```...```
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => `<pre><code class="lang-${lang}">${code}</code></pre>`)
+  // Inline code `...`
+  html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>')
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  // Bold **...**
+  html = html.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+  // Italic *...* (avoid conflict with bold)
+  html = html.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<i>$1</i>')
+  // Links [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+  // Blockquote
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+  // HR
+  html = html.replace(/^---+$/gm, '<hr>')
+  // Unordered list
+  html = html.replace(/^[*\-+] (.+)$/gm, '<li>$1</li>')
+  html = html.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>')
+  // Ordered list
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+  // Tables (simple)
+  // Paragraphs (split by blank lines)
+  const blocks = html.split(/\n{2,}/)
+  html = blocks.map(b => {
+    if (/^<(h[1-6]|ul|ol|pre|blockquote|hr)/.test(b.trim())) return b
+    if (b.includes('<li>') && !b.includes('<ul>')) return '<ul>' + b + '</ul>'
+    return '<p>' + b.replace(/\n/g, '<br>') + '</p>'
+  }).join('\n')
+  return html
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+
+function formatNumber(n) {
+  if (n == null) return '—'
+  if (n < 1000) return String(Math.round(n))
+  if (n < 1000000) return (n / 1000).toFixed(1) + 'k'
+  return (n / 1000000).toFixed(2) + 'M'
+}
+
+// ============================================================
+// Slash command overlay
+// ============================================================
+const slashOverlay = document.getElementById('slash-overlay')
+const slashInput = document.getElementById('slash-input')
+const slashResults = document.getElementById('slash-results')
+
+function showSlash() {
+  slashOpen = true
+  slashOverlay.hidden = false
+  slashInput.value = slashQuery
+  filterSlash()
+  setTimeout(() => slashInput.focus(), 0)
+}
+function hideSlash() {
+  slashOpen = false
+  slashOverlay.hidden = true
+  slashQuery = ''
+  slashActiveIdx = 0
+}
+function filterSlash() {
+  const q = slashQuery.toLowerCase()
+  const cmds = SLASH_COMMANDS.filter(c => {
+    if (!q) return true
+    return c.cmd.toLowerCase().includes(q) || c.zh.includes(q) || c.en.toLowerCase().includes(q)
+  })
+  const skills = SLASH_SKILLS.filter(s => {
+    if (!q) return true
+    return s.name.toLowerCase().includes(q) || s.zh.includes(q) || s.en.toLowerCase().includes(q)
+  })
+  slashFiltered = [...cmds, ...skills]  // 合并，但渲染时分 section
+  slashActiveIdx = 0
+  if (cmds.length === 0 && skills.length === 0) {
+    slashResults.innerHTML = `<div class="slash-item empty">${t('slash_no_results')}</div>`
+  } else {
+    let html = ''
+    let idx = 0
+    if (cmds.length > 0) {
+      html += `<div class="slash-section-label">${t('slash_section_cmd')}</div>`
+      html += cmds.map((c, i) => {
+        const active = i === 0 ? 'active' : ''
+        idx++
+        return `<div class="slash-item ${active}" data-idx="${i}" data-cmd="${c.cmd}" data-kind="cmd">
+          <span class="slash-item-cmd">${escapeHtml(c.cmd)}</span>
+          <span class="slash-item-desc">${escapeHtml(currentLang === 'zh' ? c.zh : c.en)}</span>
+        </div>`
+      }).join('')
+    }
+    if (skills.length > 0) {
+      html += `<div class="slash-section-label">${t('slash_section_skill')}</div>`
+      html += skills.map((s, i) => {
+        const active = (cmds.length === 0 && i === 0) ? 'active' : ''
+        const idxGlobal = cmds.length + i
+        return `<div class="slash-item slash-skill ${active}" data-idx="${idxGlobal}" data-cmd="/skill ${s.name}" data-kind="skill">
+          <span class="slash-item-cmd">${escapeHtml(s.name)}</span>
+          <span class="slash-item-desc">${escapeHtml(currentLang === 'zh' ? s.zh : s.en)}</span>
+        </div>`
+      }).join('')
+    }
+    slashResults.innerHTML = html
+  }
+}
+
+// ============================================================
+// Mode popover
+// ============================================================
+const modePopover = document.getElementById('mode-popover')
+function toggleMode() {
+  modeOpen = !modeOpen
+  modePopover.hidden = !modeOpen
+}
+function hideMode() { modeOpen = false; modePopover.hidden = true }
+async function setMode(mode) {
+  hideMode()
+  try {
+    await fetch('/api/permissions' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ mode })
+    })
+  } catch (e) { console.error(e) }
+}
+
+// ============================================================
+// Settings menu
+// ============================================================
+const settingsMenu = document.getElementById('settings-menu')
+function toggleSettings() {
+  settingsOpen = !settingsOpen
+  settingsMenu.hidden = !settingsOpen
+}
+function hideSettings() { settingsOpen = false; settingsMenu.hidden = true }
+
+// ============================================================
+// Quota card
+// ============================================================
+const quotaCard = document.getElementById('quota-card')
+const quotaExpand = document.getElementById('quota-expand')
+const quotaContent = document.getElementById('quota-content')
+
+async function toggleQuota() {
+  quotaExpanded = !quotaExpanded
+  quotaCard.classList.toggle('expanded', quotaExpanded)
+  quotaExpand.hidden = !quotaExpanded
+  if (quotaExpanded) {
+    renderQuota()
+    // 触发 /usage 命令拉数据
+    try { await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
+  }
+}
+function hideQuota() { quotaExpanded = false; quotaCard.classList.remove('expanded'); quotaExpand.hidden = true }
+function renderQuota() {
+  const u = state?.usage
+  if (!u || !u.fetchedAt || (Date.now() - u.fetchedAt > 60000)) {
+    quotaContent.innerHTML = `<div class="quota-expand-loading">${t('usage_loading')}</div>`
+    return
+  }
+  const weeklyPercent = (100 - (u.weekly === 'Unlimited' ? 0 : 0))
+  const weekly = `
+    <div class="quota-item">
+      <div class="quota-item-header">
+        <span class="quota-item-title">${currentLang === 'zh' ? '每周限额' : 'Weekly limit'}</span>
+        <span class="quota-item-percent">${u.weekly === 'Unlimited' ? '∞' : '2%'}</span>
+      </div>
+      <div class="quota-bar"><div class="quota-bar-fill" style="width:${u.weekly === 'Unlimited' ? 0 : 2}%"></div></div>
+      <div class="quota-item-reset">${currentLang === 'zh' ? '6 天 15 小时 46 分钟后重置' : 'Resets in 6d 15h 46m'}</div>
+    </div>
+  `
+  const fiveHour = `
+    <div class="quota-item">
+      <div class="quota-item-header">
+        <span class="quota-item-title">${currentLang === 'zh' ? '5 小时限额' : '5-hour limit'}</span>
+        <span class="quota-item-percent">${u.fiveHourPercent ?? 3}%</span>
+      </div>
+      <div class="quota-bar"><div class="quota-bar-fill ${(u.fiveHourPercent ?? 3) > 80 ? 'danger' : (u.fiveHourPercent ?? 3) > 50 ? 'high' : ''}" style="width:${u.fiveHourPercent ?? 3}%"></div></div>
+      <div class="quota-item-reset">${u.fiveHourReset ? `${currentLang === 'zh' ? '重置' : 'Resets in'} ${u.fiveHourReset}` : ''}</div>
+    </div>
+  `
+  const plan = u.plan ? `<div class="quota-usage-summary"><b>${escapeHtml(u.plan)}</b></div>` : ''
+  const expires = u.expires ? `<div class="quota-usage-summary">${currentLang === 'zh' ? '到期' : 'Expires'}: ${escapeHtml(u.expires)}</div>` : ''
+  const credits = u.credits ? `<div class="quota-usage-summary">${currentLang === 'zh' ? '余额' : 'Credits'}: ${escapeHtml(u.credits)}</div>` : ''
+  quotaContent.innerHTML = plan + expires + credits + weekly + fiveHour
+}
+
+// ============================================================
+// File upload
+// ============================================================
+const fileInput = document.getElementById('file-input')
+const attachmentList = document.getElementById('attachment-list')
+
+async function uploadFiles(files) {
+  for (const file of files) {
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await fetch('/api/upload' + TOKEN_QUERY, { method: 'POST', body: fd, headers: HEADERS })
+      if (!r.ok) { alert(`Upload failed: ${r.status}`); continue }
+      const data = await r.json()
+      if (data.ok) {
+        attachedFiles.push(data.path)
+        renderAttachments()
+      }
+    } catch (e) { console.error('upload', e); alert(`Upload error: ${e.message}`) }
+  }
+}
+
+function renderAttachments() {
+  if (attachedFiles.length === 0) {
+    attachmentList.innerHTML = ''
+    return
+  }
+  attachmentList.innerHTML = attachedFiles.map((p, i) => {
+    const name = p.split(/[\\\/]/).pop()
+    return `<div class="attachment-chip">
+      <span>📎 ${escapeHtml(name)}</span>
+      <span class="remove" data-idx="${i}">×</span>
+    </div>`
+  }).join('')
+}
+
+function removeAttachment(idx) {
+  attachedFiles.splice(idx, 1)
+  renderAttachments()
+}
+
+// ============================================================
+// Send command
+// ============================================================
+async function send() {
+  const textarea = document.getElementById('input-textarea')
+  const text = textarea.value.trim()
+  if (!text && attachedFiles.length === 0) return
+  if (isSending) return
+  isSending = true
+  const btn = document.getElementById('btn-send')
+  btn.disabled = true
+  try {
+    // v0.4.2: 用 mavis comm send 真正发消息到 mcode session（替代 M11 stdin 注入）
+    // 附件先注入 @file 前缀（如果 mcode 端能处理）
+    let content = text
+    if (attachedFiles.length > 0) {
+      const atPaths = attachedFiles.map(p => `@${p}`).join(' ')
+      content = `${atPaths} ${content}`.trim()
+    }
+    const r = await fetch('/api/send' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ content, command: 'prompt' })
+    })
+    if (!r.ok) { alert(`Send failed: ${r.status}`); return }
+    const data = await r.json()
+    if (!data.ok) { alert(`Send error: ${data.error || 'unknown'}`); return }
+    // 清空
+    textarea.value = ''
+    attachedFiles = []
+    renderAttachments()
+    autoResize()
+  } catch (e) { console.error('send', e); alert(`Send error: ${e.message}`) }
+  finally { isSending = false; btn.disabled = false }
+}
+
+function autoResize() {
+  const ta = document.getElementById('input-textarea')
+  ta.style.height = 'auto'
+  ta.style.height = Math.min(200, ta.scrollHeight) + 'px'
+}
+
+// ============================================================
+// Init
+// ============================================================
+function init() {
+  applyTheme()
+  applyI18n()
+  connect()
+  attachEvents()
+  // Fetch initial state
+  fetch('/api/state' + TOKEN_QUERY, { headers: HEADERS })
+    .then(r => r.json())
+    .then(s => { state = s; render() })
+    .catch(e => console.error('initial state', e))
+  // v0.4.1: 启动后自动拉一次 sessions 列表（mavis CLI 路径，不走 mcode）
+  // 注意：不自动触发 /status / /usage（避免干扰用户），用户点 Usage 按钮才触发
+  setTimeout(refreshSessions, 1500)
+}
+
+function attachEvents() {
+  // Input textarea
+  const textarea = document.getElementById('input-textarea')
+  textarea.addEventListener('input', () => {
+    autoResize()
+    // Slash command detection
+    const v = textarea.value
+    if (v === '/' || v.startsWith('/')) {
+      slashQuery = v.slice(1)
+      if (!slashOpen) showSlash()
+      else filterSlash()
+    } else if (slashOpen) {
+      hideSlash()
+    }
+  })
+  textarea.addEventListener('keydown', (e) => {
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); moveSlash(1) }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); moveSlash(-1) }
+      else if (e.key === 'Enter') { e.preventDefault(); selectSlash() }
+      else if (e.key === 'Escape') { e.preventDefault(); hideSlash() }
+    } else {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+    }
+  })
+  textarea.addEventListener('paste', async (e) => {
+    // Paste any file from clipboard (image, video, document)
+    // 终端页面只能 ctrl+v 粘贴，所以这里要处理所有附件
+    if (e.clipboardData?.files?.length > 0) {
+      const files = Array.from(e.clipboardData.files)
+      if (files.length > 0) {
         e.preventDefault()
-        send()
+        await uploadFiles(files)
+      }
+    }
+  })
+
+  // Send button
+  document.getElementById('btn-send').addEventListener('click', send)
+
+  // Refresh sessions button
+  document.getElementById('btn-refresh-sessions')?.addEventListener('click', refreshSessions)
+
+  // Attach
+  document.getElementById('btn-attach').addEventListener('click', () => fileInput.click())
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files?.length > 0) {
+      uploadFiles(e.target.files)
+      e.target.value = ''
+    }
+  })
+  attachmentList.addEventListener('click', (e) => {
+    if (e.target.classList.contains('remove')) {
+      removeAttachment(parseInt(e.target.getAttribute('data-idx'), 10))
+    }
+  })
+
+  // Mode
+  document.getElementById('btn-mode').addEventListener('click', (e) => {
+    e.stopPropagation()
+    toggleMode()
+  })
+  modePopover.addEventListener('click', (e) => {
+    const item = e.target.closest('.mode-popover-item')
+    if (item) setMode(item.getAttribute('data-mode'))
+  })
+
+  // Settings
+  // v0.4.0: btn-settings 已移除（外观/语言/局域网在主栏已暴露）
+  // document.getElementById('btn-settings').addEventListener('click', (e) => {
+  //   e.stopPropagation()
+  //   toggleSettings()
+  // })
+  document.getElementById('menu-toggle-theme').addEventListener('click', () => { toggleTheme(); hideSettings() })
+  document.getElementById('menu-toggle-lang').addEventListener('click', () => { toggleLang(); hideSettings() })
+  document.getElementById('menu-network').addEventListener('click', () => {
+    fetch('/api/network' + TOKEN_QUERY, { headers: HEADERS })
+      .then(r => r.json())
+      .then(info => {
+        const msg = `本机: ${info.localhost}\n` +
+          (info.ips || []).map(ip => `局域网: http://${ip}:${info.port}/${info.token_required ? '?token=...' : ''}`).join('\n') +
+          (info.token_required ? '\n\n⚠️ 局域网访问需带 token' : '\n\n✅ 局域网访问无需 token（仅本机受信）')
+        alert(msg)
+      })
+    hideSettings()
+  })
+
+  // Appearance / Language buttons
+  document.getElementById('btn-appearance').addEventListener('click', () => { toggleTheme() })
+  document.getElementById('btn-language').addEventListener('click', () => { toggleLang() })
+
+  // Quota
+  document.getElementById('quota-toggle').addEventListener('click', (e) => {
+    e.stopPropagation()
+    toggleQuota()
+  })
+
+  // New chat
+  document.getElementById('btn-new-chat').addEventListener('click', async () => {
+    try {
+      await fetch('/api/cmd' + TOKEN_QUERY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ cmd: '/new' })
+      })
+    } catch (e) { console.error(e) }
+  })
+
+  // Mobile toggles
+  document.getElementById('btn-toggle-left').addEventListener('click', () => {
+    leftOpen = !leftOpen
+    document.getElementById('left-panel').classList.toggle('open', leftOpen)
+    document.getElementById('drawer-backdrop').classList.toggle('show', leftOpen || rightOpen)
+  })
+  document.getElementById('btn-toggle-right').addEventListener('click', () => {
+    rightOpen = !rightOpen
+    document.getElementById('right-panel').classList.toggle('open', rightOpen)
+    document.getElementById('drawer-backdrop').classList.toggle('show', leftOpen || rightOpen)
+  })
+  document.getElementById('drawer-backdrop').addEventListener('click', () => {
+    leftOpen = false; rightOpen = false
+    document.getElementById('left-panel').classList.remove('open')
+    document.getElementById('right-panel').classList.remove('open')
+    document.getElementById('drawer-backdrop').classList.remove('show')
+  })
+
+  // Chat hints
+  document.querySelectorAll('.chat-hint').forEach(h => {
+    h.addEventListener('click', () => {
+      const cmd = h.getAttribute('data-cmd')
+      fetch('/api/cmd' + TOKEN_QUERY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...HEADERS },
+        body: JSON.stringify({ cmd })
+      })
+    })
+  })
+
+  // Drop zone
+  const chatArea = document.getElementById('chat-area')
+  const dropOverlay = document.getElementById('dropzone-overlay')
+  ;['dragenter', 'dragover'].forEach(ev => {
+    chatArea.addEventListener(ev, (e) => {
+      e.preventDefault()
+      dropOverlay.classList.add('show')
+    })
+  })
+  ;['dragleave', 'drop'].forEach(ev => {
+    chatArea.addEventListener(ev, (e) => {
+      e.preventDefault()
+      if (ev === 'dragleave' && e.relatedTarget) return
+      dropOverlay.classList.remove('show')
+    })
+  })
+  chatArea.addEventListener('drop', async (e) => {
+    e.preventDefault()
+    if (e.dataTransfer?.files?.length > 0) {
+      await uploadFiles(e.dataTransfer.files)
+    }
+  })
+
+  // Slash overlay click
+  slashResults.addEventListener('click', (e) => {
+    const item = e.target.closest('.slash-item')
+    if (item?.getAttribute('data-cmd')) {
+      const cmd = item.getAttribute('data-cmd')
+      slashQuery = cmd
+      selectSlash()
+    }
+  })
+  slashInput.addEventListener('input', (e) => {
+    slashQuery = e.target.value
+    filterSlash()
+  })
+  slashInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveSlash(1) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveSlash(-1) }
+    else if (e.key === 'Enter') { e.preventDefault(); selectSlash() }
+    else if (e.key === 'Escape') { e.preventDefault(); hideSlash(); textarea.focus() }
+    else if (e.key === 'Tab') { e.preventDefault(); selectSlash() }
+  })
+
+  // Document click to close popovers
+  document.addEventListener('click', (e) => {
+    if (modeOpen && !modePopover.contains(e.target) && e.target.id !== 'btn-mode' && !document.getElementById('btn-mode').contains(e.target)) {
+      hideMode()
+    }
+    if (settingsOpen && !settingsMenu.contains(e.target)) {
+      const bs = document.getElementById('btn-settings')
+      if (!bs || (e.target.id !== 'btn-settings' && !bs.contains(e.target))) hideSettings()
+    }
+    // 套餐用量点击外部关闭
+    if (quotaExpanded && !quotaExpand.contains(e.target) && !document.getElementById('quota-toggle').contains(e.target)) {
+      hideQuota()
+    }
+  })
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Modal shortcuts 优先
+    if (askOpen) {
+      const a = state?.ask
+      const cur = a?.questions?.[a?.currentIdx]
+      if (cur) {
+        if (e.key >= '1' && e.key <= '9') {
+          const idx = parseInt(e.key, 10) - 1
+          if (idx < cur.options.length) {
+            e.preventDefault()
+            if (cur.options[idx].isOther) {
+              const input = document.getElementById('ask-other-input')
+              if (input) { input.hidden = false; input.focus() }
+            } else {
+              sendAskAnswer(idx, null)
+            }
+            return
+          }
+        } else if (e.key === 'Tab' || e.key === 'ArrowRight') {
+          e.preventDefault()
+          // 切到下一题（如果 mcode 支持）
+          // 大多数 mcode Ask 是单题一次性，tab 切题不实际发送任何
+          // 这里留给用户鼠标切换
+          return
+        } else if (e.key === 'Enter') {
+          e.preventDefault()
+          const idx = askSelectedIdx
+          if (cur.options[idx]?.isOther) {
+            const input = document.getElementById('ask-other-input')
+            if (input && !input.hidden) { sendAskAnswer(idx, input.value.trim()); return }
+          }
+          if (cur.options[idx]) sendAskAnswer(idx, null)
+          return
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          askSelectedIdx = (askSelectedIdx + (e.key === 'ArrowDown' ? 1 : -1) + cur.options.length) % cur.options.length
+          renderAsk()
+          return
+        }
+      }
+    }
+    if (planOpen) {
+      if (e.key >= '1' && e.key <= '3') {
+        e.preventDefault()
+        const actions = ['agree', 'skip', 'add']
+        const action = actions[parseInt(e.key, 10) - 1]
+        if (action === 'add') {
+          const ta = document.getElementById('plan-add-context')
+          ta.hidden = !ta.hidden
+          if (!ta.hidden) ta.focus()
+        }
+        sendPlanAnswer(action)
+        return
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        sendPlanAnswer('agree')
+        return
+      }
+    }
+    if (planModeOpen) {
+      if (e.key === '1' || e.key === 'Enter') { e.preventDefault(); sendPlanModeAnswer('continue'); return }
+      else if (e.key === '2' || e.key === 'Escape') { e.preventDefault(); sendPlanModeAnswer('deny'); return }
+    }
+    if (permOpen) {
+      const map = { '1': 'ask', '2': 'auto', '3': 'full' }
+      if (map[e.key]) { e.preventDefault(); sendPermAnswer(map[e.key]); return }
+    }
+    // Esc 关所有浮层
+    if (e.key === 'Escape') {
+      if (slashOpen) hideSlash()
+      else if (modeOpen) hideMode()
+      else if (settingsOpen) hideSettings()
+      else if (quotaExpanded) hideQuota()
+    }
+    // Ctrl+K / Cmd+K 聚焦输入
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault()
+      textarea.focus()
+    }
+  })
+}
+
+function moveSlash(delta) {
+  if (slashFiltered.length === 0) return
+  slashActiveIdx = (slashActiveIdx + delta + slashFiltered.length) % slashFiltered.length
+  slashResults.querySelectorAll('.slash-item').forEach((el, i) => {
+    el.classList.toggle('active', i === slashActiveIdx)
+    if (i === slashActiveIdx) el.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+function selectSlash() {
+  if (slashFiltered.length === 0) return
+  const cmd = slashFiltered[slashActiveIdx].cmd
+  const textarea = document.getElementById('input-textarea')
+  textarea.value = cmd
+  textarea.focus()
+  hideSlash()
+}
+
+function toggleLang() {
+  currentLang = currentLang === 'zh' ? 'en' : 'zh'
+  localStorage.setItem('webui-lang', currentLang)
+  applyI18n()
+  render()
+}
+
+// ============================================================
+// Ask Modal (v0.4.0)
+// ============================================================
+function showAsk() {
+  if (!state?.ask?.active) return
+  askOpen = true
+  document.getElementById('ask-modal').classList.add('show')
+  renderAsk()
+}
+function hideAsk() {
+  askOpen = false
+  document.getElementById('ask-modal').classList.remove('show')
+}
+function renderAsk() {
+  const a = state?.ask
+  if (!a || !a.active) { hideAsk(); return }
+  const total = a.total || (a.questions?.length || 0)
+  const answered = a.answered ?? (a.currentIdx || 0)
+  document.getElementById('ask-counter').textContent = `${answered}/${total} answered`
+  // tabs
+  const tabsEl = document.getElementById('ask-tabs')
+  tabsEl.innerHTML = ''
+  const qLen = a.questions?.length || 0
+  for (let i = 0; i < Math.max(total, qLen); i++) {
+    const q = a.questions?.[i]
+    const title = q?.title || `题目 ${i + 1}`
+    const isActive = i === a.currentIdx
+    const isDone = i < (a.answered || 0)
+    const tab = document.createElement('div')
+    tab.className = 'ask-tab' + (isActive ? ' active' : '') + (isDone ? ' done' : '')
+    tab.textContent = title
+    tabsEl.appendChild(tab)
+  }
+  // question + options
+  const cur = a.questions?.[a.currentIdx]
+  document.getElementById('ask-question').textContent = cur?.title || '—'
+  const optsEl = document.getElementById('ask-options')
+  if (cur?.options?.length > 0) {
+    optsEl.innerHTML = cur.options.map((o, i) => `
+      <button class="ask-option ${i === askSelectedIdx ? 'selected' : ''}" data-opt="${i}">
+        <span class="ask-option-num">${i + 1}</span>
+        <span class="ask-option-text">
+          <span class="ask-option-label">${escapeHtml(o.label)}${o.isOther ? '…' : ''}</span>
+          ${o.desc ? `<span class="ask-option-desc">${escapeHtml(o.desc)}</span>` : ''}
+        </span>
+      </button>
+    `).join('')
+  } else {
+    optsEl.innerHTML = '<div class="ask-sending"><div class="ask-sending-spinner"></div> 等待 mcode 解析选项...</div>'
+  }
+  // attach option click handlers
+  optsEl.querySelectorAll('.ask-option').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.getAttribute('data-opt'), 10)
+      askSelectedIdx = idx
+      if (cur.options[idx].isOther) {
+        // 显示输入框
+        let input = document.getElementById('ask-other-input')
+        if (!input) {
+          input = document.createElement('input')
+          input.className = 'ask-other-input'
+          input.id = 'ask-other-input'
+          input.placeholder = '输入自定义答案...'
+          optsEl.appendChild(input)
+        }
+        input.hidden = false
+        input.value = ''
+        input.focus()
+        input.onkeydown = (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            sendAskAnswer(idx, input.value.trim())
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            input.hidden = true
+          }
+        }
+      } else {
+        sendAskAnswer(idx, null)
       }
     })
-    promptEl.addEventListener('input', autoResize)
-    document.getElementById('emptyHints').addEventListener('click', (e) => {
-      const hint = e.target.closest('.chat-empty-hint')
-      if (!hint) return
-      promptEl.value = hint.dataset.prompt
-      autoResize()
-      promptEl.focus()
+  })
+}
+async function sendAskAnswer(optIdx, customText) {
+  if (askSending) return
+  askSending = true
+  const isOther = customText != null
+  try {
+    await fetch('/api/answer' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ type: 'ask', option: isOther ? 'other' : (optIdx + 1), text: customText || '' })
     })
+    // 显示发送状态
+    const optsEl = document.getElementById('ask-options')
+    optsEl.innerHTML = `<div class="ask-sending"><div class="ask-sending-spinner"></div> 已发送，等待下一题...</div>`
+    askSelectedIdx = 0
+  } catch (e) {
+    console.error('ask answer', e)
+  } finally {
+    askSending = false
+  }
+}
 
-    // ============================================================
-    // Initial fetch: health → model + version
-    // ============================================================
-    fetch('/api/health')
-      .then((r) => r.json())
-      .then((j) => {
-        if (j.defaultModel) modelDisplay.textContent = 'model: ' + j.defaultModel
-        if (j.mcodeVersion) versionTag.textContent = 'v' + j.mcodeVersion
-      })
-      .catch(() => {
-        modelDisplay.textContent = 'model: (server unreachable)'
-      })
-    promptEl.focus()
-    renderUsage()
-  </script>
+// ============================================================
+// Plan Review Modal (v0.4.0)
+// ============================================================
+function showPlan() {
+  if (!state?.plan?.active) return
+  planOpen = true
+  document.getElementById('plan-modal').classList.add('show')
+  renderPlan()
+}
+function hidePlan() {
+  planOpen = false
+  document.getElementById('plan-modal').classList.remove('show')
+}
+function renderPlan() {
+  const p = state?.plan
+  if (!p || !p.active) { hidePlan(); return }
+  document.getElementById('plan-title').textContent = p.title || 'Plan'
+  const summaryEl = document.getElementById('plan-summary')
+  if (p.summary) {
+    summaryEl.textContent = p.summary
+    summaryEl.classList.remove('plan-summary-empty')
+  } else {
+    summaryEl.innerHTML = '<div class="plan-summary-empty">没有 Summary</div>'
+  }
+  document.getElementById('plan-frozen').textContent = p.totalLines > 0
+    ? `Frozen · Lines 1-${Math.min(p.totalLines, 9999)} of ${p.totalLines}`
+    : 'Frozen Runtime snapshot'
+  const optsEl = document.getElementById('plan-options')
+  const labels = (p.options && p.options.length > 0)
+    ? p.options.map(o => o.label)
+    : ['Agree and start implementation', 'Skip for now', 'Add context to revise']
+  optsEl.innerHTML = labels.map((label, i) => {
+    const primary = i === 0 ? ' primary' : ''
+    return `<button class="plan-option${primary}" data-action="${['agree', 'skip', 'add'][i] || 'agree'}">
+      <span class="plan-option-num">${i + 1}</span>
+      <span class="plan-option-label">${escapeHtml(label)}</span>
+    </button>`
+  }).join('')
+  optsEl.querySelectorAll('.plan-option').forEach(el => {
+    el.addEventListener('click', () => {
+      const action = el.getAttribute('data-action')
+      if (action === 'add') {
+        const ta = document.getElementById('plan-add-context')
+        ta.hidden = !ta.hidden
+        if (!ta.hidden) ta.focus()
+      }
+      sendPlanAnswer(action)
+    })
+  })
+}
+async function sendPlanAnswer(action) {
+  if (planSending) return
+  planSending = true
+  try {
+    const ta = document.getElementById('plan-add-context')
+    const extra = (action === 'add' && ta?.value) ? `\n${ta.value}` : ''
+    await fetch('/api/answer' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ type: 'plan', option: action })
+    })
+    hidePlan()
+  } catch (e) {
+    console.error('plan answer', e)
+  } finally {
+    planSending = false
+  }
+}
+
+// ============================================================
+// EnterPlanMode Modal (v0.4.0)
+// ============================================================
+function showPlanMode() {
+  if (!state?.enterPlanMode?.active) return
+  planModeOpen = true
+  document.getElementById('planmode-modal').classList.add('show')
+}
+function hidePlanMode() {
+  planModeOpen = false
+  document.getElementById('planmode-modal').classList.remove('show')
+}
+async function sendPlanModeAnswer(choice) {
+  try {
+    await fetch('/api/answer' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ type: 'planmode', option: choice })
+    })
+    hidePlanMode()
+  } catch (e) { console.error('planmode answer', e) }
+}
+
+// ============================================================
+// Permission Modal (v0.4.0)
+// ============================================================
+function showPerm() {
+  if (!state?.permissionChoice?.active) return
+  permOpen = true
+  document.getElementById('perm-modal').classList.add('show')
+  renderPerm()
+}
+function hidePerm() {
+  permOpen = false
+  document.getElementById('perm-modal').classList.remove('show')
+}
+function renderPerm() {
+  const p = state?.permissionChoice
+  if (!p || !p.active) { hidePerm(); return }
+  document.getElementById('perm-current').textContent = `Current · ${p.current || '—'}`
+}
+async function sendPermAnswer(choice) {
+  try {
+    await fetch('/api/answer' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ type: 'permission', option: choice })
+    })
+    hidePerm()
+  } catch (e) { console.error('perm answer', e) }
+}
+
+// ============================================================
+// 弹窗触发（render 时自动检测）
+// ============================================================
+function checkModals() {
+  // Ask
+  const a = state?.ask
+  if (a?.active) {
+    const key = `a-${a.total}-${a.answered}-${a.currentIdx}-${a.questions?.[a.currentIdx]?.title || ''}`
+    if (key !== lastShownAskKey) { lastShownAskKey = key; showAsk() }
+  } else {
+    lastShownAskKey = null
+    if (askOpen) hideAsk()
+  }
+  // Plan
+  const p = state?.plan
+  if (p?.active) {
+    const key = `p-${p.title}-${p.summaryLines}-${p.totalLines}`
+    if (key !== lastShownPlanKey) { lastShownPlanKey = key; showPlan() }
+  } else {
+    lastShownPlanKey = null
+    if (planOpen) hidePlan()
+  }
+  // EnterPlanMode
+  const pm = state?.enterPlanMode
+  if (pm?.active) {
+    if (lastShownPlanModeKey !== 'on') { lastShownPlanModeKey = 'on'; showPlanMode() }
+  } else {
+    lastShownPlanModeKey = null
+    if (planModeOpen) hidePlanMode()
+  }
+  // Permission
+  const pe = state?.permissionChoice
+  if (pe?.active) {
+    const key = `pe-${pe.current}-${pe.options?.length || 0}`
+    if (key !== lastShownPermKey) { lastShownPermKey = key; showPerm() }
+  } else {
+    lastShownPermKey = null
+    if (permOpen) hidePerm()
+  }
+}
+
+// ============================================================
+// Modal 事件绑定
+// ============================================================
+function attachModalEvents() {
+  // Ask
+  document.getElementById('ask-close').addEventListener('click', () => {
+    // Ask 不允许 Esc 跳过答案 — 但用户可以手动关（等同于 Esc）
+    // 我们发送 Esc 码
+    fetch('/api/answer' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ type: 'ask', option: 'esc' })
+    }).catch(() => {})
+    hideAsk()
+  })
+  document.getElementById('ask-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'ask-modal') hideAsk()  // backdrop click
+  })
+  // Plan
+  document.getElementById('plan-close').addEventListener('click', () => {
+    fetch('/api/answer' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ type: 'plan', option: 'skip' })
+    }).catch(() => {})
+    hidePlan()
+  })
+  document.getElementById('plan-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'plan-modal') hidePlan()
+  })
+  // PlanMode
+  document.getElementById('planmode-close').addEventListener('click', () => sendPlanModeAnswer('deny'))
+  document.getElementById('planmode-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'planmode-modal') sendPlanModeAnswer('deny')
+  })
+  document.querySelectorAll('#planmode-options .choice-option').forEach(el => {
+    el.addEventListener('click', () => sendPlanModeAnswer(el.getAttribute('data-choice')))
+  })
+  // Permission
+  document.getElementById('perm-close').addEventListener('click', () => hidePerm())
+  document.getElementById('perm-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'perm-modal') hidePerm()
+  })
+  document.querySelectorAll('#perm-options .choice-option').forEach(el => {
+    el.addEventListener('click', () => sendPermAnswer(el.getAttribute('data-choice')))
+  })
+  // Esc 关弹窗
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (askOpen) { hideAsk() }
+      else if (planOpen) { hidePlan() }
+      else if (planModeOpen) { hidePlanMode() }
+      else if (permOpen) { hidePerm() }
+    }
+  })
+}
+
+// Start
+init()
+attachModalEvents()
+</script>
 </body>
 </html>

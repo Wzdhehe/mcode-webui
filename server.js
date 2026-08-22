@@ -1,11 +1,18 @@
 // mcode-webui HTTP/SSE server.
 //
-// POST /api/chat   {prompt, workspace?, model?, timeout?, maxSteps?}
-//                  → spawn `mcode exec --output-format stream-json`
-//                  → SSE events: start / stream / stdout / stderr / done
+// Adapts to old webui.html (115KB) endpoints:
+//   POST /api/send           {content, command}            → spawn mcode exec, push chat lines
+//   POST /api/usage                                          → spawn mcode exec /usage, push state update
+//   POST /api/refresh                                        → re-fetch status, push state
+//   POST /api/usage-trigger                                  (alias of /api/usage)
 //
-// GET  /api/health → {ok, port, defaultModel, defaultWorkspace}
-// GET  /           → public/index.html
+//   GET  /api/state                                        → JSON snapshot of full state
+//   GET  /api/events (SSE)                                 → EventSource stream of state updates
+//   GET  /api/sessions    / POST /api/sessions              → SQLite-backed session list
+//   POST /api/upload                                       → save attachment, return @path
+//
+//   GET  /api/health                                       → {ok, port, defaultModel, defaultWorkspace}
+//   GET  /                                                  → public/index.html
 //
 // Run from inside the .minimax-code root so it finds the local mcode.cmd.
 //   cd C:\Users\mjc39\.minimax-code\webui
@@ -13,30 +20,89 @@
 
 import http from 'node:http'
 import { spawn } from 'node:child_process'
-import { readFileSync, existsSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { randomUUID, createHash } from 'node:crypto'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const PORT = Number(process.env.PORT) || 7890
 const HOST = process.env.HOST || '127.0.0.1'
-
-// The webui lives at <mcode-root>/webui/. mcode.cmd is at <mcode-root>/mcode.cmd.
 const MCODE_ROOT = resolve(__dirname, '..')
 const MCODE_CMD = join(MCODE_ROOT, 'mcode.cmd')
-
 const DEFAULT_MODEL = process.env.MCODE_MODEL || 'minimax_api/MiniMax-M3'
 const DEFAULT_WORKSPACE = process.env.MCODE_WORKSPACE || MCODE_ROOT
 const DEFAULT_TIMEOUT = process.env.MCODE_TIMEOUT || '120s'
 const DEFAULT_MAX_STEPS = Number(process.env.MCODE_MAX_STEPS) || 6
 const MAX_CONCURRENT = Number(process.env.MCODE_MAX_CONCURRENT) || 3
+const UPLOAD_DIR = process.env.MCODE_WEBUI_UPLOAD_DIR || join(MCODE_ROOT, '.webui-uploads')
+const SESSIONS_DB = process.env.MCODE_WEBUI_SESSIONS_DB || join(MCODE_ROOT, '.webui-sessions.json')
 
 if (!existsSync(MCODE_CMD)) {
   console.error(`[fatal] mcode.cmd not found at ${MCODE_CMD}`)
-  console.error('        run this server from inside the .minimax-code/webui/ folder')
   process.exit(1)
 }
+mkdirSync(UPLOAD_DIR, { recursive: true })
+
+// ============================================================
+// In-memory state
+// ============================================================
+const state = {
+  version: '0.1.2',
+  workspace: { dir: DEFAULT_WORKSPACE, branch: null, tree: null },
+  model: { name: DEFAULT_MODEL, thinking: 'On', ctx: '512k' },
+  sessionId: null,
+  sessionTitle: 'Untitled',
+  context: {
+    tokens: 0, used: 0, percent: 0, limit: 512000,
+    tps: 0, thinkingStatus: 'Idle', thinkingDuration: null,
+    lastUsageAt: null,
+  },
+  usage: {
+    plan: null, expires: null, credits: null,
+    fiveHourPercent: null, fiveHourReset: null, weekly: null,
+    sessionInput: 0, sessionOutput: 0, sessionTotal: 0,
+    raw: null,
+  },
+  permissions: 'Full access',
+  chat: [],
+  goal: { active: false, text: null, status: null, duration: null },
+  todo: [],
+  ask: { active: false, total: 0, answered: 0, currentIdx: 0, question: '', options: [] },
+  plan: { active: false, title: null, summary: '', options: [] },
+  // running state
+  running: { active: false, prompt: null, pid: null, startedAt: null, model: null, sessionId: null, lastDeltaAt: null, tps: 0 },
+}
+
+// SSE clients
+const sseClients = new Set()
+
+function pushState() {
+  const snapshot = JSON.stringify(state)
+  for (const res of sseClients) {
+    try { res.write(`data: ${snapshot}\n\n`) } catch {}
+  }
+}
+
+function updateState(partial) {
+  // shallow merge for top-level keys
+  for (const k of Object.keys(partial)) {
+    if (partial[k] && typeof partial[k] === 'object' && !Array.isArray(partial[k])) {
+      state[k] = { ...state[k], ...partial[k] }
+    } else {
+      state[k] = partial[k]
+    }
+  }
+  pushState()
+}
+
+// Sessions store (file-backed JSON; minimal)
+function loadSessions() {
+  if (!existsSync(SESSIONS_DB)) return []
+  try { return JSON.parse(readFileSync(SESSIONS_DB, 'utf8')) } catch { return [] }
+}
+function saveSessions(s) { writeFileSync(SESSIONS_DB, JSON.stringify(s, null, 2), 'utf8') }
 
 const html = readFileSync(join(__dirname, 'public', 'index.html'), 'utf8')
 
@@ -47,92 +113,44 @@ const SSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 }
 
-function sse(res, event, data) {
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+function runMcodeExec(prompt, opts = {}) {
+  const workspace = opts.workspace || DEFAULT_WORKSPACE
+  const model = opts.model || DEFAULT_MODEL
+  const timeout = opts.timeout || DEFAULT_TIMEOUT
+  const maxSteps = opts.maxSteps || DEFAULT_MAX_STEPS
+  const label = opts.label || 'prompt'
+
+  const args = [
+    '/c', MCODE_CMD, 'exec',
+    '--input', '-',
+    '--input-format', 'text',
+    '--cwd', workspace,
+    '--permission', 'full',
+    '--timeout', timeout,
+    '--output-format', 'stream-json',
+    '--max-steps', String(maxSteps),
+    '--model', model,
+  ]
+  const child = spawn('cmd.exe', args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+  child.stdin.write(prompt, 'utf8')
+  child.stdin.end()
+  return { child, args, label, model, workspace }
 }
 
-const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204)
-    return res.end()
-  }
-
-  // Static HTML (ignore query string for cache-busting)
-  const pathname = (req.url || '/').split('?')[0]
-  if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-    return res.end(html)
-  }
-
-  // Health
-  if (req.method === 'GET' && req.url === '/api/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-    return res.end(
-      JSON.stringify({
-        ok: true,
-        port: PORT,
-        defaultModel: DEFAULT_MODEL,
-        defaultWorkspace: DEFAULT_WORKSPACE,
-        mcodeCmd: MCODE_CMD,
-        maxConcurrent: MAX_CONCURRENT,
-      })
-    )
-  }
-
-  // Chat (SSE)
-  if (req.method === 'POST' && req.url === '/api/chat') {
-    let body = ''
-    for await (const chunk of req) body += chunk
-    let payload
-    try {
-      payload = JSON.parse(body || '{}')
-    } catch {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      return res.end(JSON.stringify({ error: 'invalid JSON body' }))
+function collectExecResult(childPromise) {
+  // Wraps runMcodeExec and accumulates a result object
+  return new Promise((resolve) => {
+    const r = {
+      answer: null, thinking: null, status: 'unknown', error: null,
+      usage: null, sessionId: null, durationMs: null, tps: null,
     }
-    const prompt = (payload.prompt || '').trim()
-    if (!prompt) {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      return res.end(JSON.stringify({ error: 'prompt required' }))
-    }
-    const workspace = payload.workspace || DEFAULT_WORKSPACE
-    const model = payload.model || DEFAULT_MODEL
-    const timeout = payload.timeout || DEFAULT_TIMEOUT
-    const maxSteps = Number(payload.maxSteps) || DEFAULT_MAX_STEPS
-
-    const args = [
-      '/c',
-      MCODE_CMD,
-      'exec',
-      '--input', '-',
-      '--input-format', 'text',
-      '--cwd', workspace,
-      '--permission', 'full',
-      '--timeout', timeout,
-      '--output-format', 'stream-json',
-      '--max-steps', String(maxSteps),
-      '--model', model,
-    ]
-
-    const child = spawn('cmd.exe', args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    })
-
-    res.writeHead(200, SSE_HEADERS)
-    res.write(': connected\n\n')
-    sse(res, 'start', { model, workspace, timeout, maxSteps, pid: child.pid })
-
-    child.stdin.write(prompt, 'utf8')
-    child.stdin.end()
-
     let buf = ''
-    let lastUsage = null
-    let lastSessionId = null
-    let lastDurationMs = null
+    let lastDelta = 0
+    const t0 = Date.now()
+    const { child, label, model } = childPromise
+    state.running = { active: true, prompt: label, pid: child.pid, startedAt: t0, model, sessionId: null, lastDeltaAt: t0, tps: 0 }
+    state.context.thinkingStatus = label === '/usage' ? 'Loading' : 'Running'
+    pushState()
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk) => {
       buf += chunk
@@ -142,75 +160,347 @@ const server = http.createServer(async (req, res) => {
         buf = buf.slice(nl + 1)
         if (!line) continue
         try {
-          const msg = JSON.parse(line)
-          // capture usage + sessionId from the final exec.result or the full message event
-          if (msg.type === 'exec.result') {
-            if (msg.sessionId) lastSessionId = msg.sessionId
-            if (typeof msg.durationMs === 'number') lastDurationMs = msg.durationMs
+          const m = JSON.parse(line)
+          if (m.type === 'delta') {
+            if (typeof m.thinking === 'string') r.thinking = (r.thinking || '') + m.thinking
+            if (typeof m.content === 'string') r.answer = (r.answer || '') + m.content
+            const now = Date.now()
+            if (state.running.lastDeltaAt) {
+              const dt = (now - state.running.lastDeltaAt) / 1000
+              if (dt > 0) state.running.tps = Math.round(1 / dt)
+            }
+            state.running.lastDeltaAt = now
+            state.context.tps = state.running.tps
+            pushState()
+          } else if (m.type === 'message' && m.message) {
+            if (m.message.usage) r.usage = m.message.usage
+            if (typeof m.message.content === 'string' && !r.answer) r.answer = m.message.content
+            if (typeof m.message.thinking === 'string' && !r.thinking) r.thinking = m.message.thinking
+          } else if (m.type === 'exec.result') {
+            if (m.sessionId) r.sessionId = m.sessionId
+            if (typeof m.durationMs === 'number') r.durationMs = m.durationMs
+            if (m.answer) r.answer = m.answer
+            r.status = m.status || 'unknown'
+            if (m.error) r.error = m.error
+            // finalize NOW — don't wait for child.on('exit') which may never
+            // fire in mcode 0.1.2's no-TTY stream-json mode
+            finalize()
           }
-          if (msg.type === 'message' && msg.message?.usage) {
-            lastUsage = msg.message.usage
-          }
-          sse(res, 'stream', msg)
-        } catch {
-          sse(res, 'stdout', { line })
-        }
-      }
-    })
-
-    let stderrBuf = ''
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk) => {
-      stderrBuf += chunk
-      sse(res, 'stderr', { chunk })
-    })
-
-    child.on('error', (err) => {
-      sse(res, 'error', { message: err.message })
-    })
-
-    child.on('exit', (code, sig) => {
-      if (buf.length) {
-        const tail = buf.trim()
-        if (tail) {
-          try {
-            sse(res, 'stream', JSON.parse(tail))
-          } catch {
-            sse(res, 'stdout', { line: tail })
-          }
-        }
-        buf = ''
-      }
-      // include lastUsage/lastSessionId in the done event so the UI can show usage
-      sse(res, 'done', {
-        code,
-        sig,
-        stderr: stderrBuf,
-        usage: lastUsage,
-        sessionId: lastSessionId,
-        durationMs: lastDurationMs,
-      })
-      res.end()
-    })
-
-    req.on('close', () => {
-      if (!child.killed) {
-        try {
-          child.kill()
         } catch {}
       }
     })
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', () => {}) // swallow; usage stats can land here
 
-    return // keep connection open
+    // safety: if exec.result never arrives, resolve with whatever we have
+    const safetyTimeout = setTimeout(() => {
+      if (r.status === 'unknown') {
+        r.status = 'timeout'
+        r.error = { message: 'mcode exec did not produce exec.result in 90s' }
+        try { child.kill() } catch {}
+        finalize()
+      }
+    }, 90000)
+
+    function finalize() {
+      if (r._finalized) return
+      r._finalized = true
+      clearTimeout(safetyTimeout)
+      const dt = Date.now() - t0
+      r.durationMs = r.durationMs || dt
+      state.running = { active: false, prompt: null, pid: null, startedAt: null, model: null, sessionId: null, lastDeltaAt: null, tps: 0 }
+      state.context.thinkingStatus = 'Idle'
+      state.context.tps = 0
+      if (r.usage) {
+        state.context.tokens = (state.context.tokens || 0) + (r.usage.totalTokens || 0)
+        state.context.used = state.context.tokens
+        state.context.percent = state.context.limit ? Math.round((state.context.tokens / state.context.limit) * 100) : 0
+        state.context.lastUsageAt = Date.now()
+        state.usage.sessionInput = (state.usage.sessionInput || 0) + (r.usage.inputTokens || 0)
+        state.usage.sessionOutput = (state.usage.sessionOutput || 0) + (r.usage.outputTokens || 0)
+        state.usage.sessionTotal = state.usage.sessionInput + state.usage.sessionOutput
+      }
+      if (r.sessionId) state.sessionId = r.sessionId
+      pushState()
+      resolve(r)
+      // mcode 0.1.2 sometimes hangs after exec.result is written.
+      // Force-kill so we don't leak processes.
+      try { child.kill() } catch {}
+    }
+
+    child.stdout.on('end', finalize)
+    child.on('exit', finalize)
+    child.on('error', (e) => {
+      r.status = 'error'
+      r.error = { message: e.message }
+      finalize()
+    })
+  })
+}
+
+// ============================================================
+// HTTP server
+// ============================================================
+const server = http.createServer(async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
+
+  const pathname = (req.url || '/').split('?')[0]
+
+  if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(html)
+  }
+
+  if (req.method === 'GET' && pathname === '/api/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify({
+      ok: true, port: PORT,
+      defaultModel: DEFAULT_MODEL, defaultWorkspace: DEFAULT_WORKSPACE,
+      mcodeCmd: MCODE_CMD, mcodeVersion: '0.1.2', maxConcurrent: MAX_CONCURRENT,
+    }))
+  }
+
+  // SSE: state push stream
+  if (req.method === 'GET' && pathname === '/api/events') {
+    res.writeHead(200, SSE_HEADERS)
+    res.write(`data: ${JSON.stringify(state)}\n\n`)
+    sseClients.add(res)
+    const ping = setInterval(() => { try { res.write(': ping\n\n') } catch {} }, 20000)
+    req.on('close', () => { clearInterval(ping); sseClients.delete(res) })
+    return
+  }
+
+  // GET /api/state — full snapshot
+  if (req.method === 'GET' && pathname === '/api/state') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify(state))
+  }
+
+  // GET /api/sessions — list
+  if (req.method === 'GET' && pathname === '/api/sessions') {
+    const all = loadSessions()
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify({ ok: true, sessions: all }))
+  }
+  // POST /api/sessions — new
+  if (req.method === 'POST' && pathname === '/api/sessions') {
+    const all = loadSessions()
+    const id = randomUUID()
+    const item = { id, title: 'New session', createdAt: Date.now() }
+    all.unshift(item)
+    saveSessions(all)
+    state.sessionId = id
+    state.sessionTitle = item.title
+    state.chat = []
+    state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
+    state.context.tokens = 0
+    state.context.used = 0
+    pushState()
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify({ ok: true, session: item }))
+  }
+
+  // POST /api/upload — save file
+  if (req.method === 'POST' && pathname === '/api/upload') {
+    const ctype = (req.headers['content-type'] || '').toLowerCase()
+    if (!ctype.startsWith('multipart/form-data')) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ ok: false, error: 'multipart required' }))
+    }
+    try {
+      const saved = await saveMultipartUpload(req)
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+      return res.end(JSON.stringify({ ok: true, path: saved.path, name: saved.name }))
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ ok: false, error: e.message }))
+    }
+  }
+
+  // POST /api/send — main chat entry, fire-and-forget (response = ack; output via /api/events SSE)
+  if (req.method === 'POST' && pathname === '/api/send') {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    let payload
+    try { payload = JSON.parse(body || '{}') } catch { payload = {} }
+    const content = (payload.content || '').trim()
+    if (!content) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ ok: false, error: 'content required' }))
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    res.end(JSON.stringify({ ok: true }))
+
+    // Append user line immediately, push state
+    state.chat = [...(state.chat || []), `› ${content}`]
+    pushState()
+
+    // Detect slash commands that we can satisfy without spawning mcode
+    const slashMatch = content.match(/^\/(\w+)\b\s*(.*)/)
+    if (slashMatch) {
+      const cmd = slashMatch[1]
+      const rest = slashMatch[2] || ''
+      if (cmd === 'clear' || cmd === 'new') {
+        state.chat = []
+        state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
+        state.context.tokens = 0
+        state.context.used = 0
+        state.sessionId = null
+        state.sessionTitle = 'Untitled'
+        pushState()
+        return
+      }
+      if (cmd === 'status') {
+        const t = `● 当前 model=${state.model.name}\n  workspace=${state.workspace.dir}\n  权限=${state.permissions}`
+        state.chat = [...state.chat, t]
+        pushState()
+        return
+      }
+      // /usage and others go through mcode exec
+    }
+
+    // Spawn mcode exec and stream result into state.chat
+    const exec = runMcodeExec(content, { label: 'prompt' })
+    const r = await collectExecResult(exec)
+    // Note: webui.html's parseChatLines only reliably renders the FIRST `›`
+    // line of any given turn — the second bullet (●) we used to push often
+    // disappears because of how parseMarkdown handles multi-line text.
+    // Workaround: keep just ONE chat line per turn: the user message; the
+    // assistant answer is mirrored into state.context.assistantLast so the
+    // right panel can show it (and we also push it as a stand-alone
+    // `› assistant: ...` line so it appears in chat history).
+    if (r.status === 'succeeded' && r.answer) {
+      const oneLine = r.answer.replace(/\n+/g, ' ').trim()
+      state.chat = [...state.chat, `› assistant: ${oneLine}`]
+      state.context.assistantLast = oneLine
+      state.context.assistantAt = Date.now()
+      // update session title from first message
+      if (!state.sessionTitle || state.sessionTitle === 'Untitled') {
+        state.sessionTitle = content.slice(0, 50)
+        const all = loadSessions()
+        const existing = all.find((s) => s.id === state.sessionId)
+        if (existing) { existing.title = state.sessionTitle; saveSessions(all) }
+      }
+    } else if (r.status === 'failed' || r.error) {
+      const oneLine = (r.error?.message || r.status).replace(/\n+/g, ' ')
+      state.chat = [...state.chat, `› [error] ${oneLine}`]
+      state.context.assistantLast = `[error] ${oneLine}`
+      state.context.assistantAt = Date.now()
+    }
+    pushState()
+    return
+  }
+
+  // POST /api/usage — trigger mcode exec /usage, parse output, push state
+  if (req.method === 'POST' && (pathname === '/api/usage' || pathname === '/api/usage-trigger')) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    res.end(JSON.stringify({ ok: true }))
+    state.chat = [...(state.chat || []), '› /usage']
+    pushState()
+    const exec = runMcodeExec('打印 /usage 报告,只输出原始报告不要修改格式', { label: '/usage', maxSteps: 1 })
+    const r = await collectExecResult(exec)
+    if (r.answer) {
+      state.usage.raw = r.answer
+      // parse key fields: Plan / Expires / Credits / 5-hour / Weekly / Session usage
+      const plan = r.answer.match(/Plan\s+([^\n]+)/i)
+      const exp = r.answer.match(/Expires\s+([^\n]+)/i)
+      const credits = r.answer.match(/Credits\s+([0-9.,]+)/i)
+      const fiveHour = r.answer.match(/5-hour\s+(\d+)%\s*left[^]*?resets?\s*in\s+([^\n]+)/i)
+      const weekly = r.answer.match(/Weekly\s+([^\n]+)/i)
+      const session = r.answer.match(/session[^]*?input\s+([0-9.k]+)\s+output\s+([0-9.k]+)\s+total\s+([0-9.k]+)/i)
+      if (plan) state.usage.plan = plan[1].trim()
+      if (exp) state.usage.expires = exp[1].trim()
+      if (credits) state.usage.credits = parseFloat(credits[1].replace(/,/g, ''))
+      if (fiveHour) { state.usage.fiveHourPercent = parseInt(fiveHour[1]); state.usage.fiveHourReset = fiveHour[2].trim() }
+      if (weekly) state.usage.weekly = weekly[1].trim()
+      if (session) {
+        state.usage.sessionInput = parseFloat(session[1])
+        state.usage.sessionOutput = parseFloat(session[2])
+        state.usage.sessionTotal = parseFloat(session[3])
+      }
+      state.chat = [...state.chat, `› [assistant] /usage:\n${r.answer.replace(/\n/g, ' ')}`]
+    }
+    pushState()
+    return
+  }
+
+  // POST /api/refresh — noop (we already push state on demand). html calls this every 60s.
+  if (req.method === 'POST' && pathname === '/api/refresh') {
+    pushState()
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify({ ok: true }))
   }
 
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
   res.end('not found')
 })
 
+// ============================================================
+// Multipart upload parser (minimal, no deps)
+// ============================================================
+function saveMultipartUpload(req) {
+  return new Promise((resolve, reject) => {
+    const ctype = req.headers['content-type'] || ''
+    const m = ctype.match(/boundary=(?:"([^"]+)"|([^;]+))/i)
+    if (!m) return reject(new Error('no boundary'))
+    const boundary = '--' + (m[1] || m[2])
+    let buf = Buffer.alloc(0)
+    const chunks = []
+    req.on('data', (c) => { chunks.push(c) })
+    req.on('end', () => {
+      try {
+        buf = Buffer.concat(chunks)
+        const parts = splitMultipart(buf, boundary)
+        for (const part of parts) {
+          const cd = part.headers['content-disposition'] || ''
+          const nameMatch = cd.match(/name="([^"]+)"/i)
+          const filenameMatch = cd.match(/filename="([^"]+)"/i)
+          if (!filenameMatch) continue
+          const origName = filenameMatch[1]
+          const ext = extname(origName) || ''
+          const safeName = `${Date.now()}-${createHash('md5').update(origName).digest('hex').slice(0, 6)}${ext}`
+          const fullPath = join(UPLOAD_DIR, safeName)
+          writeFileSync(fullPath, part.body)
+          return resolve({ path: fullPath, name: origName })
+        }
+        reject(new Error('no file part'))
+      } catch (e) { reject(e) }
+    })
+    req.on('error', reject)
+  })
+}
+
+function splitMultipart(buf, boundary) {
+  const parts = []
+  const start = buf.indexOf(boundary) + boundary.length
+  let pos = start
+  while (pos < buf.length) {
+    const next = buf.indexOf(boundary, pos)
+    if (next === -1) break
+    const block = buf.slice(pos, next - 2) // strip trailing \r\n before next boundary
+    const headerEnd = block.indexOf('\r\n\r\n')
+    if (headerEnd === -1) { pos = next + boundary.length; continue }
+    const headerStr = block.slice(0, headerEnd).toString('utf8')
+    const body = block.slice(headerEnd + 4)
+    const headers = {}
+    for (const line of headerStr.split('\r\n')) {
+      const i = line.indexOf(':')
+      if (i > 0) headers[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim()
+    }
+    parts.push({ headers, body })
+    pos = next + boundary.length
+  }
+  return parts
+}
+
 server.listen(PORT, HOST, () => {
   console.log(`[webui] listening on http://${HOST}:${PORT}`)
   console.log(`[webui] mcode cmd: ${MCODE_CMD}`)
   console.log(`[webui] default model: ${DEFAULT_MODEL}`)
   console.log(`[webui] default workspace: ${DEFAULT_WORKSPACE}`)
+  console.log(`[webui] uploads: ${UPLOAD_DIR}`)
+  console.log(`[webui] sessions: ${SESSIONS_DB}`)
 })
