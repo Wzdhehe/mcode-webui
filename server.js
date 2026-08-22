@@ -39,6 +39,31 @@ const MAX_CONCURRENT = Number(process.env.MCODE_MAX_CONCURRENT) || 3
 const UPLOAD_DIR = process.env.MCODE_WEBUI_UPLOAD_DIR || join(MCODE_ROOT, '.webui-uploads')
 const SESSIONS_DB = process.env.MCODE_WEBUI_SESSIONS_DB || join(MCODE_ROOT, '.webui-sessions.json')
 
+// v0.5.x: 把当前 state.chat 写回 db 里对应 session 的 chat 字段
+// 切 session 时从这个字段加载历史（之前 db 只存 {id,title,createdAt}，导致切过去看不到聊天）
+function persistCurrentChat() {
+  if (!state.sessionId) return
+  const all = loadSessions()
+  const item = all.find((s) => s.id === state.sessionId)
+  if (!item) return
+  item.chat = state.chat || []
+  item.updatedAt = Date.now()
+  saveSessions(all)
+}
+
+// v0.5.x: 重置所有 context 字段（不只是 tokens/used；percent/spent/tps 之前漏了导致切完仍显示旧的 %）
+function resetContext() {
+  state.context.tokens = 0
+  state.context.used = 0
+  state.context.percent = 0
+  state.context.spent = 0
+  state.context.tps = 0
+  state.context.thinkingDuration = null
+  state.context.assistantLast = null
+  state.context.assistantAt = null
+  state.context.lastUsageAt = null
+}
+
 if (!existsSync(MCODE_CMD)) {
   console.error(`[fatal] mcode.cmd not found at ${MCODE_CMD}`)
   process.exit(1)
@@ -109,6 +134,29 @@ function loadSessions() {
 function saveSessions(s) { writeFileSync(SESSIONS_DB, JSON.stringify(s, null, 2), 'utf8') }
 
 const html = readFileSync(join(__dirname, 'public', 'index.html'), 'utf8')
+
+// v0.5.x: 启动时清理空 chat + 默认标题的 session（用户点了"新建会话"但没发消息的残留）
+// 保留：有 chat 内容的；或标题是用户手打的中文/英文（不是 New session/Untitled/对话 N 这种默认名）
+;(function cleanupEmptyDefaultSessions() {
+  if (!existsSync(SESSIONS_DB)) return
+  let all
+  try { all = JSON.parse(readFileSync(SESSIONS_DB, 'utf8')) } catch { return }
+  if (!Array.isArray(all) || all.length === 0) return
+  const before = all.length
+  all = all.filter((s) => {
+    if (!s || !s.id) return false
+    const hasChat = Array.isArray(s.chat) && s.chat.length > 0
+    if (hasChat) return true  // 有消息就保留
+    const t = (s.title || '').trim()
+    // 真实标题（有中文/英文实质内容，非默认名）也保留
+    const isDefault = t === 'New session' || t === 'Untitled' || /^对话 \d+$/.test(t)
+    return !isDefault
+  })
+  if (all.length !== before) {
+    saveSessions(all)
+    console.log(`[webui] cleanup: removed ${before - all.length} empty/default sessions, ${all.length} kept`)
+  }
+})()
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream; charset=utf-8',
@@ -296,7 +344,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/sessions') {
     const all = loadSessions()
     const id = randomUUID()
-    const item = { id, title: 'New session', createdAt: Date.now() }
+    const item = { id, title: 'New session', createdAt: Date.now(), updatedAt: Date.now(), chat: [] }
     all.unshift(item)
     saveSessions(all)
     state.sessionId = id
@@ -304,8 +352,7 @@ const server = http.createServer(async (req, res) => {
     state.sessionTitle = item.title
     state.chat = []
     state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
-    state.context.tokens = 0
-    state.context.used = 0
+    resetContext()
     pushState()
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
     return res.end(JSON.stringify({ ok: true, session: item }))
@@ -328,19 +375,16 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404, { 'Content-Type': 'application/json' })
       return res.end(JSON.stringify({ ok: false, error: 'session not found' }))
     }
-    // 切换 server 端 state：清空当前 chat/usage，下次 mcode exec 用新 sessionId
-    // 注意：mcode 自己的 sessionId（mvs_xxx）跟 webui 侧边栏 id（randomUUID）不同
-    // 这里只切换 webui 侧边栏的"当前 session"标记；mcode 续接要看 sessionTitle 对应的历史消息
+    // 切换 server 端 state：从 db 加载该 session 的历史 chat（之前只清空不加载，导致切过去看不见对话）
     state.sessionId = target.id
     state.mcodeSessionId = null  // 切到新 webui session 后，mcode 上下文也开新
     state.sessionTitle = target.title || 'Untitled'
-    state.chat = []  // 清空当前 chat 视图（不重新拉历史——mcode stream-json 没暴露历史回放 API）
+    state.chat = Array.isArray(target.chat) ? target.chat : []
     state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
-    state.context.tokens = 0
-    state.context.used = 0
+    resetContext()
     pushState()
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    return res.end(JSON.stringify({ ok: true, session: { id: target.id, title: state.sessionTitle } }))
+    return res.end(JSON.stringify({ ok: true, session: { id: target.id, title: state.sessionTitle, chat: state.chat } }))
   }
 
   // POST /api/upload — save file
@@ -377,6 +421,16 @@ const server = http.createServer(async (req, res) => {
     // Append user line immediately, push state
     state.chat = [...(state.chat || []), `› ${content}`]
     pushState()
+    persistCurrentChat()
+
+    // v0.5.x: 用户发首条消息时立即按首条内容给 session 改名（之前要等 assistant 回复才改名，导致新建的空 session 一直是 "New session"）
+    if (state.sessionTitle === 'New session' || state.sessionTitle === 'Untitled' || !state.sessionTitle) {
+      const newTitle = content.slice(0, 50)
+      state.sessionTitle = newTitle
+      const all = loadSessions()
+      const existing = all.find((s) => s.id === state.sessionId)
+      if (existing) { existing.title = newTitle; saveSessions(all) }
+    }
 
     // Detect slash commands that we can satisfy without spawning mcode
     const slashMatch = content.match(/^\/(\w+)\b\s*(.*)/)
@@ -384,13 +438,30 @@ const server = http.createServer(async (req, res) => {
       const cmd = slashMatch[1]
       const rest = slashMatch[2] || ''
       if (cmd === 'clear' || cmd === 'new') {
+        // /clear 或 /new：清空当前 chat（如果是 /new 还要新建一个 session entry 并把清空状态写进去）
+        if (cmd === 'new') {
+          const all = loadSessions()
+          const id = randomUUID()
+          const item = { id, title: 'New session', createdAt: Date.now(), updatedAt: Date.now(), chat: [] }
+          all.unshift(item)
+          saveSessions(all)
+          state.sessionId = id
+          state.sessionTitle = item.title
+        } else {
+          // /clear：把当前 session 的 chat 数组清空并写回 db（别留下旧消息）
+          state.chat = []
+          persistCurrentChat()
+        }
         state.chat = []
         state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
-        state.context.tokens = 0
-        state.context.used = 0
-        state.sessionId = null
-        state.mcodeSessionId = null
-        state.sessionTitle = 'Untitled'
+        if (cmd === 'new') {
+          state.mcodeSessionId = null
+          state.sessionTitle = 'New session'
+        } else {
+          state.mcodeSessionId = null
+          state.sessionTitle = 'Untitled'
+        }
+        resetContext()
         pushState()
         return
       }
@@ -421,14 +492,7 @@ const server = http.createServer(async (req, res) => {
       state.chat = [...state.chat, `● ${oneLine}`]
       state.context.assistantLast = oneLine
       state.context.assistantAt = Date.now()
-      // update session title from first message（默认 "Untitled" / "New session" 都算没设）
-      if (!state.sessionTitle || state.sessionTitle === 'Untitled' || state.sessionTitle === 'New session') {
-        const newTitle = content.slice(0, 50)
-        state.sessionTitle = newTitle
-        const all = loadSessions()
-        const existing = all.find((s) => s.id === state.sessionId)
-        if (existing) { existing.title = newTitle; saveSessions(all) }
-      }
+      // title 已在用户发首条消息时改过了，这里不用再改
     } else if (r.status === 'failed' || r.error) {
       const oneLine = (r.error?.message || r.status).replace(/\n+/g, ' ')
       // 错误用 ○ 渲染为 system bubble
@@ -436,6 +500,7 @@ const server = http.createServer(async (req, res) => {
       state.context.assistantLast = `[error] ${oneLine}`
       state.context.assistantAt = Date.now()
     }
+    persistCurrentChat()  // 把刚追加的 assistant 消息写进 db
     pushState()
     return
   }
@@ -473,6 +538,7 @@ const server = http.createServer(async (req, res) => {
       state.chat = [...state.chat, `● /usage:\n${r.answer.replace(/\n/g, ' ')}`]
     }
     pushState()
+    persistCurrentChat()
     return
   }
 
@@ -517,7 +583,7 @@ const server = http.createServer(async (req, res) => {
       // 等同于点 "新建会话" 按钮
       const all = loadSessions()
       const id = randomUUID()
-      const item = { id, title: 'New session', createdAt: Date.now() }
+      const item = { id, title: 'New session', createdAt: Date.now(), updatedAt: Date.now(), chat: [] }
       all.unshift(item)
       saveSessions(all)
       state.sessionId = id
@@ -525,8 +591,7 @@ const server = http.createServer(async (req, res) => {
       state.sessionTitle = item.title
       state.chat = []
       state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
-      state.context.tokens = 0
-      state.context.used = 0
+      resetContext()
       pushState()
       return
     }
@@ -535,16 +600,16 @@ const server = http.createServer(async (req, res) => {
       const t = `● 当前 model=${state.model.name}\n  workspace=${state.workspace.dir}\n  权限=${state.permissions}`
       state.chat = [...(state.chat || []), `› /status`, t]
       pushState()
+      persistCurrentChat()
       return
     }
     if (cmd === '/clear') {
       state.chat = []
       state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
-      state.context.tokens = 0
-      state.context.used = 0
-      state.sessionId = null
       state.mcodeSessionId = null
       state.sessionTitle = 'Untitled'
+      resetContext()
+      persistCurrentChat()  // 把清空写回 db，避免下次切回来还看到旧消息
       pushState()
       return
     }
@@ -553,12 +618,14 @@ const server = http.createServer(async (req, res) => {
       const t = `● 最近 ${all.length} 个会话：\n` + all.slice(0, 8).map((s, i) => `  ${i+1}. ${s.title} (${s.id.substring(0, 8)}…)`).join('\n')
       state.chat = [...(state.chat || []), `› /sessions`, t]
       pushState()
+      persistCurrentChat()
       return
     }
     if (cmd === '/help') {
       const t = `● 可用命令：\n  /new — 新建会话\n  /clear — 清空当前对话\n  /status — 查看状态\n  /sessions — 最近会话列表\n  /usage — 套餐用量\n  @文件 — 引用文件`
       state.chat = [...(state.chat || []), `› /help`, t]
       pushState()
+      persistCurrentChat()
       return
     }
     if (cmd === '/usage') {
@@ -589,6 +656,7 @@ const server = http.createServer(async (req, res) => {
         state.chat = [...state.chat, `● /usage:\n${r.answer.replace(/\n/g, ' ')}`]
       }
       pushState()
+      persistCurrentChat()
       return
     }
     // 未知命令：忽略

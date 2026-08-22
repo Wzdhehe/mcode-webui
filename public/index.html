@@ -2316,10 +2316,11 @@ async function switchSession(sessionId) {
     if (r.ok) {
       const data = await r.json()
       if (data.ok) {
-        // 服务器会推 SSE，state 自动更新；这里只做视觉高亮
+        // 直接用 server 返回的 session 数据更新本地 state（避免 SSE race condition）
         state.sessionId = data.session.id
         state.sessionTitle = data.session.title
-        state.chat = []
+        // 关键：从 db 加载该 session 的历史 chat
+        state.chat = Array.isArray(data.session.chat) ? data.session.chat : []
         renderSessions()
         render()
       }
@@ -2362,6 +2363,8 @@ function renderChat() {
   })
   if (lines.length === 0) {
     if (empty) empty.style.display = ''
+    // v0.5.x: 切到空 chat 的 session 时必须清空 inner，否则会残留上一个 session 的 messages
+    if (inner) inner.innerHTML = ''
     return
   }
   if (empty) empty.style.display = 'none'
