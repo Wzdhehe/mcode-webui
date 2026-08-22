@@ -382,7 +382,71 @@ a { color: var(--accent); text-decoration: none; }
   border-top: 1px solid var(--border);
   background: var(--bg-sidebar);
 }
-/* v0.5.x: 套餐用量 UI 全部删掉（数据是 LLM fabrication，没意义） */
+
+/* v0.5.y: 套餐用量卡片（kimi 风格，mmx quota show 直拉） */
+.quota-card {
+  margin: 8px 12px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card, var(--bg-sidebar));
+  overflow: hidden;
+}
+.quota-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.quota-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.quota-refresh {
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+.quota-refresh:hover { color: var(--text); background: var(--bg-hover); }
+.quota-refresh .icon { width: 12px; height: 12px; display: block; }
+.quota-refresh.loading .icon { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.quota-body {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text);
+}
+.quota-loading { color: var(--text-muted); font-style: italic; padding: 2px 0; }
+.quota-error { color: var(--danger); padding: 2px 0; line-height: 1.5; word-break: break-word; }
+.quota-section { padding: 4px 0; }
+.quota-section + .quota-section { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+.quota-model {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.quota-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+}
+.quota-label { color: var(--text); }
+.quota-percent { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.quota-percent.low { color: var(--danger); }
+.quota-reset {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 0 2px;
+}
 
 .btn-menu {
   display: flex;
@@ -1401,7 +1465,18 @@ a { color: var(--accent); text-decoration: none; }
       </div>
 
       <div class="left-bottom">
-        <!-- v0.5.x: 套餐用量卡片已删（数据是 LLM fabrication，不如直接用 mcode TUI 看 /usage） -->
+        <!-- v0.5.y: 套餐用量卡片（kimi 风格，mmx quota show 直拉，无 AI 参与） -->
+        <div class="quota-card" id="quota-card">
+          <div class="quota-header">
+            <span class="quota-title" data-i18n="usage">套餐用量</span>
+            <button class="quota-refresh" id="quota-refresh" title="刷新" aria-label="刷新用量">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
+          <div class="quota-body" id="quota-body">
+            <div class="quota-loading" data-i18n="usage_loading">加载中...</div>
+          </div>
+        </div>
         <button class="btn-menu" id="btn-appearance">
           <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <span class="btn-text" data-i18n="appearance">外观</span>
@@ -2079,6 +2154,9 @@ function render() {
   // Sessions list (左栏 RECENT)
   renderSessions()
 
+  // Quota card (左下角, kimi 风格, mmx 直拉)
+  renderQuota()
+
   // Chat
   renderChat()
 
@@ -2568,9 +2646,76 @@ function toggleSettings() {
 function hideSettings() { settingsOpen = false; settingsMenu.hidden = true }
 
 // ============================================================
-// Quota card: v0.5.x 已删（数据是 LLM fabrication 没意义，要看用 mcode TUI 自己 /usage）
-// 后端 /api/usage + /api/cmd /usage 保留，输入框输 /usage 仍可本地处理
+// Quota card: v0.5.y kimi 风格，mmx quota show 直拉（不再走 AI 瞎编）
+// 状态从 state.usage.raw 解析；点刷新按钮或首次加载触发 /api/usage
 // ============================================================
+function formatDurationMs(ms) {
+  // kimi 风格："6天 15小时 46分 分钟后重置" / "1小时 46分 分钟后重置" / "46分 分钟后重置"
+  if (!ms || ms < 0) return '—'
+  const total = Math.floor(ms / 1000)
+  const d = Math.floor(total / 86400)
+  const h = Math.floor((total % 86400) / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const parts = []
+  if (d > 0) parts.push(`${d}天`)
+  if (h > 0) parts.push(`${h}小时`)
+  if (m > 0 || parts.length === 0) parts.push(`${m}分`)
+  return `${parts.join(' ')} 分钟后重置`
+}
+
+function renderQuota() {
+  const body = document.getElementById('quota-body')
+  const btn = document.getElementById('quota-refresh')
+  if (!body) return
+  const raw = state?.usage?.raw
+  let data = null
+  if (typeof raw === 'string') {
+    try { data = JSON.parse(raw) } catch {}
+  } else if (raw && typeof raw === 'object') {
+    data = raw
+  }
+  if (!data?.model_remains?.length) {
+    return  // 保留之前的 loading / error 状态
+  }
+  body.innerHTML = data.model_remains.map((m) => {
+    const ip = m.current_interval_remaining_percent
+    const wp = m.current_weekly_remaining_percent
+    const ir = formatDurationMs(m.remains_time)
+    const wr = formatDurationMs(m.weekly_remains_time)
+    const ipClass = (typeof ip === 'number' && ip < 20) ? ' low' : ''
+    const wpClass = (typeof wp === 'number' && wp < 20) ? ' low' : ''
+    const name = escapeHtml(m.model_name || 'model')
+    return `<div class="quota-section">
+      <div class="quota-model">${name}</div>
+      <div class="quota-row">
+        <span class="quota-label">5 小时限额</span>
+        <span class="quota-percent${ipClass}">${ip ?? '—'}% 剩余</span>
+      </div>
+      <div class="quota-reset">${escapeHtml(ir)}</div>
+      <div class="quota-row">
+        <span class="quota-label">每周限额</span>
+        <span class="quota-percent${wpClass}">${wp ?? '—'}% 剩余</span>
+      </div>
+      <div class="quota-reset">${escapeHtml(wr)}</div>
+    </div>`
+  }).join('')
+  // 数据已就绪，停掉刷新按钮的 loading 动画
+  if (btn) btn.classList.remove('loading')
+}
+
+async function refreshQuota() {
+  const body = document.getElementById('quota-body')
+  const btn = document.getElementById('quota-refresh')
+  if (btn) btn.classList.add('loading')
+  if (body) body.innerHTML = `<div class="quota-loading">加载中…</div>`
+  try {
+    await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS })
+    // state.usage 会由 SSE 推过来，render() → renderQuota() 自动刷新
+  } catch (e) {
+    if (body) body.innerHTML = `<div class="quota-error">加载失败：${escapeHtml(e.message || String(e))}</div>`
+    if (btn) btn.classList.remove('loading')
+  }
+}
 
 // ============================================================
 // File upload
@@ -2672,6 +2817,8 @@ function init() {
   // v0.4.1: 启动后自动拉一次 sessions 列表（mavis CLI 路径，不走 mcode）
   // v0.5.x: 改成立即拉，不延时轮询（避免刷新图标一直转的视觉噪音）
   refreshSessions()
+  // v0.5.y: 启动后自动拉一次 quota（mmx quota show 直拉, kimi 风格卡片用）
+  refreshQuota()
 }
 
 function attachEvents() {
@@ -2716,6 +2863,9 @@ function attachEvents() {
 
   // Refresh sessions button
   document.getElementById('btn-refresh-sessions')?.addEventListener('click', refreshSessions)
+
+  // Quota card refresh button
+  document.getElementById('quota-refresh')?.addEventListener('click', refreshQuota)
 
   // Search sessions input — 实时过滤 sidebar 列表
   document.getElementById('search-input')?.addEventListener('input', (e) => {
