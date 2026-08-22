@@ -1,0 +1,11 @@
+# runtime / cache
+*.log
+.DS_Store
+
+# local probe artifacts (kept out of repo — they belong in /acp-probe/)
+probes/.cache/
+probes/*.log
+
+# node
+node_modules/
+package-lock.json
