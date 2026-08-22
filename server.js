@@ -67,6 +67,7 @@ const state = {
   },
   permissions: 'Full access',
   chat: [],
+  sessions: [],
   goal: { active: false, text: null, status: null, duration: null },
   todo: [],
   ask: { active: false, total: 0, answered: 0, currentIdx: 0, question: '', options: [] },
@@ -79,9 +80,11 @@ const state = {
 const sseClients = new Set()
 
 function pushState() {
-  const snapshot = JSON.stringify(state)
+  // 注入 sessions 列表（来自磁盘 db）— 让 webui 侧边栏 "最近会话" 不被 SSE 推送覆盖
+  const snapshot = { ...state, sessions: loadSessions() }
+  const payload = JSON.stringify(snapshot)
   for (const res of sseClients) {
-    try { res.write(`data: ${snapshot}\n\n`) } catch {}
+    try { res.write(`data: ${payload}\n\n`) } catch {}
   }
 }
 
@@ -119,6 +122,8 @@ function runMcodeExec(prompt, opts = {}) {
   const timeout = opts.timeout || DEFAULT_TIMEOUT
   const maxSteps = opts.maxSteps || DEFAULT_MAX_STEPS
   const label = opts.label || 'prompt'
+  // 续接已有 session（多轮对话上下文）— 由 collectExecResult 写回的 mcode exec.sessionId
+  const sessionId = opts.sessionId || null
 
   const args = [
     '/c', MCODE_CMD, 'exec',
@@ -131,10 +136,11 @@ function runMcodeExec(prompt, opts = {}) {
     '--max-steps', String(maxSteps),
     '--model', model,
   ]
+  if (sessionId) args.push('--session', sessionId)
   const child = spawn('cmd.exe', args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
   child.stdin.write(prompt, 'utf8')
   child.stdin.end()
-  return { child, args, label, model, workspace }
+  return { child, args, label, model, workspace, sessionId }
 }
 
 function collectExecResult(childPromise) {
@@ -363,7 +369,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Spawn mcode exec and stream result into state.chat
-    const exec = runMcodeExec(content, { label: 'prompt' })
+    // 如果 state.sessionId 已存在（之前 mcode exec 返回的），加 --session 续接上下文
+    const exec = runMcodeExec(content, { label: 'prompt', sessionId: state.sessionId })
     const r = await collectExecResult(exec)
     // webui.html parseChatLines 角色前缀约定（见 public/index.html L2298-2340）：
     //   › / >  → user   bubble
