@@ -50,6 +50,12 @@ export function persistCurrentChat(cs) {
 // v0.5.ad: 流式更新 chat 数组 — 同 prefix 最后一行就地替换，否则追加
 export function streamUpdateLine(chat, prefix, text) {
   const target = `${prefix} `;
+  // fix: 新行开始流式前，先清掉其他行的 ▍ —— 思考(▲)→正文(●)切换时思考块不再残留闪烁光标
+  for (let i = 0; i < chat.length; i++) {
+    if (typeof chat[i] === "string" && chat[i].endsWith(" ▍")) {
+      chat[i] = chat[i].slice(0, -2);
+    }
+  }
   const last = chat[chat.length - 1];
   if (last && last.startsWith(target)) {
     chat[chat.length - 1] = `${target}${text} ▍`;
