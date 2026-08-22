@@ -179,6 +179,9 @@ export async function handleSwitchSession(req, res, ctx) {
 }
 
 // DELETE /api/sessions/:id — 删一个 session
+// v0.5.bx 系列:支持 ?dryRun=true 走预览路径 (mcode-plugin-guide red-lines.md §"写操作/破坏性操作")
+//   dryRun=true 时,函数走 readonly SQL 路径,只统计每个表的行数,不修改任何数据
+//   行为:true 删除路径不变
 export function handleDeleteSession(req, res, ctx) {
   const cs = ctx.cs;
   const cid = ctx.cid;
@@ -187,8 +190,17 @@ export function handleDeleteSession(req, res, ctx) {
     res.writeHead(400, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ ok: false, error: "id required" }));
   }
+  // Parse ?dryRun=true|false from req.url
+  let dryRun = false;
+  try {
+    const qIdx = (req.url || "").indexOf("?");
+    if (qIdx >= 0) {
+      const params = new URLSearchParams(req.url.slice(qIdx + 1));
+      dryRun = params.get("dryRun") === "true";
+    }
+  } catch {}
   console.log(
-    `[delete] cid=${cid} incoming id=${id.substring(0, 12)}… isMcodeSid=${/^mvs_[a-f0-9]{32}$/.test(id)}`,
+    `[delete] cid=${cid} incoming id=${id.substring(0, 12)}… isMcodeSid=${/^mvs_[a-f0-9]{32}$/.test(id)} dryRun=${dryRun}`,
   );
   const all = loadSessions();
   let idx = all.findIndex((s) => s.id === id);
@@ -200,7 +212,7 @@ export function handleDeleteSession(req, res, ctx) {
   // v0.5.bx-19: 兜底 — webui session db 找不到, 但 id 是 mvs_xxx → 当孤儿 mcode session 直接 SQL 删
   if (idx < 0) {
     if (/^mvs_[a-f0-9]{32}$/.test(id)) {
-      const mcodeDbDel = deleteMcodeSessionFromDb(id, { MCODE_RUNTIME_DB });
+      const mcodeDbDel = deleteMcodeSessionFromDb(id, { MCODE_RUNTIME_DB, dryRun });
       console.log(
         `[delete] cid=${cid} ORPHAN mcode session sid=${id.substring(0, 12)}… ok=${mcodeDbDel.ok}` +
           (mcodeDbDel.ok
@@ -224,6 +236,7 @@ export function handleDeleteSession(req, res, ctx) {
             ok: true,
             deleted: id,
             matchKind: "orphan_mcode",
+            dryRun,
             mcodeDbDel,
           }),
         );
@@ -240,6 +253,32 @@ export function handleDeleteSession(req, res, ctx) {
     console.log(`[delete] cid=${cid} 404 id=${id.substring(0, 12)}… not found`);
     res.writeHead(404, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ ok: false, error: "session not found" }));
+  }
+  // dryRun: 不真删 webui session entry,只预览 mcode db 影响
+  if (dryRun) {
+    const mcodeSid = all[idx].mcodeSessionId;
+    const mcodeDbDel = mcodeSid
+      ? deleteMcodeSessionFromDb(mcodeSid, { MCODE_RUNTIME_DB, dryRun: true })
+      : { ok: true, dryRun: true, log: [], totalRows: 0 };
+    console.log(
+      `[delete] cid=${cid} DRYRUN id=${id.substring(0, 12)}… mcodeDbDel=${JSON.stringify(mcodeDbDel)}`,
+    );
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+    });
+    return res.end(
+      JSON.stringify({
+        ok: true,
+        dryRun: true,
+        matchKind,
+        mcodeDbDel,
+        webuiEntryWouldBeDeleted: {
+          id: all[idx].id,
+          title: all[idx].title,
+          mcodeSessionId: mcodeSid,
+        },
+      }),
+    );
   }
   const deletedItem = all[idx];
   all.splice(idx, 1);
@@ -280,6 +319,7 @@ export function handleDeleteSession(req, res, ctx) {
       ok: true,
       deleted: id,
       matchKind,
+      dryRun: false,
       remaining: all.length,
       mcodeDbDel,
     }),

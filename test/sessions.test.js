@@ -10,7 +10,9 @@
 import { test, describe, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
-import { setupMocks, absPath, registerSessionsStore } from "./_setup.js";
+import { setupMocks, absPath, registerSessionsStore, getSessionsStore } from "./_setup.js";
+
+let deleteMcodeSessionFromDb, SQLITE3_BIN;
 
 // Helper: build a fake IncomingMessage that readJson() can consume
 function fakeReq(body) {
@@ -56,6 +58,12 @@ before(async (t) => {
   handleListSessions = mod.handleListSessions;
   handleAcpSessions = mod.handleAcpSessions;
   handleAcpSessionTitle = mod.handleAcpSessionTitle;
+  // Load db.js for the new dryRun tests (Batch D, mcode-plugin-guide red-lines §1)
+  const dbMod = await import(absPath("lib/db.js"));
+  deleteMcodeSessionFromDb = dbMod.deleteMcodeSessionFromDb;
+  // Load config.js for SQLITE3_BIN
+  const cfgMod = await import(absPath("lib/config.js"));
+  SQLITE3_BIN = cfgMod.SQLITE3_BIN;
 });
 
 beforeEach(() => {
@@ -327,6 +335,95 @@ describe("handleDeleteSession", () => {
     assert.equal(cs.sessionId, null);
     assert.equal(cs.sessionTitle, "Untitled");
     assert.deepEqual(cs.chat, []);
+  });
+
+  test("?dryRun=true returns preview without deleting the webui entry", async () => {
+    const cs = makeClientState();
+    cs.workspace = { dir: "/ws-A", branch: null, tree: null };
+    // Pretend the target session IS the current one, so we can verify
+    // dryRun does NOT reset it.
+    cs.sessionId = "webui-A";
+    cs.sessionTitle = "A on ws-A";
+    cs.chat = ["existing"];
+    const cid = "cid-1";
+    clients.set(cid, cs);
+    const before = getSessionsStore().length;
+    const res = fakeRes();
+    const ctx = { cs, cid, pathname: "/api/sessions/webui-A" };
+    // Pass ?dryRun=true in req.url
+    const req = { url: "/api/sessions/webui-A?dryRun=true" };
+    await handleDeleteSession(req, res, ctx);
+    assert.equal(res._status, 200);
+    const body = JSON.parse(res._body);
+    assert.equal(body.ok, true);
+    assert.equal(body.dryRun, true);
+    // webui entry should NOT be deleted
+    assert.equal(getSessionsStore().length, before, "session store should be unchanged");
+    // cs should NOT be reset (preserved as the current session)
+    assert.equal(cs.sessionId, "webui-A", "cs.sessionId should be preserved in dry-run");
+    assert.equal(cs.sessionTitle, "A on ws-A");
+    assert.deepEqual(cs.chat, ["existing"]);
+  });
+});
+
+describe("handleDeleteSession — dry-run (db-level preview)", () => {
+  test("deleteMcodeSessionFromDb with dryRun=true returns rows per table without modifying", async () => {
+    // Use a temp sqlite db, set MCODE_RUNTIME_DB to it, populate rows,
+    // call dryRun, then verify rows are still there.
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "webui-dryrun-"));
+    const dbPath = join(dir, "runtime-state.sqlite");
+    // Create tables with one row for our sid
+    const { spawnSync } = await import("node:child_process");
+    const sql = `
+      CREATE TABLE local_runtime_sessions (session_id TEXT PRIMARY KEY, data TEXT);
+      CREATE TABLE local_runtime_session_assets (session_id TEXT);
+      INSERT INTO local_runtime_sessions (session_id, data) VALUES ('mvs_aaaa000000000000000000000000bbbb', 'x');
+      INSERT INTO local_runtime_session_assets (session_id) VALUES ('mvs_aaaa000000000000000000000000bbbb');
+    `;
+    const r = spawnSync(SQLITE3_BIN, [dbPath, sql], { encoding: "utf8" });
+    assert.equal(r.status, 0, `sqlite3 create failed: ${r.stderr}`);
+
+    const SID = "mvs_aaaa000000000000000000000000bbbb";
+    const dry = deleteMcodeSessionFromDb(SID, { MCODE_RUNTIME_DB: dbPath, dryRun: true });
+    assert.equal(dry.ok, true);
+    assert.equal(dry.dryRun, true);
+    assert.ok(Array.isArray(dry.log));
+    assert.ok(dry.totalRows >= 2, `should count >= 2 rows, got ${dry.totalRows}`);
+
+    // Verify rows are STILL there
+    const check = spawnSync(
+      SQLITE3_BIN,
+      [dbPath, `SELECT COUNT(*) FROM local_runtime_sessions WHERE session_id='${SID}'`],
+      { encoding: "utf8" },
+    );
+    assert.equal(check.stdout.trim(), "1", "row should NOT be deleted in dry-run");
+  });
+
+  test("deleteMcodeSessionFromDb without dryRun actually deletes (sanity)", async () => {
+    const { mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "webui-real-del-"));
+    const dbPath = join(dir, "runtime-state.sqlite");
+    const { spawnSync } = await import("node:child_process");
+    spawnSync(
+      SQLITE3_BIN,
+      [dbPath, `CREATE TABLE local_runtime_sessions (session_id TEXT PRIMARY KEY, data TEXT); INSERT INTO local_runtime_sessions (session_id, data) VALUES ('mvs_real00000000000000000000bbbb', 'x');`],
+      { encoding: "utf8" },
+    );
+    const SID = "mvs_bbbb000000000000000000000000cccc";
+    const r = deleteMcodeSessionFromDb(SID, { MCODE_RUNTIME_DB: dbPath });
+    assert.equal(r.ok, true);
+    assert.equal(r.dryRun, undefined, "default path should NOT have dryRun flag");
+    const check = spawnSync(
+      SQLITE3_BIN,
+      [dbPath, `SELECT COUNT(*) FROM local_runtime_sessions WHERE session_id='${SID}'`],
+      { encoding: "utf8" },
+    );
+    assert.equal(check.stdout.trim(), "0", "row SHOULD be deleted in normal path");
   });
 });
 

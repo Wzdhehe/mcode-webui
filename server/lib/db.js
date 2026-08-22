@@ -54,13 +54,44 @@ export const MCODE_SESSION_DELETE_TABLES = [
   "local_runtime_session_assets",
 ];
 
-export function deleteMcodeSessionFromDb(sid, { MCODE_RUNTIME_DB } = {}) {
+export function deleteMcodeSessionFromDb(
+  sid,
+  { MCODE_RUNTIME_DB, dryRun = false } = {},
+) {
   if (!/^mvs_[a-f0-9]{32}$/.test(sid))
     return { ok: false, reason: "not_mcode_sid" };
   const Db = getMcodeBetterSqlite3();
   if (!Db) return { ok: false, reason: "better_sqlite3_not_loaded" };
   if (!MCODE_RUNTIME_DB || !existsSync(MCODE_RUNTIME_DB))
     return { ok: false, reason: "mcode_db_not_found" };
+
+  // dry-run path: open readonly, count rows per table, do NOT modify.
+  // Satisfies mcode-plugin-guide red-lines.md §"写操作/破坏性操作":
+  // callers (CLI / API) can preview what would be deleted before committing.
+  if (dryRun) {
+    let db;
+    try {
+      db = new Db(MCODE_RUNTIME_DB, { readonly: true });
+      const log = [];
+      for (const t of MCODE_SESSION_DELETE_TABLES) {
+        try {
+          const r = db
+            .prepare(`SELECT COUNT(*) AS c FROM ${t} WHERE session_id = ?`)
+            .get(sid);
+          if (r && r.c > 0) log.push(`${t}:${r.c}`);
+        } catch {
+          // 表可能不存在 (mcode 不同版本 schema 略不同), 跳过
+        }
+      }
+      db.close();
+      const totalRows = log.reduce((s, e) => s + Number(e.split(":")[1]), 0);
+      return { ok: true, dryRun: true, log, totalRows };
+    } catch (e) {
+      if (db) try { db.close(); } catch {}
+      return { ok: false, error: e.message };
+    }
+  }
+
   let db;
   try {
     db = new Db(MCODE_RUNTIME_DB, { readonly: false });
