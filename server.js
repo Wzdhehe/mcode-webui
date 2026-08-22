@@ -173,59 +173,26 @@ function mmxQuotaShow() {
   })
 }
 
-function formatDuration(ms) {
-  if (!ms || ms < 0) return '—'
-  const totalSec = Math.floor(ms / 1000)
-  const days = Math.floor(totalSec / 86400)
-  const hours = Math.floor((totalSec % 86400) / 3600)
-  const mins = Math.floor((totalSec % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h 后重置`
-  if (hours > 0) return `${hours}h ${mins}m 后重置`
-  return `${mins}m 后重置`
-}
-
-function formatMmxQuota(data) {
-  const arr = data?.model_remains
-  if (!Array.isArray(arr) || arr.length === 0) return '  暂无数据'
-  return arr.map((m) => {
-    const intervalPct = m.current_interval_remaining_percent
-    const weeklyPct = m.current_weekly_remaining_percent
-    const intervalReset = formatDuration(m.remains_time)
-    const weeklyReset = formatDuration(m.weekly_remains_time)
-    const name = m.model_name || 'model'
-    return `  ${name}\n    5 小时  ${intervalPct}% 剩余 · ${intervalReset}\n    周  ${weeklyPct}% 剩余 · ${weeklyReset}`
-  }).join('\n')
-}
-
+// v0.5.aa: /usage 改成静默查询 — 只更新 state.usage，不写 chat
+// 用户在左下角"套餐用量"按钮 + 弹层看数据，chat 不再被 /usage 消息污染
+// 自动每 2 分钟由客户端 setInterval 触发，slash /usage 仅作手动立即刷新
 async function runUsageQuery() {
-  state.chat = [...(state.chat || []), '› /usage']
-  pushState()
-  // 加一个 loading 占位（系统消息 ○），等数据回来再替换
-  state.chat = [...state.chat, '○ 套餐用量加载中…']
-  pushState()
-  persistCurrentChat()
   try {
     const data = await mmxQuotaShow()
-    const formatted = formatMmxQuota(data)
-    // 同步给 state.usage 留一份（兼容老 webui.html 里可能用到的字段）
     const general = data.model_remains?.find((m) => m.model_name === 'general') || data.model_remains?.[0]
     if (general) {
       state.usage.fiveHourPercent = general.current_interval_remaining_percent
-      state.usage.fiveHourReset = formatDuration(general.remains_time)
       state.usage.weekly = `${general.current_weekly_remaining_percent}%`
-      state.usage.weeklyReset = formatDuration(general.weekly_remains_time)
     }
     state.usage.raw = JSON.stringify(data, null, 2)
     state.usage.fetchedAt = Date.now()
-    // 替换最后一条 loading 为真实数据
-    const reply = `● 套餐用量：\n${formatted}`
-    state.chat = state.chat.slice(0, -1).concat([reply])
+    state.usage.error = null
   } catch (e) {
-    const errText = `○ /usage 失败：${e.message}`
-    state.chat = state.chat.slice(0, -1).concat([errText])
+    state.usage.fetchedAt = Date.now()
+    state.usage.error = String(e.message || e)
   }
   pushState()
-  persistCurrentChat()
+  // 不写 chat，不 persistCurrentChat
 }
 
 // v0.5.x: 启动时清理空 chat + 默认标题的 session（用户点了"新建会话"但没发消息的残留）

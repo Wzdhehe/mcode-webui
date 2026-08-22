@@ -2794,7 +2794,8 @@ function renderUsageValue() {
     return
   }
   const ip = g.current_interval_remaining_percent
-  val.textContent = `${ip}%`
+  // v0.5.aa: 加 "剩余" 后缀让"已用"和"剩余"语义明确（用户反馈）
+  val.textContent = `${ip}% 剩余`
   if (ip < 20) val.classList.add('low')
   else val.classList.remove('low')
 }
@@ -2939,6 +2940,8 @@ function init() {
     const popover = document.getElementById('usage-popover')
     if (popover && !popover.hidden) renderUsagePopover()
   }, 30_000)
+  // v0.5.aa: /usage 静默查询，每 2 分钟自动刷一次（按钮 value + 弹层用，chat 不污染）
+  setInterval(refreshUsage, 2 * 60_000)
 }
 
 function attachEvents() {
