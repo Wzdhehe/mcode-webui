@@ -14,20 +14,17 @@ const __DBG = (() => {
     buf.push({ t, msg: String(msg) })
     if (buf.length > MAX) buf.shift()
     flush()
-    // 也打到 console 让 devtools 也能看
     try { console.log('[webui]', msg) } catch {}
   }
   return { log, buf, flush }
 })()
 window.__DBG = __DBG
-// 全局错误 → log 面板
 window.addEventListener('error', (e) => {
   __DBG.log('❌ERR: ' + (e.error?.message || e.message) + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?') + ':' + (e.colno || '?'))
 })
 window.addEventListener('unhandledrejection', (e) => {
   __DBG.log('❌REJ: ' + (e.reason?.message || e.reason?.toString() || e.reason))
 })
-// copy / clear 按钮 (defer 到 DOM ready)
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('debug-log-copy')?.addEventListener('click', () => {
     const txt = __DBG.buf.map(e => `[${e.t}] ${e.msg}`).join('\n')
@@ -203,20 +200,6 @@ const I18N = {
     ask_user_no_options_hint: '无预设选项 — 用下方"其他"输入回答',
     ask_user_send_count: '发送 ({n} 题)',
     ask_user_resend_count: '已答完 ({n} 题, 点重发)',
-    // v0.5.by: workspace picker 国际化 (Ponkan 反馈 没英语)
-    workspace_sync_tui: '同时更新 mcode TUI 的 cwd (写 cwd.json)',
-    workspace_recents_title: '最近使用',
-    workspace_browse: '浏览目录…',
-    workspace_loading: '加载中…',
-    workspace_picker_hint: '回车切换 · Esc 关闭',
-    workspace_drive_letters: '盘符',
-    tree_set_btn: '选',
-    tree_no_subdir: '（无子目录）',
-    tree_load_error: '加载失败',
-    tree_switch_to: '切换到此目录',
-    tree_back_to_drives: '回到根盘符',
-    tree_back_to_root: '/',
-    ws_input_placeholder: 'C:\\Users\\your-name\\project-path',
   },
   en: {
     title: 'Mcode Web UI',
@@ -343,20 +326,6 @@ const I18N = {
     ask_user_no_options_hint: 'No preset options — type in "Other" below',
     ask_user_send_count: 'Send ({n} questions)',
     ask_user_resend_count: 'Answered ({n} questions, click to resend)',
-    // v0.5.by: workspace picker 国际化 (Ponkan 反馈 没英语)
-    workspace_sync_tui: 'Also update mcode TUI\'s cwd (write cwd.json)',
-    workspace_recents_title: 'Recent',
-    workspace_browse: 'Browse...',
-    workspace_loading: 'Loading...',
-    workspace_picker_hint: 'Enter to switch · Esc to close',
-    workspace_drive_letters: 'Drive Letters',
-    tree_set_btn: 'Set',
-    tree_no_subdir: '(No subdirectories)',
-    tree_load_error: 'Load failed',
-    tree_switch_to: 'Switch to this directory',
-    tree_back_to_drives: 'Back to drive letters',
-    tree_back_to_root: '/',
-    ws_input_placeholder: 'C:\\Users\\your-name\\project-path',
   }
 }
 // v0.5.bh: 首次加载默认英文（用户反馈），有缓存时读缓存
@@ -511,9 +480,7 @@ function connect() {
 // Render
 // ============================================================
 function render() {
-  if (!state) { __DBG.log('render: no state, skip'); return }
-  __DBG.log('render: start, sessions=' + (state.sessions?.length || 0) + ' mcodeSessions=' + (state.mcodeSessions?.length || 0) + ' ver=' + state.version)
-  try {
+  if (!state) return
   // v0.5.ap: chip-lan — 局域网访问状态（替 v0.5.ak 的 chip-status "空闲"）
   // v0.5.at: 跟其他 btn-menu 同结构，value 位置显示 开/关
   const lanBroadcast = state.lanBroadcast !== false  // 缺省 true
@@ -535,8 +502,8 @@ function render() {
     console.warn('[lan] render: chip-lan-link element NOT found in DOM')
   }
 
-  // v0.5.aa: TPS 还在用 (v0.5.by 顶栏 chip-tps 删了, 这里 null check 防止 JS 崩)
-  const tpsEl = document.getElementById('chip-tps')  // 可能 null, 见下
+  // v0.5.aa: TPS 还在用
+  const tpsEl = document.getElementById('chip-tps')
 
   // v0.5.ak: 在线 webui tab 数（server sseByCid.size）
   // v0.5.bh: 走 i18n（zh: 1 台, en: 1 dev），离线时显示红点 + "offline" 文案
@@ -572,8 +539,7 @@ function render() {
 
   if (state.context?.tps) {
     if (tpsEl) tpsEl.hidden = false
-    const tpsVal = document.getElementById('tps-value')
-    if (tpsVal) tpsVal.textContent = state.context.tps
+    document.getElementById('tps-value').textContent = state.context.tps
   } else {
     if (tpsEl) tpsEl.hidden = true
   }
@@ -650,15 +616,10 @@ function render() {
   renderUsage()
 
   // Chat
-  try { renderChat() } catch (e) { __DBG.log('renderChat FAIL: ' + e.message) }
+  renderChat()
 
   // Modals (v0.4.0)
-  try { checkModals() } catch (e) { __DBG.log('checkModals FAIL: ' + e.message) }
-
-  __DBG.log('render: done')
-  } catch (e) {
-    __DBG.log('❌render FATAL: ' + (e?.stack || e?.message || e))
-  }
+  checkModals()
 }
 
 function renderRight() {
@@ -840,7 +801,6 @@ function wsShortName(ws) {
 }
 
 function renderSessions() {
-  __DBG.log('renderSessions: state.sessions=' + (state?.sessions?.length || 0) + ' mcodeSessions=' + (state?.mcodeSessions?.length || 0) + ' q="' + (sessionSearchQuery || '') + '"')
   console.log('[webui] renderSessions: state.sessions=' + (state?.sessions?.length || 0) + ' mcodeSessions=' + (state?.mcodeSessions?.length || 0))
   const list = document.getElementById('sessions-list')
   // v0.5.bv: 优先显示 mcode 真实 sessions（mvs_xxx id + mcode 自动 title）
@@ -1010,23 +970,16 @@ async function refreshSessions() {
     let got = false
     try {
       const r = await fetch('/api/sessions' + API_SUFFIX, { method: 'GET', headers: HEADERS })
-      __DBG.log('refreshSessions: GET /api/sessions status=' + r.status)
       if (r.ok) {
         const data = await r.json()
-        __DBG.log('refreshSessions: data.ok=' + data.ok + ' count=' + (data.sessions?.length ?? 'null') + ' firstId=' + (data.sessions?.[0]?.id?.slice(0, 8) || 'none'))
         if (data.ok && data.sessions && data.sessions.length > 0) {
           state = state || {}
           state.sessions = data.sessions
-          __DBG.log('refreshSessions: state.sessions set, calling render()')
           render()
           got = true
-        } else {
-          __DBG.log('refreshSessions: no sessions in response, NOT calling render()')
         }
-      } else {
-        __DBG.log('refreshSessions: /api/sessions not ok')
       }
-    } catch (e) { __DBG.log('❌refreshSessions GET FAIL: ' + e.message) }
+    } catch {}
     if (!got) {
       // fallback: 触发 mcode /sessions
       try { await fetch('/api/sessions' + API_SUFFIX, { method: 'POST', headers: HEADERS }) } catch {}
@@ -3077,11 +3030,9 @@ function autoResize() {
 // Init
 // ============================================================
 function init() {
-  __DBG.log('init: start')
   console.log('[webui] init: applyTheme/I18n start')
   applyTheme()
   applyI18n()
-  __DBG.log('init: theme/i18n applied')
   console.log('[webui] init: applyTheme/I18n done')
   // v0.5.bx-8: 从 localStorage 恢复已答状态, 避免刷新后按钮重新可点
   if (!state) state = {}
@@ -3101,18 +3052,16 @@ function init() {
   if (!isLocal) document.body.classList.add('is-remote')
   connect()
   attachEvents()
-  __DBG.log('init: events attached')
   // Fetch initial state
   console.log('[webui] init: fetch /api/state')
   fetch('/api/state' + API_SUFFIX, { headers: HEADERS })
-    .then(r => { __DBG.log('init: /api/state status=' + r.status); return r.json() })
-    .then(s => { state = s; __DBG.log('init: state loaded, sessions=' + (s.sessions?.length ?? 'null') + ' ver=' + s.version + ' model=' + s.model?.name); render() })
-    .catch(e => { __DBG.log('❌init: /api/state FAIL: ' + (e?.message || e)); document.title = '⚠ /api/state FAIL' })
+    .then(r => r.json())
+    .then(s => { state = s; console.log('[webui] init: state loaded, sessions=' + (s.sessions ? s.sessions.length : 'null')); render() })
+    .catch(e => { console.error('[webui] init: /api/state FAIL', e); document.title = '⚠ /api/state FAIL' })
   // v0.4.1: 启动后自动拉一次 sessions 列表（mavis CLI 路径，不走 mcode）
   // v0.5.x: 改成立即拉，不延时轮询（避免刷新图标一直转的视觉噪音）
   refreshSessions()
   console.log('[webui] init: refreshSessions called')
-  __DBG.log('init: refreshSessions triggered')
   // v0.5.z: 启动后自动拉一次 quota（mmx quota show 直拉，按钮 value 用）
   refreshUsage()
   // v0.5.z: 定时刷新 popover 的本机时间倒计时（30s 一次，避免分钟级过期）
@@ -3436,15 +3385,15 @@ function attachEvents() {
       wsCurrent.textContent = cur || t('workspace_unset')
       wsInput.value = cur
       renderWsRecents()
-      // v0.5.by: 旧 "Use TUI" 按钮删了, 这里探测 TUI cwd 的逻辑保留 (其他功能可能用到)
-      //   比如未来加 "use tui" slash cmd 或快捷键, 这里不删
+      // 探测 TUI cwd，让 "跟随 TUI" 按钮显示真实路径（tooltip）
       fetch('/api/workspace' + API_SUFFIX, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...HEADERS },
         body: JSON.stringify({ action: 'detect' }),
       }).then(r => r.json()).then(data => {
         if (data && data.tuiCwd) {
-          // tuiBtn 已删, 不再 update tooltip. 保留 fetch 是为了 cache tuiCwd 在 server 端
+          const tuiBtn = document.getElementById('workspace-picker-tui')
+          if (tuiBtn) tuiBtn.title = 'mcode TUI 当前在: ' + data.tuiCwd
         }
       }).catch(() => {})
       setTimeout(() => {
@@ -3468,9 +3417,20 @@ function attachEvents() {
     }
   })
 
-  // v0.5.by: 旧 Switch/Use TUI/Reset 三按钮删了, Enter 提交替代 Switch
-  //   (还有 wsInput.addEventListener('keydown') 在上面, Enter 已经触发 submitWorkspaceChange)
-  //   Use TUI / Reset 两个 action 由 /api/workspace 端点支持, 但 UI 入口已删, 避免用户误点
+  document.getElementById('workspace-picker-confirm').addEventListener('click', (e) => {
+    e.stopPropagation()
+    const dir = wsInput.value.trim()
+    if (!dir) { alert('请输入目录路径'); return }
+    submitWorkspaceChange({ dir, syncTui: wsSyncCheckbox.checked })
+  })
+  document.getElementById('workspace-picker-tui').addEventListener('click', (e) => {
+    e.stopPropagation()
+    submitWorkspaceChange({ action: 'useTui', syncTui: false })
+  })
+  document.getElementById('workspace-picker-reset').addEventListener('click', (e) => {
+    e.stopPropagation()
+    submitWorkspaceChange({ action: 'reset' })
+  })
 
   // v0.5.am: 可视化目录树浏览（懒加载）
   const browseToggle = document.getElementById('workspace-picker-browse-toggle')
@@ -3497,11 +3457,11 @@ function attachEvents() {
   function renderBreadcrumb(dir) {
     breadcrumb.innerHTML = ''
     if (!dir) {
-      // 根盘符视图 — v0.5.by 改用 i18n
+      // 根盘符视图
       const span = document.createElement('span')
       span.className = 'workspace-picker-breadcrumb-item'
-      span.textContent = t('workspace_drive_letters')
-      span.title = t('tree_back_to_drives')
+      span.textContent = '盘符'
+      span.title = '根盘符'
       breadcrumb.appendChild(span)
       return
     }
@@ -3518,7 +3478,7 @@ function attachEvents() {
     const firstCrumb = document.createElement('span')
     firstCrumb.className = 'workspace-picker-breadcrumb-item'
     firstCrumb.textContent = acc
-    firstCrumb.title = isWin ? t('tree_back_to_drives') : t('tree_back_to_root')
+    firstCrumb.title = isWin ? '回到根盘符' : '/'
     // 关键修复：firstCrumb 始终跳回根盘符视图（Windows = loadBrowse(null)，Linux = loadBrowse('/')）
     firstCrumb.addEventListener('click', (e) => {
       e.stopPropagation()
@@ -3554,17 +3514,25 @@ function attachEvents() {
     if (!children || children.length === 0) {
       const empty = document.createElement('div')
       empty.className = 'workspace-picker-tree-empty'
-      empty.textContent = t('tree_no_subdir')  // v0.5.by: i18n
+      empty.textContent = '（无子目录）'
       parent.appendChild(empty)
       return
-    }me = document.createElement('span')
+    }
+    for (const c of children) {
+      const node = document.createElement('div')
+      node.className = 'workspace-tree-node'
+      if (c.path === currentDir) node.classList.add('current')
+      const chev = document.createElement('span')
+      chev.className = 'workspace-tree-chevron'
+      chev.textContent = '▶'
+      const name = document.createElement('span')
       name.className = 'workspace-tree-name'
       name.textContent = c.name
       name.title = c.path
       const setBtn = document.createElement('button')
       setBtn.className = 'workspace-tree-set-btn'
-      setBtn.textContent = t('tree_set_btn')  // v0.5.by: i18n
-      setBtn.title = t('tree_switch_to')
+      setBtn.textContent = '选'
+      setBtn.title = '切换到此目录'
       const childrenBox = document.createElement('div')
       childrenBox.className = 'workspace-tree-children'
       childrenBox.hidden = true
@@ -3588,7 +3556,7 @@ function attachEvents() {
             } else {
               const err = document.createElement('div')
               err.className = 'workspace-picker-tree-error'
-              err.textContent = t('tree_load_error') + ': ' + (data.error || '')  // v0.5.by: i18n
+              err.textContent = '加载失败: ' + (data.error || '未知')
               childrenBox.innerHTML = ''
               childrenBox.appendChild(err)
             }
@@ -4090,6 +4058,7 @@ function attachEvents() {
       textarea.focus()
     }
   })
+}
 
 function moveSlash(delta) {
   if (slashFiltered.length === 0) return
@@ -4357,10 +4326,8 @@ window.addEventListener('error', (e) => {
 try {
   init()
   attachModalEvents()
-  __DBG.log('✅ init done')
   console.log('[webui] init done')
 } catch (e) {
-  __DBG.log('❌INIT FATAL: ' + (e?.stack || e?.message || e))
   console.error('[webui INIT FATAL]', e?.stack || e?.message || e)
   document.body.innerHTML = '<pre style="color:red;padding:20px;font-size:14px;">⚠ webui JS 初始化失败:\n\n' + (e?.stack || e?.message || JSON.stringify(e)) + '\n\n请截图给开发</pre>'
   throw e
