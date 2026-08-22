@@ -224,7 +224,7 @@ export async function setupMocks(t, overrides = {}) {
       setConfigOption: async () => ({ ok: false, code: "unsupported" }),
       loadSession: async () => ({ ok: false, code: "unsupported" }),
       activateSession: async () => ({ ok: false, code: "unsupported" }),
-      listSessions: async () => ({ sessions: [] }),
+      listSessions: async () => [],
       webuiPermissionToMcode: () => "bypassPermissions",
     },
   });
@@ -241,6 +241,13 @@ export async function setupMocks(t, overrides = {}) {
       // routes/chat.js imports this too — a missing named export makes the
       // SUT import hang (Node 24.14 mock.module pitfall #4)
       handleCmdCommand: async () => ({ ok: true }),
+      // v0.5.bx 系列 patch: lib-slash.test.js tests the real matchSlash
+      // — but we still provide a stub for the mocked version
+      matchSlash: (content) => {
+        const m = content.match(/^\/([a-zA-Z][\w-]*)\b\s*(.*)/);
+        if (!m) return null;
+        return { cmd: m[1], rest: m[2] || "" };
+      },
     },
   });
 }
