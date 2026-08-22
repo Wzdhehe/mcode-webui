@@ -1,4 +1,45 @@
 // ============================================================
+// Debug log (in-page) — v0.5.bx-NN
+// 让用户能直接看到 init / render 流程, 不用开 devtools
+// ============================================================
+const __DBG = (() => {
+  const buf = []
+  const MAX = 30
+  const flush = () => {
+    const el = document.getElementById('debug-log')
+    if (el) el.textContent = buf.map(e => `[${e.t}] ${e.msg}`).join('\n')
+  }
+  const log = (msg) => {
+    const t = new Date().toTimeString().slice(0, 8)
+    buf.push({ t, msg: String(msg) })
+    if (buf.length > MAX) buf.shift()
+    flush()
+    // 也打到 console 让 devtools 也能看
+    try { console.log('[webui]', msg) } catch {}
+  }
+  return { log, buf, flush }
+})()
+window.__DBG = __DBG
+// 全局错误 → log 面板
+window.addEventListener('error', (e) => {
+  __DBG.log('❌ERR: ' + (e.error?.message || e.message) + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?') + ':' + (e.colno || '?'))
+})
+window.addEventListener('unhandledrejection', (e) => {
+  __DBG.log('❌REJ: ' + (e.reason?.message || e.reason?.toString() || e.reason))
+})
+// copy / clear 按钮 (defer 到 DOM ready)
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('debug-log-copy')?.addEventListener('click', () => {
+    const txt = __DBG.buf.map(e => `[${e.t}] ${e.msg}`).join('\n')
+    navigator.clipboard?.writeText(txt).then(() => __DBG.log('✓ copied ' + __DBG.buf.length + ' lines'))
+  })
+  document.getElementById('debug-log-clear')?.addEventListener('click', () => {
+    __DBG.buf.length = 0
+    __DBG.flush()
+  })
+})
+
+// ============================================================
 // Config
 // ============================================================
 const urlParams = new URLSearchParams(window.location.search)
@@ -470,7 +511,9 @@ function connect() {
 // Render
 // ============================================================
 function render() {
-  if (!state) return
+  if (!state) { __DBG.log('render: no state, skip'); return }
+  __DBG.log('render: start, sessions=' + (state.sessions?.length || 0) + ' mcodeSessions=' + (state.mcodeSessions?.length || 0) + ' ver=' + state.version)
+  try {
   // v0.5.ap: chip-lan — 局域网访问状态（替 v0.5.ak 的 chip-status "空闲"）
   // v0.5.at: 跟其他 btn-menu 同结构，value 位置显示 开/关
   const lanBroadcast = state.lanBroadcast !== false  // 缺省 true
@@ -607,10 +650,15 @@ function render() {
   renderUsage()
 
   // Chat
-  renderChat()
+  try { renderChat() } catch (e) { __DBG.log('renderChat FAIL: ' + e.message) }
 
   // Modals (v0.4.0)
-  checkModals()
+  try { checkModals() } catch (e) { __DBG.log('checkModals FAIL: ' + e.message) }
+
+  __DBG.log('render: done')
+  } catch (e) {
+    __DBG.log('❌render FATAL: ' + (e?.stack || e?.message || e))
+  }
 }
 
 function renderRight() {
@@ -792,6 +840,7 @@ function wsShortName(ws) {
 }
 
 function renderSessions() {
+  __DBG.log('renderSessions: state.sessions=' + (state?.sessions?.length || 0) + ' mcodeSessions=' + (state?.mcodeSessions?.length || 0) + ' q="' + (sessionSearchQuery || '') + '"')
   console.log('[webui] renderSessions: state.sessions=' + (state?.sessions?.length || 0) + ' mcodeSessions=' + (state?.mcodeSessions?.length || 0))
   const list = document.getElementById('sessions-list')
   // v0.5.bv: 优先显示 mcode 真实 sessions（mvs_xxx id + mcode 自动 title）
@@ -961,16 +1010,23 @@ async function refreshSessions() {
     let got = false
     try {
       const r = await fetch('/api/sessions' + API_SUFFIX, { method: 'GET', headers: HEADERS })
+      __DBG.log('refreshSessions: GET /api/sessions status=' + r.status)
       if (r.ok) {
         const data = await r.json()
+        __DBG.log('refreshSessions: data.ok=' + data.ok + ' count=' + (data.sessions?.length ?? 'null') + ' firstId=' + (data.sessions?.[0]?.id?.slice(0, 8) || 'none'))
         if (data.ok && data.sessions && data.sessions.length > 0) {
           state = state || {}
           state.sessions = data.sessions
+          __DBG.log('refreshSessions: state.sessions set, calling render()')
           render()
           got = true
+        } else {
+          __DBG.log('refreshSessions: no sessions in response, NOT calling render()')
         }
+      } else {
+        __DBG.log('refreshSessions: /api/sessions not ok')
       }
-    } catch {}
+    } catch (e) { __DBG.log('❌refreshSessions GET FAIL: ' + e.message) }
     if (!got) {
       // fallback: 触发 mcode /sessions
       try { await fetch('/api/sessions' + API_SUFFIX, { method: 'POST', headers: HEADERS }) } catch {}
@@ -3021,9 +3077,11 @@ function autoResize() {
 // Init
 // ============================================================
 function init() {
+  __DBG.log('init: start')
   console.log('[webui] init: applyTheme/I18n start')
   applyTheme()
   applyI18n()
+  __DBG.log('init: theme/i18n applied')
   console.log('[webui] init: applyTheme/I18n done')
   // v0.5.bx-8: 从 localStorage 恢复已答状态, 避免刷新后按钮重新可点
   if (!state) state = {}
@@ -3043,16 +3101,18 @@ function init() {
   if (!isLocal) document.body.classList.add('is-remote')
   connect()
   attachEvents()
+  __DBG.log('init: events attached')
   // Fetch initial state
   console.log('[webui] init: fetch /api/state')
   fetch('/api/state' + API_SUFFIX, { headers: HEADERS })
-    .then(r => r.json())
-    .then(s => { state = s; console.log('[webui] init: state loaded, sessions=' + (s.sessions ? s.sessions.length : 'null')); render() })
-    .catch(e => { console.error('[webui] init: /api/state FAIL', e); document.title = '⚠ /api/state FAIL' })
+    .then(r => { __DBG.log('init: /api/state status=' + r.status); return r.json() })
+    .then(s => { state = s; __DBG.log('init: state loaded, sessions=' + (s.sessions?.length ?? 'null') + ' ver=' + s.version + ' model=' + s.model?.name); render() })
+    .catch(e => { __DBG.log('❌init: /api/state FAIL: ' + (e?.message || e)); document.title = '⚠ /api/state FAIL' })
   // v0.4.1: 启动后自动拉一次 sessions 列表（mavis CLI 路径，不走 mcode）
   // v0.5.x: 改成立即拉，不延时轮询（避免刷新图标一直转的视觉噪音）
   refreshSessions()
   console.log('[webui] init: refreshSessions called')
+  __DBG.log('init: refreshSessions triggered')
   // v0.5.z: 启动后自动拉一次 quota（mmx quota show 直拉，按钮 value 用）
   refreshUsage()
   // v0.5.z: 定时刷新 popover 的本机时间倒计时（30s 一次，避免分钟级过期）
@@ -4297,8 +4357,10 @@ window.addEventListener('error', (e) => {
 try {
   init()
   attachModalEvents()
+  __DBG.log('✅ init done')
   console.log('[webui] init done')
 } catch (e) {
+  __DBG.log('❌INIT FATAL: ' + (e?.stack || e?.message || e))
   console.error('[webui INIT FATAL]', e?.stack || e?.message || e)
   document.body.innerHTML = '<pre style="color:red;padding:20px;font-size:14px;">⚠ webui JS 初始化失败:\n\n' + (e?.stack || e?.message || JSON.stringify(e)) + '\n\n请截图给开发</pre>'
   throw e
