@@ -1643,6 +1643,10 @@ function closeAskModal() {
   // 清空 other input
   const other = document.getElementById('ask-modal-other')
   if (other) other.value = ''
+  // v0.5.bx-28: 防御性清 pendingAskUser — 任何关弹窗路径 (X / Esc / 背景 / 切会话) 都要清,
+  //   否则 send() 会把后续正常消息包成 Q/A 模板 ("Q: <question>\nA: <user input>")
+  //   X / Esc / 背景 现在都绑 closeAskModal (不再过 askModalSkip), 语义是"我放弃这题, 让我正常发消息"
+  if (state && state.pendingAskUser) state.pendingAskUser = null
 }
 
 // v0.5.bx-14: 清掉"已展示"记录 (调试/重置用, 切 session 时也调, 让历史 ask 重新可答)
@@ -1822,7 +1826,11 @@ function bindAskModal() {
   const other = document.getElementById('ask-modal-other')
   const backdrop = document.getElementById('ask-modal-backdrop')
   const opts = document.getElementById('ask-modal-options')
-  if (close) close.addEventListener('click', askModalSkip)  // × 视作跳过当前题
+  // v0.5.bx-28: X / Esc / 点背景 = 彻底放弃 (dismiss) — 关弹窗 + 清 pendingAskUser, 不发任何 Q/A 给 mcode
+  //   用户明确说"我不回答这个问题, 让我正常发消息", 后续 chat 走 send() 正常通路, 不会被套 Q/A 模板
+  //   "跳过" 按钮 (skip) 才是明确动作: 发 "Q: ... A: 未回答" 给 mcode, 走 askModalSkip → submitAskModal
+  //   "发送" 按钮 (send) 走 askModalNextOrSend → submitAskModal: 模板化所有题目, 已答正常 Q/A, 未答 "未回答"
+  if (close) close.addEventListener('click', closeAskModal)  // × 彻底放弃当前 ask
   if (skip) skip.addEventListener('click', askModalSkip)
   if (send) send.addEventListener('click', askModalNextOrSend)
   if (other) {
@@ -1834,7 +1842,7 @@ function bindAskModal() {
       }
     })
   }
-  if (backdrop) backdrop.addEventListener('click', askModalSkip)  // 点背景 = 跳过
+  if (backdrop) backdrop.addEventListener('click', closeAskModal)  // 点背景 = 彻底放弃
   if (opts) {
     opts.addEventListener('click', (e) => {
       const btn = e.target.closest('.ask-modal-opt')
@@ -1842,11 +1850,11 @@ function bindAskModal() {
       onAskModalOptClick(btn)
     })
   }
-  // Esc 关闭
+  // Esc 关闭 = 彻底放弃
   document.addEventListener('keydown', (e) => {
     if (ASK_MODAL_STATE.open && e.key === 'Escape') {
       e.preventDefault()
-      askModalSkip()
+      closeAskModal()
     }
   })
 }
@@ -4355,8 +4363,9 @@ function attachModalEvents() {
 }
 
 // Start
+// v0.5.bx-28: ask_user 弹窗 X / Esc / 背景 = 彻底放弃, 不发 Q/A 给 mcode; 防御性清 pendingAskUser
 // v0.5.bx-27: 启动日志 + JS 错误捕获 — 让 reload 后能立刻看到 fatal error
-console.log('[webui] init start, version=v0.5.bx-27, build=2026-08-20')
+console.log('[webui] init start, version=v0.5.bx-28, build=2026-08-20')
 window.addEventListener('error', (e) => {
   console.error('[webui FATAL]', e.error?.stack || e.message, '@', e.filename + ':' + e.lineno + ':' + e.colno)
   document.title = '⚠ JS ERR: ' + (e.error?.message || e.message).substring(0, 50)

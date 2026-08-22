@@ -178,7 +178,15 @@
                 <span id="mode-label">Default</span>
               </span>
               <div class="input-spacer"></div>
-              <button class="btn-tool" id="btn-model" title="模型">
+              <!-- v0.5.bz: 暂时隐藏模型切换按钮 (隐藏不删除, 等 mcode 0.1.5+ 加 set_config_option 后可恢复)
+                   原因: mcode 0.1.5 acp 协议不支持 session/set_config_option (实测 "Method not found",
+                   已在 server/lib/mcode-rpc.js:32-40 的 UNSUPPORTED set 显式列出)
+                   后果: webui 端 cs.model.name 改了 UI 也变, 但 runMcodeAcp 默认路径不读 opts.model,
+                   调 client.newSession(workspace) / client.loadSession(sid, workspace) 都不带 model 参数
+                   (acp.mjs:155-160), mcode 实际仍用旧 model 跑
+                   唯一能真切的路径: mcode exec (MCODE_USE_ACP=0) — runMcodeExec 真把 --model 透传给子进程
+                   想临时恢复: 把下面 btn-model 标签的 hidden 去掉即可, server /api/set-model 端点没动 -->
+              <button class="btn-tool" id="btn-model" title="mcode 0.1.5 acp 不支持 mid-session 改 model (实测 probe); 按钮已隐藏" hidden>
                 <span id="model-label">—</span>
                 <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
@@ -502,7 +510,9 @@
 <!-- v4: v0.5.bx-NN — 加 in-page debug log 面板 (visible), render() 包 try/catch -->
 <!-- v5: v0.5.bx-NN — session delete 确认 i18n (会话列表 X 按钮的二次确认) -->
 <!-- v6: v0.5.bx-NN — debug log 面板默认收起, 报错自动弹出, 加 close 按钮 -->
-<script type="module" src="/app/main.js?v=6"></script>
+<!-- v7: v0.5.bx-28 ask modal X/Esc/背景 改"彻底放弃" (清除 pendingAskUser, 不发 Q/A 给 mcode) -->
+<!-- v8: v0.5.bx-29 fix context usage: SSE 连接时主动 hydrate mavis db 真值 + finalize 时 broadcast 到同 mcodeSessionId 的所有 cid -->
+<script type="module" src="/app/main.js?v=8"></script>
 
 <div class="lan-url-popover" id="lan-url-popover" hidden>
   <div class="lan-url-title">访问地址</div>

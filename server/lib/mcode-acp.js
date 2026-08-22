@@ -4,7 +4,7 @@
 import { McodeAcpClient } from '../../acp.mjs'
 import { DEFAULT_WORKSPACE, DEFAULT_MODEL } from './config.js'
 import { streamUpdateLine } from './sessions.js'
-import { setActiveChild, clearActiveChild, pushStateFor } from './state-bus.js'
+import { setActiveChild, clearActiveChild, pushStateFor, getCidsByMcodeSession } from './state-bus.js'
 import { applyMavisUsageToCs } from './mavis-usage.js'
 import { getMcodeSessionTitle, invalidateMcodeSessionsCache, getMcodeSessionsForWorkspace } from './acp-client.js'
 import { getMcodeModelLimit } from './models.js'
@@ -143,6 +143,17 @@ function streamAcpPrompt(client, sid, content, label, cs, cid) {
                 console.log(`[usage.mavis] cid=${cid} sid=${mavisSid} (覆盖估算)`)
               }
               pushStateFor(cid)
+              // v0.5.bx-29: 同一 mcodeSessionId 的其它 cid (手机 + 电脑开同一 session) 也要更新
+              //   修: 之前只有发起 prompt 的 cid 更新 context, 其它 CID 一直看估算
+              const others = getCidsByMcodeSession(mavisSid).filter(o => o.cid !== cid)
+              if (process.env.MCODE_USAGE_DEBUG && others.length > 0) {
+                console.log(`[usage.mavis.broadcast] sid=${mavisSid} → ${others.length} other cid(s): ${others.map(o => o.cid).join(',')}`)
+              }
+              for (const { cid: otherCid, cs: otherCs } of others) {
+                applyMavisUsageToCs(otherCs, mavisSid, { getMcodeModelLimit })
+                  .then(() => pushStateFor(otherCid))
+                  .catch(() => {})
+              }
             })
             .catch((e) => {
               if (process.env.MCODE_USAGE_DEBUG) console.warn(`[usage.mavis] cid=${cid} error: ${e.message}`)

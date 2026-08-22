@@ -134,6 +134,20 @@ export function clearActiveChild(cid) {
   if (cid) activeChildByCid.delete(cid)
 }
 
+// v0.5.bx-29: 找出所有绑定了同一个 mcodeSessionId 的 cid
+//   用于 mavis db 真值更新后, 通知其它同 session 的 cid (手机 + 电脑开同一 session)
+//   返回 [{cid, cs}, ...] 数组
+export function getCidsByMcodeSession(mvsSessionId) {
+  if (!mvsSessionId) return []
+  const out = []
+  for (const [cid, cs] of clients) {
+    if (cs && cs.mcodeSessionId === mvsSessionId) {
+      out.push({ cid, cs })
+    }
+  }
+  return out
+}
+
 // SSE channel helpers — only state-bus.js should touch sseByCid directly.
 export function getSseClient(cid) {
   return sseByCid.get(cid) || null
