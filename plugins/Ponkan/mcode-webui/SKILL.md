@@ -98,24 +98,20 @@ All optional. Defaults shown. See `server/lib/config.js` for full list.
 
 ## Security Notes
 
-- **Network exposure**: server binds `0.0.0.0` by default — accessible from
-  any device on the LAN (phones, tablets). Override via `HOST=127.0.0.1`
-  for loopback-only. LAN can be toggled at runtime via `/api/settings` (LAN
-  Broadcast toggle).
+The full security disclosure is in
+[`references/SECURITY-NOTES.md`](references/SECURITY-NOTES.md) — this is
+the **single source of truth** for the plugin's network, credential,
+destructive-operation, file-system, and process-model behavior.
 
-- **Token auth**: `?token=` query param + `Authorization: Bearer` header
-  supported. When `TOKEN` env is set, all non-local requests require it.
-  **Note**: tokens in query strings can be logged by intermediate proxies
-  — prefer `Authorization: Bearer` header for any non-browser client.
+TL;DR (read the full notes for details):
 
-- **Destructive operations**: `DELETE /api/sessions/:id` removes the
-  corresponding mcode session from `~/.minimax/v2/sqlite/runtime-state.sqlite`
-  (the user's real mavis database). Pass `?dryRun=true` first to preview
-  what will be deleted before committing.
-
-- **mcode session cache**: `acp-client.js` spawns a long-lived mcode acp
-  child process. Killing the webui process leaves the child orphaned until
-  the mcode runtime's own TTL kicks in.
+- Default bind `0.0.0.0` — set `HOST=127.0.0.1` for loopback-only.
+- `?token=` query string supported for browser convenience; prefer
+  `Authorization: Bearer` header for non-browser callers.
+- `DELETE /api/sessions/:id` writes to the user's real mavis sqlite
+  (`~/.minimax/v2/sqlite/runtime-state.sqlite`). Pass `?dryRun=true`
+  first to preview.
+- No telemetry, no remote endpoints. All processing is local.
 
 ## Endpoints (summary — full table in `docs/API.md`)
 

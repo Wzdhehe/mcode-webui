@@ -21,6 +21,7 @@
   "extensions": {
     "displayName": "mcode Web UI",
     "icon": "🌐",
+    "securityNotes": "See references/SECURITY-NOTES.md — canonical disclosure (network bind 0.0.0.0, ?token= query, mavis sqlite cross-delete, file upload, no telemetry). Per red-line 7 of mcode-plugin-guide, this is the single source of truth.",
     "runtime": {
       "minNodeVersion": "22.19",
       "maxNodeVersion": "26",
