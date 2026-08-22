@@ -1,182 +1,164 @@
 ---
 name: mcode-webui
-displayName: mcode Web UI
-version: 0.5.bx
-description: Browser-based chat frontend for the mcode agent runtime. Streams mcode acp / exec sessions to a Kimi-Code-style web UI with real-time tool events, plan review, ask-user prompts, context usage, and quota. Zero npm dependencies; runs on Node 22+.
-author: Ponkan
-icon: 🌐
-category: developer-tools
-tags:
-  - mcode
-  - webui
-  - acp
-  - chat
-  - sse
-  - zero-deps
-mcp:
-  - name: mcode-webui
-    type: http
-    entry: server.js
-    port: 7890
-    health: /api/health
-capabilities:
-  - chat-streaming
-  - tool-execution
-  - plan-mode
-  - ask-user-tool
-  - permission-prompts
-  - workspace-switching
-  - session-management
-  - file-attachments
-  - quota-usage
-  - bilingual-ui
-  - lan-sharing
-  - token-auth
-  - mobile-responsive
-runtime:
-  minNodeVersion: "22.19"
-  maxNodeVersion: "26"
-  zeroDeps: true
-  platforms: [windows, linux, macos]
-exampleQueries:
-  - open mcode webui
-  - start the mcode webui
-  - launch mcode browser
-  - mcode webui status
-  - show mcode webui url
+description: Browser-based chat frontend for the mcode agent runtime. Streams mcode acp / exec sessions with real-time tool events, plan review, ask-user prompts, context usage, and quota. Zero npm dependencies; runs on Node 22+. Trigger on: "open mcode webui", "start the mcode webui", "launch mcode browser", "mcode webui status", "show mcode webui url".
 ---
 
 # mcode Web UI
 
-A Kimi-Code-style browser frontend for the `mcode` agent runtime.
-Speaks mcode's two native transports (acp JSON-RPC, exec stream-json)
-and renders everything as a single SPA. Designed to be the only UI
-you need to drive a mcode session from a browser.
+> 🌐 Browser-based chat frontend for the mcode agent runtime.
 
-## When to use this
+- **Version**: 0.5.bx
+- **Author**: Ponkan
+- **License**: MIT
+- **Entry**: `server.js` (Node 22.19+)
+- **Default port**: 7890 (LAN-accessible on `0.0.0.0`)
 
-The mcode Web UI is the right frontend when:
+A Kimi-Code-style web UI for the mcode CLI. Streams `mcode acp` (Agent
+Client Protocol) and `mcode exec` sessions to the browser in real time:
+tool events, plan review, ask-user prompts, context usage bar, quota, and
+session switching. Zero npm dependencies at runtime — only Node 22+ stdlib.
 
-- You want a real browser, not a TUI. Phones, tablets, multiple
-  monitors, sharing a session via LAN.
-- You need a persistent session log with search, not just the
-  current turn.
-- You want to attach files (drag, drop, paste) and have them
-  injected as `@path` references automatically.
-- You're building tooling that consumes mcode via the same acp
-  protocol and want a known-good reference client.
+## When to use this Skill
 
-The mcode Web UI is **not** the right frontend when:
+Trigger when the user wants any of:
 
-- You only need non-interactive single-shot prompts — `mcode exec`
-  on the CLI is faster and leaves no UI state.
-- You need a fully offline client — the webui is HTTP, not local
-  binary.
-- You need to script mcode from another language — use the
-  python / go acp SDKs directly, not the webui.
+| User says | Skill should |
+|-----------|--------------|
+| "open mcode webui" / "start the mcode webui" | start `server.js` and tell the user the URL |
+| "launch mcode browser" | start server + (optional) open browser |
+| "mcode webui status" | report running / port / last error |
+| "show mcode webui url" | print `http://<lan-ip>:7890/` |
+| "mcode webui config" | list environment variables below |
 
-## How to start
+Do not use this Skill for: editing the webui source code itself, debugging
+the mcode agent runtime, or anything not about the webui HTTP/SSE server.
 
-```bash
-# 1. install (zero npm deps, no build step)
-cd C:\Users\mjc39\.minimax-code\webui
-node server.js
+## Capabilities
 
-# 2. open
-#    http://127.0.0.1:7890/                 local
-#    http://<lan-ip>:7890/                  LAN (toggle "局域网访问" in sidebar)
-```
+13 capabilities, all implemented and live in v0.5.bx:
 
-Optional env:
-```bash
-PORT=8080            # default 7890
-HOST=127.0.0.1       # default 0.0.0.0
-TOKEN=s3cret         # require this in ?token= or Authorization: Bearer
-MCODE_MODEL=...      # default model override
-DEBUG_INJECT=1       # enable /api/debug/* (testing only)
-```
+- **chat-streaming** — SSE-delivered streamed model output
+- **tool-execution** — bash / edit / read tool events shown inline
+- **plan-mode** — mcode plan mode surfaced as collapsible right-panel
+- **ask-user-tool** — multi-choice modal for tool `AskUserQuestion`
+- **permission-prompts** — mcode acp `RequestPermission` shown as inline cards
+- **workspace-switching** — sidebar chip + picker dialog
+- **session-management** — list / new / switch / delete with mcode sid cross-reference
+- **file-attachments** — multipart upload (10MB default, configurable)
+- **quota-usage** — 5h + weekly usage fetched from mmx quota API
+- **bilingual-ui** — zh-CN / en toggle, instant
+- **lan-sharing** — `0.0.0.0` bind, optional `TOKEN` auth
+- **token-auth** — `?token=` query + `Authorization: Bearer` header
+- **mobile-responsive** — viewport + touch gestures
 
-## What it does
+## Configuration (Environment Variables)
 
-| | |
-|---|---|
-| ✅ | Multi-turn chat with streaming deltas and tool events |
-| ✅ | Plan mode with structured review modal |
-| ✅ | Ask-user tool with modal question UI (single + multi-select) |
-| ✅ | Permission prompts (ask / auto / full) |
-| ✅ | Slash-command autocomplete (`/help`, `/compact`, `/model`, …) |
-| ✅ | File attachments (drag, drop, paste) → `@path` injection |
-| ✅ | Workspace switching with directory-tree browser |
-| ✅ | Session persistence (webui JSON + mcode sqlite) |
-| ✅ | Real-time context window, cache hit, tok/s |
-| ✅ | `mmx quota show` parsed + per-turn `mavis` runtime db |
-| ✅ | Bilingual UI (zh-CN / en) |
-| ✅ | LAN sharing with runtime on/off toggle |
-| ✅ | Token auth (`?token=` or `Authorization: Bearer`) |
-| ✅ | Mobile responsive |
-| ⚠ | Mid-session mode switch (mcode 0.1.5 acp doesn't support `set_mode` — shows toast) |
-| ⚠ | Mid-flight cancel (mcode 0.1.5 acp doesn't support `cancel` — falls back to SIGTERM) |
-| ❌ | Rewind / regenerate / edit-and-resend (no acp method) |
-| ❌ | HTTPS (use a reverse proxy) |
+All optional. Defaults shown. See `server/lib/config.js` for full list.
 
-See [docs/CAPABILITIES.md](docs/CAPABILITIES.md) for the full matrix.
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PORT` | `7890` | HTTP listen port |
+| `HOST` | `0.0.0.0` | bind address (loopback-only or all interfaces) |
+| `TOKEN` | (empty) | if set, non-local requests must include `?token=` or `Authorization: Bearer` |
+| `MCODE_MODEL` | `minimax_api/MiniMax-M3` | default model |
+| `MCODE_CMD` | auto-detect | path to `mcode.cmd` / `mcode` binary |
+| `MCODE_WEBUI_UPLOAD_DIR` | auto-detect | directory for uploaded attachments |
+| `DEBUG_INJECT` | (empty) | set to `1` to enable `/api/debug/*` |
 
-## Architecture in one diagram
+## Runtime
 
-```
-[Browser :7890]  ←── SSE /api/events  ←──  [Node server.js]  ←──  mcode acp / exec subprocess
-       ▲                                  │
-       └───── REST /api/*  ───────────────┘
-```
+- **Node**: `>=22.19 <23 || >=24 <27`
+- **Platforms**: Windows, Linux, macOS
+- **Entry**: `server.js` (project root)
+- **Default port**: 7890
+- **Bind**: `0.0.0.0` (LAN-accessible by default; override `HOST` for loopback-only)
 
-Single Node process, single HTML file, single ES module for the
-frontend. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the
-full topology, module contracts, and SSE event schema.
+## Triggers (Real example prompts + expected results)
 
-## Plugin integration
+**Prompt 1** — User: `打开 mcode webui` (or "open mcode webui")
 
-This skill installs the webui as a mavis / minimax plugin:
+**Expected**:
+1. Run `node server.js` (foreground or background, your call)
+2. Wait for the SSE `open` log line on stdout
+3. Tell the user: "webui running at http://127.0.0.1:7890/  (or http://<lan-ip>:7890/ for LAN)"
 
-1. Copy the repo to `<mavis-data-dir>/plugins/mcode-webui/`
-2. Add the plugin to the mavis plugin loader
-3. The plugin provides a `mcode-webui` MCP entry that auto-starts
-   the server and exposes the URL
+**Prompt 2** — User: `mcode webui status`
 
-Configuration knobs (all via env or `plugin.json`):
-- `PORT` — webui port (default 7890)
-- `HOST` — bind address (default 0.0.0.0)
-- `TOKEN` — required token for non-local requests
-- `MCODE_CMD` — path to `mcode.cmd` / `mcode` (auto-detected)
-- `MCODE_MODEL` — default model (default `minimax_api/MiniMax-M3`)
-- `MCODE_WEBUI_UPLOAD_DIR` — attachment target dir
+**Expected**:
+1. Check if port 7890 is in use (`netstat -an | findstr 7890` on Win / `lsof -iTCP:7890` on Unix)
+2. If listening: report "running" + URL; if not: report "not running"
+3. Optionally read `C:\...\minimax-code\.server.err` for last error
 
-## Known issues with mcode 0.1.5 acp
+**Prompt 3** — User: `配置 mcode webui 用端口 9000 绑定 127.0.0.1`
 
-These are upstream limitations, not webui bugs. Reported to the
-mcode team in 2026-08; expected to be addressed in a later release:
+**Expected**:
+1. Suggest the user set `PORT=9000 HOST=127.0.0.1` in their env
+2. Explain the server must be restarted to pick up new env (process-level config)
+3. Reference `server/lib/config.js` for the env-var names
 
-- `session/set_mode` — "Method not found"
-- `session/set_config_option` — "Method not found"
-- `session/cancel` — "Method not found" (webui falls back to SIGTERM)
-- `session/activate`, `session/fork`, `session/resume`, `session/delete`,
-  `session/request_permission`, `session/subscribe` — same
+## Security Notes
 
-The webui's `mcode-rpc.js` whitelists these methods and returns
-`{ok:false, code:'unsupported'}` so the UI can degrade gracefully
-instead of throwing.
+- **Network exposure**: server binds `0.0.0.0` by default — accessible from
+  any device on the LAN (phones, tablets). Override via `HOST=127.0.0.1`
+  for loopback-only. LAN can be toggled at runtime via `/api/settings` (LAN
+  Broadcast toggle).
 
-## Documentation
+- **Token auth**: `?token=` query param + `Authorization: Bearer` header
+  supported. When `TOKEN` env is set, all non-local requests require it.
+  **Note**: tokens in query strings can be logged by intermediate proxies
+  — prefer `Authorization: Bearer` header for any non-browser client.
 
-| Doc | Purpose |
-|---|---|
-| [README.md](README.md) | Project overview, quickstart, capability summary |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module topology, request lifecycle, SSE schema, why each file exists |
-| [docs/CAPABILITIES.md](docs/CAPABILITIES.md) | What works / what doesn't / workarounds, per-feature status matrix |
-| [docs/API.md](docs/API.md) | Every HTTP endpoint: method, path, request, response, errors |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Dev setup, code structure, how to add routes / events / panels / slash commands |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common errors with stack traces and verified fixes |
-| [docs/acp-goal-plan-status.md](docs/acp-goal-plan-status.md) | Historical acp coverage notes (archaeology) |
+- **Destructive operations**: `DELETE /api/sessions/:id` removes the
+  corresponding mcode session from `~/.minimax/v2/sqlite/runtime-state.sqlite`
+  (the user's real mavis database). Pass `?dryRun=true` first to preview
+  what will be deleted before committing.
 
-## License
+- **mcode session cache**: `acp-client.js` spawns a long-lived mcode acp
+  child process. Killing the webui process leaves the child orphaned until
+  the mcode runtime's own TTL kicks in.
 
-Internal project. Not published.
+## Endpoints (summary — full table in `docs/API.md`)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET    | `/api/health` | basic status, port + version |
+| GET    | `/api/events` | SSE stream, all state changes |
+| GET    | `/api/state` | current client state snapshot |
+| GET / POST / DELETE | `/api/sessions[/:id\|/switch]` | session CRUD; `?dryRun=true` on DELETE for preview |
+| POST   | `/api/send\|/stop\|/cmd` | chat pipeline |
+| GET / POST | `/api/workspace[?/browse]` | workspace picker |
+| GET / POST | `/api/settings` | runtime-tunable settings (LAN broadcast etc.) |
+| POST   | `/api/upload` | multipart file upload |
+| GET    | `/api/models`, POST `/api/set-model\|/permissions` | model + permission |
+| GET / POST | `/api/usage[-real\|-trigger\|/refresh]` | quota / token usage |
+| GET / POST | `/api/protocol/*` | mcode acp shim (set-mode, cancel, load, etc.) |
+| GET / POST | `/api/debug/*` | gated by `DEBUG_INJECT=1` (testing only) |
+
+For full request/response schema, error codes, and examples, see
+`docs/API.md`. For architecture, see `docs/ARCHITECTURE.md`. For
+contribution workflow, see `docs/DEVELOPMENT.md`.
+
+## Files in this plugin
+
+- `plugin.json` — Agent Plugins 1.0 manifest (10 top-level fields, white-listed)
+- `SKILL.md` — this file
+- `LICENSE` — MIT
+- `README.md` — user-facing quick start
+- `docs/` — ARCHITECTURE, API, CAPABILITIES, DEVELOPMENT, TROUBLESHOOTING, REFACTORING
+- `server/` — Node.js HTTP + SSE server (junction to project root)
+- `public/` — static frontend SPA (junction to project root)
+- `test/` — node:test unit tests (junction to project root)
+- `package.json` — project metadata (copy of root)
+
+## Development vs Release layout
+
+- **In this repo (development)**: `plugins/Ponkan/mcode-webui/{server,public,test}`
+  are **Windows junctions** pointing at the project root. Edit files in
+  `server/`, `public/`, `test/` at the project root as usual — the plugin
+  directory sees the changes immediately.
+- **For release** (the artifact pushed to the community plugin repo):
+  `npm run package:plugin` expands the junctions into a real `dist/Ponkan/
+  mcode-webui/` tree and zips it. The resulting artifact contains zero
+  symlinks/junctions, satisfying the mcode-plugin-guide contract.
+
+To re-establish junctions on a fresh clone: `npm run setup:plugin`.
