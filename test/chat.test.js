@@ -107,3 +107,92 @@ describe("handleSend �?v0.5.bx-32 lastUsedWorkspace contract", () => {
     assert.equal(cs.chat.length, 0);
   });
 });
+
+// ============================================================
+// 批次 C 扩展: 错误路径 + handleStop + handleCmd
+// ============================================================
+
+describe("handleSend — edge cases", () => {
+  test("whitespace-only content returns 400", async () => {
+    const cid = "cid-1";
+    const cs = makeClientState();
+    cs.workspace = { dir: "/ws-X", branch: null, tree: null };
+    cs.lastUsedWorkspace = null;
+    cs.chat = [];
+    clients.set(cid, cs);
+
+    const ctx = { cs, cid };
+    const res = fakeRes();
+    await handleSend(fakeReq({ content: "   \n\t  " }), res, ctx);
+    assert.equal(res._status, 400);
+  });
+});
+
+describe("handleStop", () => {
+  test("no active child: wasRunning=false, cancelled=false, hardKilled=false", async () => {
+    const cid = "cid-1";
+    const cs = makeClientState();
+    cs.workspace = { dir: "/ws-X", branch: null, tree: null };
+    cs.mcodeSessionId = null;
+    clients.set(cid, cs);
+    const { getActiveChild } = await import(absPath("lib/state-bus.js"));
+    // Ensure no child registered
+    getActiveChild(cid);
+
+    const res = fakeRes();
+    const { handleStop } = await import(absPath("routes/chat.js"));
+    await handleStop(null, res, { cs, cid });
+    assert.equal(res._status, 200);
+    const body = JSON.parse(res._body);
+    assert.equal(body.ok, true);
+    assert.equal(body.wasRunning, false);
+    assert.equal(body.cancelled, false);
+    assert.equal(body.hardKilled, false);
+  });
+
+  test("mcode acp unsupported cancel: hardKilled=true, note='hard kill'", async () => {
+    // The default mock for mcode-rpc.cancelSession returns {ok:false, code:'unsupported'}
+    const cid = "cid-1";
+    const cs = makeClientState();
+    cs.workspace = { dir: "/ws-X", branch: null, tree: null };
+    cs.mcodeSessionId = "mvs_aabb000000000000000000000000abcd";
+    clients.set(cid, cs);
+
+    // Register a fake active child
+    const { setActiveChild, getActiveChild } = await import(absPath("lib/state-bus.js"));
+    const fakeChild = {
+      child: { killed: false, exitCode: null },
+      kill: () => { fakeChild.child.killed = true; },
+    };
+    setActiveChild(cid, fakeChild);
+    assert.ok(getActiveChild(cid));
+
+    const res = fakeRes();
+    const { handleStop } = await import(absPath("routes/chat.js"));
+    await handleStop(null, res, { cs, cid });
+    const body = JSON.parse(res._body);
+    assert.equal(body.ok, true);
+    assert.equal(body.wasRunning, true);
+    assert.equal(body.cancelled, false, "mcode acp unsupported → not cancelled");
+    assert.equal(body.hardKilled, true, "fallback hard kill should fire");
+    assert.match(body.note, /hard kill/);
+  });
+});
+
+describe("handleCmd", () => {
+  test("returns 200 with ok:true for any cmd (delegates to handleCmdCommand)", async () => {
+    const cid = "cid-1";
+    const cs = makeClientState();
+    cs.workspace = { dir: "/ws-X", branch: null, tree: null };
+    cs.sessionTitle = "Untitled";
+    cs.chat = [];
+    clients.set(cid, cs);
+
+    const { handleCmd } = await import(absPath("routes/chat.js"));
+    const res = fakeRes();
+    await handleCmd(fakeReq({ cmd: "/status" }), res, { cs, cid });
+    assert.equal(res._status, 200);
+    const body = JSON.parse(res._body);
+    assert.equal(body.ok, true);
+  });
+});
