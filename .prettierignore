@@ -1,0 +1,5 @@
+node_modules/
+public/lib/
+*.min.js
+package-lock.json
+test/fixtures/

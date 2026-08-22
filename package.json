@@ -8,9 +8,17 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --experimental-test-module-mocks --test test/*.test.js"
+    "test": "node --experimental-test-module-mocks --test test/*.test.js",
+    "lint": "eslint server/ test/",
+    "format": "prettier --write server/ test/"
   },
   "engines": {
     "node": ">=22.19 <23 || >=24 <27"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6"
   }
 }

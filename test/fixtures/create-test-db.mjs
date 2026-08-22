@@ -16,7 +16,7 @@
 // new v2/sqlite/runtime-state.sqlite.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, unlinkSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 

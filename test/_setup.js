@@ -3,7 +3,7 @@
 //
 // Usage:
 //   import { test, before } from 'node:test'
-//   import { setupMocks, absPath, registerAcpMock, registerSessionsStore, setApplyMavisImpl, setLanBroadcast } from './_setup.js'
+//   import { setupMocks, absPath, registerAcpMock, registerSessionsStore, setLanBroadcast } from './_setup.js'
 //
 //   before(async (t) => {
 //     await setupMocks(t, {
@@ -29,13 +29,13 @@
 //     need a fake child process should use a real sqlite3 fixture
 //     instead of mocking node:child_process.
 
-import { fileURLToPath, pathToFileURL } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, resolve } from "node:path";
 
-const TEST_DIR = dirname(fileURLToPath(import.meta.url))
-export const SERVER_DIR = resolve(TEST_DIR, '..', 'server')
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+export const SERVER_DIR = resolve(TEST_DIR, "..", "server");
 // mock.module() on Windows requires file:// URLs for filesystem paths
-export const absPath = (rel) => pathToFileURL(resolve(SERVER_DIR, rel)).href
+export const absPath = (rel) => pathToFileURL(resolve(SERVER_DIR, rel)).href;
 
 // -----------------------------------------------------------------------
 // Mutable mock impls. Tests can pass overrides to setupMocks().
@@ -46,30 +46,34 @@ const _acpMock = {
   getMcodeSessionsCacheSync: () => null,
   getMcodeSessionTitle: async () => null,
   deleteMcodeSessionFromDb: () => ({ ok: true }),
-}
+};
 
-let _sessionsStore = []
-let _saveImpl = (arr) => { _sessionsStore = [...arr] }
+let _sessionsStore = [];
+let _saveImpl = (arr) => {
+  _sessionsStore = [...arr];
+};
 
-let _lanBroadcast = false
-
-let _applyMavisImpl = async () => {}
+let _lanBroadcast = false;
 
 // Per-test direct handles (for tests that need to read state after the SUT)
-export const acpMock = _acpMock
+export const acpMock = _acpMock;
 
 // Imperative mutators — tests can use these to override between tests
 // (alternative to passing `overrides` to setupMocks at before() time)
 export function registerAcpMock(overrides) {
-  Object.assign(_acpMock, overrides)
+  Object.assign(_acpMock, overrides);
 }
 export function registerSessionsStore({ initial = [], save } = {}) {
-  _sessionsStore = [...initial]
-  if (save) _saveImpl = save
+  _sessionsStore = [...initial];
+  if (save) _saveImpl = save;
 }
-export function getSessionsStore() { return _sessionsStore }
-export const _persist = (arr) => _saveImpl(arr)
-export function setLanBroadcast(v) { _lanBroadcast = !!v }
+export function getSessionsStore() {
+  return _sessionsStore;
+}
+export const _persist = (arr) => _saveImpl(arr);
+export function setLanBroadcast(v) {
+  _lanBroadcast = !!v;
+}
 
 /**
  * Register all built-in + webui module mocks on the test context.
@@ -102,23 +106,26 @@ export async function setupMocks(t, overrides = {}) {
   //    so later registerAcpMock() calls wouldn't take effect. Instead,
   //    each export is a thin wrapper that looks up the current impl
   //    in _acpMock at call time.
-  if (overrides.acp) Object.assign(_acpMock, overrides.acp)
-  t.mock.module(absPath('lib/acp-client.js'), {
+  if (overrides.acp) Object.assign(_acpMock, overrides.acp);
+  t.mock.module(absPath("lib/acp-client.js"), {
     namedExports: {
       getCachedMcodeCommands: (...a) => _acpMock.getCachedMcodeCommands(...a),
-      getMcodeSessionsForWorkspace: (...a) => _acpMock.getMcodeSessionsForWorkspace(...a),
-      getMcodeSessionsCacheSync: (...a) => _acpMock.getMcodeSessionsCacheSync(...a),
+      getMcodeSessionsForWorkspace: (...a) =>
+        _acpMock.getMcodeSessionsForWorkspace(...a),
+      getMcodeSessionsCacheSync: (...a) =>
+        _acpMock.getMcodeSessionsCacheSync(...a),
       getMcodeSessionTitle: (...a) => _acpMock.getMcodeSessionTitle(...a),
-      deleteMcodeSessionFromDb: (...a) => _acpMock.deleteMcodeSessionFromDb(...a),
+      deleteMcodeSessionFromDb: (...a) =>
+        _acpMock.deleteMcodeSessionFromDb(...a),
     },
-  })
+  });
 
   // 4. webui/lib/sessions.js (server-side session store)
   if (overrides.sessions) {
-    _sessionsStore = [...(overrides.sessions.initial || [])]
-    if (overrides.sessions.save) _saveImpl = overrides.sessions.save
+    _sessionsStore = [...(overrides.sessions.initial || [])];
+    if (overrides.sessions.save) _saveImpl = overrides.sessions.save;
   }
-  t.mock.module(absPath('lib/sessions.js'), {
+  t.mock.module(absPath("lib/sessions.js"), {
     namedExports: {
       loadSessions: () => [..._sessionsStore],
       saveSessions: (arr) => _saveImpl(arr),
@@ -128,27 +135,28 @@ export async function setupMocks(t, overrides = {}) {
       // (we'd need to add similar wrappers — not done yet).
       resetContext: (cs) => {
         if (cs && cs.context) {
-          cs.context.tokens = 0
-          cs.context.used = 0
-          cs.context.percent = 0
-          cs.context.estimated = true
-          cs.context.usageSource = null
+          cs.context.tokens = 0;
+          cs.context.used = 0;
+          cs.context.percent = 0;
+          cs.context.estimated = true;
+          cs.context.usageSource = null;
         }
       },
       persistCurrentChat: () => {},
       streamUpdateLine: (chat, prefix, text) => {
-        if (Array.isArray(chat)) chat.push(prefix + text)
-        return text
+        if (Array.isArray(chat)) chat.push(prefix + text);
+        return text;
       },
       cleanupEmptyDefaultSessions: () => {},
     },
-  })
+  });
 
   // 5. webui/lib/settings.js
-  if (overrides.lanBroadcast !== undefined) _lanBroadcast = !!overrides.lanBroadcast
-  t.mock.module(absPath('lib/settings.js'), {
+  if (overrides.lanBroadcast !== undefined)
+    _lanBroadcast = !!overrides.lanBroadcast;
+  t.mock.module(absPath("lib/settings.js"), {
     namedExports: { getLanBroadcast: () => _lanBroadcast },
-  })
+  });
 
   // 6. webui/lib/mavis-usage.js (heavy: spawns sqlite3)
   //    NOT mocked by default — mavis-usage.test.js wants the real
@@ -156,44 +164,54 @@ export async function setupMocks(t, overrides = {}) {
   //    sessions) that need to mock applyMavisUsageToCs pass
   //    overrides.mavis and we register the mock only then.
   if (overrides.mavis) {
-    t.mock.module(absPath('lib/mavis-usage.js'), {
+    t.mock.module(absPath("lib/mavis-usage.js"), {
       namedExports: {
-        getMavisTokenUsage: overrides.mavis.getMavisTokenUsage
-          || (async () => null),
-        getMavisTokenUsageModel: overrides.mavis.getMavisTokenUsageModel
-          || (async () => null),
-        applyMavisUsageToCs: overrides.mavis.applyMavisUsageToCs
-          || (async () => {}),
+        getMavisTokenUsage:
+          overrides.mavis.getMavisTokenUsage || (async () => null),
+        getMavisTokenUsageModel:
+          overrides.mavis.getMavisTokenUsageModel || (async () => null),
+        applyMavisUsageToCs:
+          overrides.mavis.applyMavisUsageToCs || (async () => {}),
         ...overrides.mavis,
       },
-    })
+    });
   }
 
   // 7. webui/lib/mcode-{acp,exec,rpc}.js — heavy mcode spawners
-  t.mock.module(absPath('lib/mcode-acp.js'), {
+  t.mock.module(absPath("lib/mcode-acp.js"), {
     namedExports: {
-      runMcodeAcp: async () => ({ status: 'succeeded', answer: 'mocked', sessionId: null }),
-      streamAcpPrompt: async () => ({ status: 'succeeded', answer: 'mocked' }),
+      runMcodeAcp: async () => ({
+        status: "succeeded",
+        answer: "mocked",
+        sessionId: null,
+      }),
+      streamAcpPrompt: async () => ({ status: "succeeded", answer: "mocked" }),
     },
-  })
-  t.mock.module(absPath('lib/mcode-exec.js'), {
+  });
+  t.mock.module(absPath("lib/mcode-exec.js"), {
     namedExports: {
-      runMcodeExec: async () => ({ status: 'succeeded', answer: 'mocked', sessionId: null }),
+      runMcodeExec: async () => ({
+        status: "succeeded",
+        answer: "mocked",
+        sessionId: null,
+      }),
       collectExecResult: async (p) => p,
     },
-  })
-  t.mock.module(absPath('lib/mcode-rpc.js'), {
-    namedExports: { cancelSession: async () => ({ ok: false, code: 'unsupported' }) },
-  })
-  t.mock.module(absPath('lib/models.js'), {
+  });
+  t.mock.module(absPath("lib/mcode-rpc.js"), {
+    namedExports: {
+      cancelSession: async () => ({ ok: false, code: "unsupported" }),
+    },
+  });
+  t.mock.module(absPath("lib/models.js"), {
     namedExports: { getMcodeModelLimit: async () => ({ context: 512000 }) },
-  })
-  t.mock.module(absPath('lib/slash.js'), {
+  });
+  t.mock.module(absPath("lib/slash.js"), {
     namedExports: {
       handleLocalSlash: async () => ({ handled: false, continueMcode: false }),
       // routes/chat.js imports this too — a missing named export makes the
       // SUT import hang (Node 24.14 mock.module pitfall #4)
       handleCmdCommand: async () => ({ ok: true }),
     },
-  })
+  });
 }

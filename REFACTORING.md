@@ -4,7 +4,7 @@
 > **日期**：2026-08-21
 > **目标读者**：接手的强 LLM（被 Ponkan 叫来"打补丁"的）
 > **当前分支**：`refactor/modularization`（已 commit 到 `d2db672`，HEAD clean）
-> **当前状态**：批次 1（unit test）完成 18/18 + chat.test.js 留 TODO，剩余 3 批未做
+> **当前状态**：批次 1 完成（21/21，commit `5fe70c4`）；批次 2（ESLint+Prettier+代码清理）完成；批次 3/4 未做
 > **重要**：所有路径**都是 `C:\Users\mjc39\.minimax-code\webui\`**（**带 `.`**，很容易写错成 `minimax-code` 没点）
 
 ---
@@ -96,7 +96,17 @@ bd9698e fix(webui v0.5.bx-30+31+32+33): typo + sidebar 整套 + 删清理孤儿�
 4f31de7 docs(v0.5.bx): 全面重写所有文档 + 加 SKILL.md / plugin.json
 ```
 
-### 2.2 本轮（批次 1）已完成（**还没 commit**）
+### 2.2 批次 1（已 commit `5fe70c4`）
+
+**chat.test.js 卡死根因（已解决）**：`routes/chat.js` import 了 `handleCmdCommand`，但 `_setup.js` 的 slash mock 只导出 `handleLocalSlash` —— 正是坑 4。补上 export 即跑通（3/3）。测试总数 18 → **21**。
+
+### 2.3 批次 2（已完成）
+
+- **ESLint 用了 v10 flat config（`eslint.config.mjs`），不是原文档假设的 `.eslintrc.json`**——eslint 9+ 默认只读 flat config。devDependencies：eslint / @eslint/js / globals / prettier
+- 规则适配现有代码风格：`no-empty` 开 `allowEmptyCatch`（代码库惯例的防御性空 catch）；`no-control-regex` / `no-irregular-whitespace` off（ANSI strip regex / 中文全角空格误报）
+- **用户授权"可优化"后做了代码清理**（超出原"只 lint 不改码"范围）：修掉全部 14 个 warning（未用 import/变量 ×9、useless assignment ×3、无用转义 ×1、regex 转义 ×1）
+- prettier --write 统一格式化 server/ + test/
+- 验证：lint 0 问题、node --check 全过、npm test 21/21
 
 **新建 / 修改**：
 - `test/_setup.js`（约 200 行）— mock 框架，详见 §3
