@@ -4,7 +4,7 @@
 > **日期**：2026-08-21
 > **目标读者**：接手的强 LLM（被 Ponkan 叫来"打补丁"的）
 > **当前分支**：`refactor/modularization`（已 commit 到 `d2db672`，HEAD clean）
-> **当前状态**：批次 1 完成（21/21，commit `5fe70c4`）；批次 2（ESLint+Prettier+代码清理）完成；批次 3/4 未做
+> **当前状态**：**全部 4 批完成**（批次1 `5fe70c4` / 批次2 `037a108` / 批次3 `258a825` / 批次4 `cfc9406`+`cd569a4`）。main.js 4410 行 → 77 行 bootstrap + i18n/util/state/render/events 五模块。未 push。
 > **重要**：所有路径**都是 `C:\Users\mjc39\.minimax-code\webui\`**（**带 `.`**，很容易写错成 `minimax-code` 没点）
 
 ---
@@ -107,6 +107,22 @@ bd9698e fix(webui v0.5.bx-30+31+32+33): typo + sidebar 整套 + 删清理孤儿�
 - **用户授权"可优化"后做了代码清理**（超出原"只 lint 不改码"范围）：修掉全部 14 个 warning（未用 import/变量 ×9、useless assignment ×3、无用转义 ×1、regex 转义 ×1）
 - prettier --write 统一格式化 server/ + test/
 - 验证：lint 0 问题、node --check 全过、npm test 21/21
+
+### 2.4 批次 3（已完成 `258a825`）
+
+`.github/workflows/ci.yml`：Node 22/24 matrix，步骤 = node --check (server.js + main.js) → npm ci → lint → test。**CI 上 sqlite3 用系统 PATH 的**（`SQLITE3_BIN: sqlite3` env 覆盖，config.js 支持）。仓库暂无 remote，push 后 CI 自动生效。
+
+### 2.5 批次 4（已完成 `cfc9406` + `cd569a4`）
+
+**最终结构**：`main.js`(77 行 bootstrap) + `i18n.js`(341) + `util.js`(~200) + `state.js`(~270) + `render.js`(~2050) + `events.js`(~1540)
+
+**拆分要点**（接手者必读）：
+- main.js 本就是 `type="module"` 且 index.html **零内联 handler** —— 文档原担心的两大风险不存在
+- 可变绑定归属：`state/es/connect/refreshSessions/refreshUsage/sidebarReady/sessionSearchQuery/leftOpen/rightOpen` → state.js；跨模块写一律走 setter（`setState/setSidebarReady/setSearchQuery/setLeftOpen/setRightOpen`），读靠 ESM 活绑定
+- state↔render 有意循环导入：安全前提是**只在函数体内用导入绑定，模块顶层不许碰**（`ASK_DISMISSED_LS_KEY` 因此改成惰性函数）
+- 踩坑记录：①分段脚本漏了 refreshSessions 独立段（落进 render 桶但它重绑定 state）②CRLF 让 `$` 锚点正则全部失灵——**所有手术脚本必须 `\r?\n` 或不用 `$`** ③PowerShell Get-Content/-Raw 重写文件会把 UTF-8 当 ANSI 毁掉中文——**改前端文件只用 node**
+- 顺手修的潜伏 bug：ask-modal Esc/背景点击调已删除的 `hideAsk()`（→closeAskModal）、`__DBG.show` 引用闭包私有 `panel()`、/plan slash 里裸调不存在的 `pushState()`
+- 回归验证：agent-browser 全功能过（主题/语言/用量弹层/slash/会话切换/61 sessions 渲染），console 0 错误
 
 **新建 / 修改**：
 - `test/_setup.js`（约 200 行）— mock 框架，详见 §3
