@@ -101,6 +101,15 @@ export function shutdownMcodeAcpSingleton() {
   }
 }
 
+// v0.5.by: 暴露 mcode acp initialize 响应 (含 agentInfo) 给能力探测
+//  - 用于 GET /api/protocol/capabilities 返回动态 mcode version (不 hardcode)
+//  - 不暴露 _mcodeAcpSingleton 内部,只读 agentInfo
+//  - mcode 0.1.5 acp initialize 返 { protocolVersion, agentCapabilities, agentInfo: { name, title, version } }
+export function getMcodeServerInfo() {
+  if (!_mcodeAcpSingleton || !_mcodeAcpSingleton.capabilities) return null
+  return _mcodeAcpSingleton.capabilities.agentInfo || null
+}
+
 // ============================================================
 // v0.5.ak: mcode 真实命令缓存（不套预设）
 // 用一个长寿命 McodeAcpClient lazy init 拉 available_commands_update

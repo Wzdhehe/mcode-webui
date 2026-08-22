@@ -99,16 +99,56 @@ export async function handleSend(req, res, ctx) {
   pushStateFor(cid)
 }
 
-// POST /api/stop — 中断正在跑的 mcode exec
-export function handleStop(_req, res, ctx) {
+// POST /api/stop — 中断正在跑的 prompt
+// v0.5.by: 优先走 mcode acp session/cancel RPC (温和取消 — 让 mcode 走 finalize),
+//   走不通再 hard kill child process (兜底)
+// 注意: mcode 0.1.5 acp 不支持 session/cancel (probe 实测 "Method not found"),
+//   所以 cancelled 永远是 false, 直接走 hard kill
+// 旧实现: 永远 child.kill() — 太粗暴,会让 mcode acp 进程直接 SIGKILL,
+//   同进程里的 background task 也会被 runtime-shutdown 杀 (子 agent 跑不完的根因之一)
+export async function handleStop(_req, res, ctx) {
   const cid = ctx.cid
+  const cs = ctx.cs
   const child = getActiveChild(cid)
   const wasRunning = !!child
-  if (child) {
+  let cancelled = false
+  let hardKilled = false
+  // 1. 温和路径: 调 session/cancel RPC
+  //    mcode 0.1.5 不支持 — r.ok=false, code='unsupported'
+  if (cs && cs.mcodeSessionId) {
+    try {
+      const { cancelSession } = await import('../lib/mcode-rpc.js')
+      const r = await cancelSession(cs.mcodeSessionId)
+      if (r.ok) cancelled = true
+      else if (r.code !== 'unsupported') {
+        // 真错 (不是不支持) — 记下来排查
+        console.warn(`[stop] session/cancel failed cid=${cid}: ${r.error} (code=${r.code})`)
+      }
+    } catch (e) {
+      console.warn(`[stop] session/cancel threw cid=${cid}: ${e.message}`)
+    }
+  }
+  // 2. 兜底路径: hard kill child (RPC 不支持或失败)
+  if (child && !cancelled) {
     try { child.kill() } catch {}
+    hardKilled = true
+  }
+  // 3. 兜底路径 2: 设个 2s timeout, 如果 mcode acp 没通过 cancel 退出, 也强 kill
+  //    (避免 mcode 还在 prompt 不响应时 webui 显示 "已停止" 但实际还在跑)
+  //    缓存 child.child 引用, 因为 2s 后 child.stop() 可能已经把它置 null
+  if (child) {
+    const rawChild = child.child  // 缓存 node child_process 实例
+    setTimeout(() => {
+      try {
+        if (rawChild && !rawChild.killed && rawChild.exitCode === null) {
+          console.log(`[stop] cid=${cid} child still alive 2s after stop, force-killing`)
+          child.kill()
+        }
+      } catch {}
+    }, 2000).unref()
   }
   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-  return res.end(JSON.stringify({ ok: true, wasRunning }))
+  return res.end(JSON.stringify({ ok: true, wasRunning, cancelled, hardKilled, note: cancelled ? 'gentle cancel' : 'hard kill (mcode 0.1.5 acp 不支持 session/cancel)' }))
 }
 
 // POST /api/cmd — webui button-driven commands

@@ -1,5 +1,7 @@
 # runtime / cache
 *.log
+.server.log*
+.server.err*
 .DS_Store
 .server.log
 .server.err

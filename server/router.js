@@ -21,6 +21,8 @@ import * as settingsRoute from './routes/settings.js'
 import * as uploadRoute from './routes/upload.js'
 import * as modelRoute from './routes/model.js'
 import * as debugRoute from './routes/debug.js'
+// v0.5.by: mcode acp 协议 RPC 路由 (set_mode / set_config_option / cancel / load / activate)
+import * as protocolRoute from './routes/protocol.js'
 
 // Route table: pattern → handler. Patterns are tested in declaration order; first match wins.
 // Each entry: { method, match(pathname) → boolean, handler(req, res, ctx) }
@@ -87,11 +89,21 @@ const ROUTES = [
   { method: 'GET',  match: (p) => p === '/api/models', handler: modelRoute.handleGetModels },
   { method: 'POST', match: (p) => p === '/api/set-model', handler: modelRoute.handleSetModel },
   { method: 'POST', match: (p) => p === '/api/permissions', handler: modelRoute.handleSetPermissions },
+  { method: 'GET',  match: (p) => p === '/api/permissions-modes', handler: modelRoute.handleListPermissionModes },
   { method: 'POST', match: (p) => p === '/api/answer', handler: modelRoute.handleAnswer },
 
   // Debug (gated by DEBUG_INJECT=1)
   { method: 'POST', match: (p) => p === '/api/debug/inject', handler: debugRoute.handleDebugInject },
   { method: 'GET',  match: (p) => p === '/api/debug/state', handler: debugRoute.handleDebugState },
+
+  // v0.5.by: mcode acp 协议 RPC (plan/goal mode, permission, cancel, load TUI session)
+  { method: 'POST', match: (p) => p === '/api/protocol/set-mode', handler: protocolRoute.handleSetMode },
+  { method: 'POST', match: (p) => p === '/api/protocol/set-config-option', handler: protocolRoute.handleSetConfigOption },
+  { method: 'POST', match: (p) => p === '/api/protocol/cancel', handler: protocolRoute.handleCancel },
+  { method: 'POST', match: (p) => p === '/api/protocol/load-session', handler: protocolRoute.handleLoadSession },
+  { method: 'POST', match: (p) => p === '/api/protocol/activate-session', handler: protocolRoute.handleActivateSession },
+  { method: 'GET',  match: (p) => p === '/api/protocol/list-sessions', handler: protocolRoute.handleListSessions },
+  { method: 'GET',  match: (p) => p === '/api/protocol/capabilities', handler: protocolRoute.handleCapabilities },
 ]
 
 export async function handleRequest(req, res) {

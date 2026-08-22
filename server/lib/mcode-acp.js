@@ -298,6 +298,8 @@ function streamAcpPrompt(client, sid, content, label, cs, cid) {
         }
         console.log(`[mode.update] cid=${cid} mode=${mode}`)
       } else if (c.kind === 'goal_update' && c.update) {
+        // mcode 0.1.5 acp 协议里 goal_update 实际上不一定发 (cli.js 搜不到此事件 type 字面量)
+        // 但保留 handler — 如果未来 mcode 0.1.6+ 加了, 直接用
         const u = c.update
         cs.goal = {
           active: !!u.active,
@@ -306,6 +308,27 @@ function streamAcpPrompt(client, sid, content, label, cs, cid) {
           duration: u.duration || null,
         }
         console.log(`[goal.update] cid=${cid} active=${cs.goal.active} status=${cs.goal.status}`)
+      } else if (c.kind === 'config_option_update' && c.update) {
+        // v0.5.by: mcode acp 0.1.5 推的 config 变化事件
+        // 典型场景: 别的客户端改了 permissionMode / model, webui 同步本地 cs
+        const u = c.update
+        if (u && u.key === 'permissionMode') {
+          // 反向映射 mcode value → webui label
+          const label = u.value === 'bypassPermissions' ? 'Full access'
+                      : u.value === 'auto' ? 'Auto'
+                      : u.value === 'read' ? 'Read'
+                      : u.value === 'off' ? 'Off'
+                      : 'Ask'
+          cs.permissions = label
+          console.log(`[config.option] cid=${cid} permissionMode=${u.value} → label=${label}`)
+        } else if (u && u.key) {
+          console.log(`[config.option] cid=${cid} ${u.key}=${JSON.stringify(u.value).slice(0, 80)}`)
+        }
+      } else if (c.kind === 'session_info_update' && c.update) {
+        // v0.5.by: mcode acp 0.1.5 推的 session info 变化
+        // 字段暂未知 (mcode 0.1.5 文档没列), 收到就 log, 不盲改 cs
+        const u = c.update
+        console.log(`[session.info] cid=${cid} keys=${JSON.stringify(Object.keys(u || {})).slice(0, 200)}`)
       } else if (c.kind === 'other' && c.update) {
         const u = c.update
         if (u && u.sessionUpdate) {

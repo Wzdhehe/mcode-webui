@@ -204,6 +204,13 @@ export class McodeAcpClient extends EventEmitter {
         } else if (u.sessionUpdate === 'goal_update') {
           // v0.5.bx-9: 目标追踪（mcode 0.1.4 acp 没见，但 0.1.5+ 可能加）
           try { onChunk?.({ kind: 'goal_update', update: u }) } catch {}
+        } else if (u.sessionUpdate === 'config_option_update') {
+          // v0.5.by: mcode acp 0.1.5 推的 config 变化 (如 permissionMode 被改)
+          // payload: { sessionId, key, value, ... } — 透传给上层, 上层按 key 分发
+          try { onChunk?.({ kind: 'config_option_update', update: u }) } catch {}
+        } else if (u.sessionUpdate === 'session_info_update') {
+          // v0.5.by: mcode acp 0.1.5 推的 session info 变化 (mcode docs 没列具体字段, 透传)
+          try { onChunk?.({ kind: 'session_info_update', update: u }) } catch {}
         } else {
           try { onChunk?.({ kind: 'other', update: u }) } catch {}
         }

@@ -2550,27 +2550,29 @@ function toggleMode() {
 }
 function hideMode() { modeOpen = false; modePopover.hidden = true }
 async function setMode(mode) {
-  // v0.5.bx-9: Plan 模式是 webui 端本地 toggle, 不走 /api/permissions (那是 mcode 权限)
-  //   选了 plan 后, send() 给 prompt 加 plan 模板前缀, 强制 mcode 按 Plan: 格式输出
+  // v0.5.by: plan 模式本地 toggle — mcode 0.1.5 acp 不支持 session/set_mode (probe 验证 Method not found)
+  //   fallback: send() 时给 prompt 加 plan 模板前缀, 强制 mcode 按 Plan: 格式输出
+  //   这是 mcode 0.1.5 唯一可行的进 plan mode 路径
+  //   (goal 模式: 之前是按钮, mcode 0.1.5 不支持, 删了按钮. 用 /goal slash command 代替)
+  hideMode()
   if (mode === 'plan') {
-    if (!state.planMode) {
-      state.planMode = true
-      // 给用户一个视觉提示 — btn-mode 加 active 高亮 (走 renderRight)
-      if (typeof renderRight === 'function') renderRight()
-    }
-    hideMode()
+    state.planMode = !state.planMode
+    showToast(state.planMode ? '已开 Plan 模式 (下次发消息时 mcode 会按 Plan: 格式输出)' : '已关 Plan 模式', 'info', 2500)
+    pushState()
     return
   }
-  hideMode()
+  // 权限 mode (ask/auto/full/read) — mcode 0.1.5 acp 不支持 mid-session 改 permissionMode
+  //   server 仅更新 webui UI, mcode 实际 mode 不变 (启动时已固定)
   try {
-    await fetch('/api/permissions' + API_SUFFIX, {
+    const r = await fetch('/api/permissions' + API_SUFFIX, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...HEADERS },
       body: JSON.stringify({ mode })
     })
-    // 选正常 mode (ask/auto/full) 退出 plan 模式
-    if (state.planMode) {
-      state.planMode = false
+    const j = await r.json().catch(() => ({}))
+    if (state.planMode) state.planMode = false
+    if (j && j.ok === true) {
+      showToast('权限 mode 仅更新 webui UI, mcode 实际 mode 由启动 --permission 标志决定 (0.1.5 不支持 mid-session 改)', 'info', 4500)
     }
   } catch (e) { console.error(e) }
 }
