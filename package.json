@@ -9,6 +9,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node --experimental-test-module-mocks --test test/*.test.js",
+    "coverage": "c8 --reporter=text --reporter=lcov node --experimental-test-module-mocks --test test/*.test.js",
     "lint": "eslint server/ test/",
     "format": "prettier --write server/ test/"
   },
@@ -17,8 +18,24 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "c8": "^12.0.0",
     "eslint": "^10.8.1",
     "globals": "^17.11.0",
     "prettier": "^3.9.6"
+  },
+  "c8": {
+    "include": [
+      "server/**/*.js"
+    ],
+    "exclude": [
+      "server/lib/mcode-acp.js",
+      "server/lib/mcode-exec.js",
+      "server/lib/mcode-rpc.js",
+      "server/acp.mjs"
+    ],
+    "reporter": [
+      "text",
+      "lcov"
+    ]
   }
 }

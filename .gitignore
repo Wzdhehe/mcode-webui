@@ -28,3 +28,7 @@ probes/
 # node
 node_modules/
 package-lock.json
+
+# coverage
+coverage/
+lcov.info
