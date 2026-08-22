@@ -16,7 +16,6 @@
   --bg-hover: #f3f4f6;
   --bg-active: #e5e7eb;
   --bg-input: #ffffff;
-  --bg-quota-expand: #f9fafb;
   --text: #1f2937;
   --text-secondary: #6b7280;
   --text-tertiary: #9ca3af;
@@ -41,7 +40,6 @@
   --bg-hover: #1f2329;
   --bg-active: #2a2f36;
   --bg-input: #1a1d23;
-  --bg-quota-expand: #13161b;
   --text: #e5e7eb;
   --text-secondary: #9ca3af;
   --text-tertiary: #6b7280;
@@ -278,6 +276,52 @@ a { color: var(--accent); text-decoration: none; }
   transition: background 0.15s;
 }
 .session-item:hover { background: var(--bg-hover); }
+/* v0.5.x: 删除按钮 — 默认不显示，hover 时才出现 */
+.session-item .session-delete {
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.session-item:hover .session-delete { display: inline-block; }
+.session-item .session-delete:hover { background: var(--danger); color: white; }
+/* 二次确认条：覆盖在 item 上 */
+.session-item.confirming { background: var(--bg-active); }
+.session-item .session-confirm {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  font-size: 12px;
+}
+.session-item .session-confirm-yes {
+  border: none;
+  background: var(--danger);
+  color: white;
+  border-radius: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.session-item .session-confirm-no {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.session-item { position: relative; } /* 容纳 confirm 浮层 */
 .session-dot {
   width: 6px;
   height: 6px;
@@ -338,117 +382,7 @@ a { color: var(--accent); text-decoration: none; }
   border-top: 1px solid var(--border);
   background: var(--bg-sidebar);
 }
-.quota-card {
-  position: relative;
-  border-bottom: 1px solid var(--border-light);
-}
-.quota-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 12px;
-  font-size: 13px;
-  color: var(--text);
-  transition: background 0.1s;
-}
-.quota-toggle:hover { background: var(--bg-hover); }
-.quota-toggle-icon { color: var(--text-tertiary); width: 16px; height: 16px; }
-.quota-toggle-text { flex: 1; }
-.quota-toggle-arrow {
-  color: var(--text-tertiary);
-  transition: transform 0.2s;
-}
-.quota-card.expanded .quota-toggle-arrow { transform: rotate(90deg); }
-/* 套餐用量右向展开浮层（覆盖 chat 区） */
-.quota-expand {
-  position: absolute;
-  left: 100%;
-  top: 0;
-  bottom: 0;
-  width: 360px;
-  background: var(--bg-quota-expand);
-  border: 1px solid var(--border);
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 50;
-  box-shadow: var(--shadow-lg);
-  animation: slideInRight 0.18s ease-out;
-}
-.quota-expand::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 0; bottom: 0;
-  width: 8px;
-  pointer-events: none;
-}
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(-8px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-.quota-expand-loading {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  font-style: italic;
-  padding: 12px 0;
-}
-.quota-item {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-}
-.quota-item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.quota-item-title { font-size: 13px; font-weight: 500; }
-.quota-item-percent { font-size: 13px; font-weight: 600; color: var(--accent-text); }
-.quota-bar {
-  width: 100%;
-  height: 6px;
-  background: var(--bg-active);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-.quota-bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width 0.3s;
-}
-.quota-bar-fill.high { background: var(--warning); }
-.quota-bar-fill.danger { background: var(--danger); }
-.quota-item-reset {
-  font-size: 11px;
-  color: var(--text-tertiary);
-}
-.quota-usage-summary {
-  font-size: 12px;
-  color: var(--text-secondary);
-  padding: 4px 0;
-}
-.quota-usage-summary b { color: var(--text); }
-.quota-raw {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-family: ui-monospace, monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: 8px;
-  background: var(--bg-elevated);
-  border-radius: 4px;
-  max-height: 240px;
-  overflow-y: auto;
-}
+/* v0.5.x: 套餐用量 UI 全部删掉（数据是 LLM fabrication，没意义） */
 
 .btn-menu {
   display: flex;
@@ -1044,7 +978,6 @@ a { color: var(--accent); text-decoration: none; }
 @media (max-width: 600px) {
   .chat-inner { padding: 0 12px; }
   .input-area { padding: 8px 12px 12px; }
-  .quota-expand { width: calc(100vw - 240px); }
   .msg-body { font-size: 13.5px; }
   .slash-overlay { left: 16px; right: 16px; width: auto; transform: none; bottom: 80px; }
   .slash-overlay { animation: none; }
@@ -1468,20 +1401,7 @@ a { color: var(--accent); text-decoration: none; }
       </div>
 
       <div class="left-bottom">
-        <!-- 套餐用量卡（右向展开） -->
-        <div class="quota-card" id="quota-card">
-          <button class="quota-toggle" id="quota-toggle">
-            <svg class="icon quota-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            <span class="quota-toggle-text" data-i18n="usage">套餐用量</span>
-            <svg class="icon quota-toggle-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-          <div class="quota-expand" id="quota-expand" hidden>
-            <div id="quota-content">
-              <div class="quota-expand-loading" data-i18n="usage_loading">点击套餐用量加载...</div>
-            </div>
-          </div>
-        </div>
-
+        <!-- v0.5.x: 套餐用量卡片已删（数据是 LLM fabrication，不如直接用 mcode TUI 看 /usage） -->
         <button class="btn-menu" id="btn-appearance">
           <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <span class="btn-text" data-i18n="appearance">外观</span>
@@ -1984,7 +1904,6 @@ function toggleTheme() {
 // State
 // ============================================================
 let state = null
-let quotaExpanded = false
 let slashOpen = false
 let slashQuery = ''
 let slashActiveIdx = 0
@@ -2163,9 +2082,6 @@ function render() {
   // Chat
   renderChat()
 
-  // Quota card (在展开时实时刷新)
-  if (quotaExpanded) renderQuota()
-
   // Modals (v0.4.0)
   checkModals()
 }
@@ -2265,14 +2181,45 @@ function renderSessions() {
         <div class="session-name">${short}</div>
         <div class="session-id">${escapeHtml(s.id.substring(0, 12))}…</div>
       </div>
+      <button class="session-delete" data-id="${escapeHtml(s.id)}" title="删除此会话">×</button>
     </div>`
   }).join('')
   list.innerHTML = html
   // 点击 session：切到那个 session（设置 state.sessionId 并请求服务器）
   list.querySelectorAll('.session-item').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      // 点删除按钮/确认按钮时不要触发切 session
+      if (e.target.closest('.session-delete') || e.target.closest('.session-confirm')) return
       const id = el.getAttribute('data-id')
       switchSession(id)
+    })
+  })
+  // 删除按钮：第一次点显示二次确认，第二次点确认按钮才真删
+  list.querySelectorAll('.session-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const item = btn.closest('.session-item')
+      if (item.classList.contains('confirming')) return
+      item.classList.add('confirming')
+      // 在 item 里插入确认条
+      const bar = document.createElement('div')
+      bar.className = 'session-confirm'
+      bar.innerHTML = `<span>删除?</span><button class="session-confirm-yes" data-id="${btn.getAttribute('data-id')}">删</button><button class="session-confirm-no">×</button>`
+      item.appendChild(bar)
+      // 5 秒没动作自动收回
+      const timer = setTimeout(() => cancelConfirm(item), 5000)
+      item._confirmTimer = timer
+      bar.querySelector('.session-confirm-yes').addEventListener('click', async (ev) => {
+        ev.stopPropagation()
+        clearTimeout(timer)
+        const id = btn.getAttribute('data-id')
+        await deleteSession(id)
+      })
+      bar.querySelector('.session-confirm-no').addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        clearTimeout(timer)
+        cancelConfirm(item)
+      })
     })
   })
 }
@@ -2305,6 +2252,33 @@ async function refreshSessions() {
 }
 
 // v0.5.x: 点击 sidebar session 切到该会话（#1 反馈修复）
+function cancelConfirm(item) {
+  if (!item) return
+  if (item._confirmTimer) clearTimeout(item._confirmTimer)
+  item.classList.remove('confirming')
+  const bar = item.querySelector('.session-confirm')
+  if (bar) bar.remove()
+}
+
+async function deleteSession(sessionId) {
+  if (!sessionId) return
+  try {
+    const r = await fetch('/api/sessions/' + encodeURIComponent(sessionId) + TOKEN_QUERY, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+    })
+    if (r.ok) {
+      // 从本地 state.sessions 移除并重渲染
+      state.sessions = (state.sessions || []).filter(s => s.id !== sessionId)
+      renderSessions()
+      // 触发 SSE 拉取最新 state（包括 current session 是否被清空）
+      // （SSE 会自动推送，但 pushState 已被 server 调过——等下一次刷新也行）
+    } else {
+      console.error('deleteSession failed', r.status, await r.text())
+    }
+  } catch (e) { console.error('deleteSession', e) }
+}
+
 async function switchSession(sessionId) {
   if (!sessionId) return
   try {
@@ -2594,81 +2568,9 @@ function toggleSettings() {
 function hideSettings() { settingsOpen = false; settingsMenu.hidden = true }
 
 // ============================================================
-// Quota card
+// Quota card: v0.5.x 已删（数据是 LLM fabrication 没意义，要看用 mcode TUI 自己 /usage）
+// 后端 /api/usage + /api/cmd /usage 保留，输入框输 /usage 仍可本地处理
 // ============================================================
-const quotaCard = document.getElementById('quota-card')
-const quotaExpand = document.getElementById('quota-expand')
-const quotaContent = document.getElementById('quota-content')
-
-async function toggleQuota() {
-  quotaExpanded = !quotaExpanded
-  quotaCard.classList.toggle('expanded', quotaExpanded)
-  quotaExpand.hidden = !quotaExpanded
-  if (quotaExpanded) {
-    renderQuota()
-    // 触发 /usage 命令拉数据（首次或 60s 过期）
-    const u = state?.usage
-    if (!u?.fetchedAt || (Date.now() - u.fetchedAt > 60000)) {
-      try { await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
-    }
-  }
-}
-function hideQuota() { quotaExpanded = false; quotaCard.classList.remove('expanded'); quotaExpand.hidden = true }
-
-// 提取 "80% left" / "30% used" 中的数字；不识别返回 null
-function parsePercent(text) {
-  if (!text) return null
-  const m = String(text).match(/(\d+(?:\.\d+)?)\s*%/)
-  return m ? parseFloat(m[1]) : null
-}
-function renderQuota() {
-  const u = state?.usage
-  if (!u || !u.fetchedAt || (Date.now() - u.fetchedAt > 60000)) {
-    quotaContent.innerHTML = `<div class="quota-expand-loading">${t('usage_loading')}</div>`
-    return
-  }
-  const isZh = currentLang === 'zh'
-
-  // 5 小时限额：mcode 输出 "80% left"，kimi 风格显示已用 % = 100 - left%
-  // 兼容服务端两种字段名（u.fiveHourPercent 已是 left%, 或 u.fiveHourLeft 是字符串）
-  let fiveLeft = parsePercent(u.fiveHourLeft) ?? (typeof u.fiveHourPercent === 'number' ? u.fiveHourPercent : null)
-  const fiveUsed = fiveLeft != null ? Math.max(0, Math.min(100, 100 - fiveLeft)) : null
-  const fiveHour = `
-    <div class="quota-item">
-      <div class="quota-item-header">
-        <span class="quota-item-title">${isZh ? '5 小时限额' : '5-hour limit'}</span>
-        <span class="quota-item-percent">${fiveUsed != null ? fiveUsed + '%' : '—'}</span>
-      </div>
-      <div class="quota-item-reset">${u.fiveHourReset ? `${isZh ? '重置' : 'Resets in'} ${escapeHtml(u.fiveHourReset)}` : ''}</div>
-    </div>
-  `
-
-  // 每周限额：mcode 输出 "Weekly Unlimited" 或 "Weekly 2% used" 等
-  const isUnlimited = /unlimited|无限/i.test(u.weekly || '')
-  const weeklyUsed = parsePercent(u.weekly)  // 如果 raw 是 "2% left/used" 才解析
-  const weekly = `
-    <div class="quota-item">
-      <div class="quota-item-header">
-        <span class="quota-item-title">${isZh ? '每周限额' : 'Weekly limit'}</span>
-        <span class="quota-item-percent">${isUnlimited ? '∞' : (weeklyUsed != null ? weeklyUsed + '%' : '—')}</span>
-      </div>
-      <div class="quota-item-reset">${isUnlimited ? (isZh ? '无限' : 'Unlimited') : ''}</div>
-    </div>
-  `
-
-  // 套餐信息：plan 名 + 到期 + 余额
-  const plan = u.plan ? `<div class="quota-usage-summary"><b>${escapeHtml(u.plan)}</b></div>` : ''
-  const expires = u.expires ? `<div class="quota-usage-summary">${isZh ? '到期' : 'Expires'}: ${escapeHtml(u.expires)}</div>` : ''
-  const credits = (u.credits != null) ? `<div class="quota-usage-summary">${isZh ? '余额' : 'Credits'}: ${escapeHtml(String(u.credits))}</div>` : ''
-
-  // 如果结构化字段都缺失，至少把 raw 显示出来（mcode 0.1.2 的 /usage 经常只能拿到 LLM 对话式回复）
-  const noStructured = !u.plan && !u.expires && u.credits == null && fiveUsed == null && isUnlimited && weeklyUsed == null
-  const rawFallback = noStructured && u.raw
-    ? `<div class="quota-raw">${escapeHtml(u.raw.slice(0, 400))}${u.raw.length > 400 ? '…' : ''}</div>`
-    : ''
-
-  quotaContent.innerHTML = plan + expires + credits + weekly + fiveHour + rawFallback
-}
 
 // ============================================================
 // File upload
@@ -2869,12 +2771,6 @@ function attachEvents() {
   document.getElementById('btn-appearance').addEventListener('click', () => { toggleTheme() })
   document.getElementById('btn-language').addEventListener('click', () => { toggleLang() })
 
-  // Quota
-  document.getElementById('quota-toggle').addEventListener('click', (e) => {
-    e.stopPropagation()
-    toggleQuota()
-  })
-
   // New chat
   document.getElementById('btn-new-chat').addEventListener('click', async () => {
     try {
@@ -2969,10 +2865,7 @@ function attachEvents() {
       const bs = document.getElementById('btn-settings')
       if (!bs || (e.target.id !== 'btn-settings' && !bs.contains(e.target))) hideSettings()
     }
-    // 套餐用量点击外部关闭
-    if (quotaExpanded && !quotaExpand.contains(e.target) && !document.getElementById('quota-toggle').contains(e.target)) {
-      hideQuota()
-    }
+    // 套餐用量 UI 已删（v0.5.x）
   })
 
   // Keyboard shortcuts
@@ -3048,7 +2941,6 @@ function attachEvents() {
       if (slashOpen) hideSlash()
       else if (modeOpen) hideMode()
       else if (settingsOpen) hideSettings()
-      else if (quotaExpanded) hideQuota()
     }
     // Ctrl+K / Cmd+K 聚焦输入
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {

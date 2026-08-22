@@ -2,7 +2,7 @@
 //
 // Adapts to old webui.html (115KB) endpoints:
 //   POST /api/send           {content, command}            → spawn mcode exec, push chat lines
-//   POST /api/usage                                          → spawn mcode exec /usage, push state update
+//   POST /api/usage                                          → spawn mmx quota show, push state + chat
 //   POST /api/refresh                                        → re-fetch status, push state
 //   POST /api/usage-trigger                                  (alias of /api/usage)
 //
@@ -134,6 +134,99 @@ function loadSessions() {
 function saveSessions(s) { writeFileSync(SESSIONS_DB, JSON.stringify(s, null, 2), 'utf8') }
 
 const html = readFileSync(join(__dirname, 'public', 'index.html'), 'utf8')
+
+// v0.5.x → v0.5.y: /usage 改成直接调 mmx CLI（mmx quota show --output json），
+// 完全不走 mcode exec/AI，拿到的是 mmx API 返回的真实结构化数据。
+// 提取成 helper 让 /api/send (/usage slash)、/api/usage、/api/cmd /usage 三处都走同一份逻辑。
+// 结果以 assistant 消息（● 前缀）的形式进 chat，不再隐藏（之前是 LLM fabrication 所以隐藏）。
+
+function mmxQuotaShow() {
+  // mmx 在 Windows 上是 .ps1 shim，用 shell:true 让 cmd 自动解析
+  return new Promise((resolve, reject) => {
+    const child = spawn('mmx', ['quota', 'show', '--output', 'json', '--no-color', '--quiet'], {
+      windowsHide: true,
+      shell: true,
+    })
+    let stdout = ''
+    let stderr = ''
+    const timer = setTimeout(() => {
+      try { child.kill() } catch {}
+      reject(new Error('mmx quota show 超时（15s）'))
+    }, 15000)
+    child.stdout?.on('data', (chunk) => { stdout += chunk.toString('utf8') })
+    child.stderr?.on('data', (chunk) => { stderr += chunk.toString('utf8') })
+    child.on('error', (e) => {
+      clearTimeout(timer)
+      reject(new Error(`mmx 启动失败：${e.message}（确认 mmx CLI 已安装并登录）`))
+    })
+    child.on('exit', (code) => {
+      clearTimeout(timer)
+      if (code !== 0) {
+        return reject(new Error(`mmx 退出码 ${code}：${(stderr || stdout).trim().slice(0, 200) || '无输出'}`))
+      }
+      try {
+        resolve(JSON.parse(stdout))
+      } catch (e) {
+        reject(new Error(`mmx 返回非 JSON：${e.message}\nstdout: ${stdout.slice(0, 200)}`))
+      }
+    })
+  })
+}
+
+function formatDuration(ms) {
+  if (!ms || ms < 0) return '—'
+  const totalSec = Math.floor(ms / 1000)
+  const days = Math.floor(totalSec / 86400)
+  const hours = Math.floor((totalSec % 86400) / 3600)
+  const mins = Math.floor((totalSec % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h 后重置`
+  if (hours > 0) return `${hours}h ${mins}m 后重置`
+  return `${mins}m 后重置`
+}
+
+function formatMmxQuota(data) {
+  const arr = data?.model_remains
+  if (!Array.isArray(arr) || arr.length === 0) return '  暂无数据'
+  return arr.map((m) => {
+    const intervalPct = m.current_interval_remaining_percent
+    const weeklyPct = m.current_weekly_remaining_percent
+    const intervalReset = formatDuration(m.remains_time)
+    const weeklyReset = formatDuration(m.weekly_remains_time)
+    const name = m.model_name || 'model'
+    return `  ${name}\n    5 小时  ${intervalPct}% 剩余 · ${intervalReset}\n    周  ${weeklyPct}% 剩余 · ${weeklyReset}`
+  }).join('\n')
+}
+
+async function runUsageQuery() {
+  state.chat = [...(state.chat || []), '› /usage']
+  pushState()
+  // 加一个 loading 占位（系统消息 ○），等数据回来再替换
+  state.chat = [...state.chat, '○ 套餐用量加载中…']
+  pushState()
+  persistCurrentChat()
+  try {
+    const data = await mmxQuotaShow()
+    const formatted = formatMmxQuota(data)
+    // 同步给 state.usage 留一份（兼容老 webui.html 里可能用到的字段）
+    const general = data.model_remains?.find((m) => m.model_name === 'general') || data.model_remains?.[0]
+    if (general) {
+      state.usage.fiveHourPercent = general.current_interval_remaining_percent
+      state.usage.fiveHourReset = formatDuration(general.remains_time)
+      state.usage.weekly = `${general.current_weekly_remaining_percent}%`
+      state.usage.weeklyReset = formatDuration(general.weekly_remains_time)
+    }
+    state.usage.raw = JSON.stringify(data, null, 2)
+    state.usage.fetchedAt = Date.now()
+    // 替换最后一条 loading 为真实数据
+    const reply = `● 套餐用量：\n${formatted}`
+    state.chat = state.chat.slice(0, -1).concat([reply])
+  } catch (e) {
+    const errText = `○ /usage 失败：${e.message}`
+    state.chat = state.chat.slice(0, -1).concat([errText])
+  }
+  pushState()
+  persistCurrentChat()
+}
 
 // v0.5.x: 启动时清理空 chat + 默认标题的 session（用户点了"新建会话"但没发消息的残留）
 // 保留：有 chat 内容的；或标题是用户手打的中文/英文（不是 New session/Untitled/对话 N 这种默认名）
@@ -387,6 +480,35 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, session: { id: target.id, title: state.sessionTitle, chat: state.chat } }))
   }
 
+  // DELETE /api/sessions/:id — 删一个 session（从 db 移除 + 如果是当前会话则清空 state）
+  if (req.method === 'DELETE' && pathname.startsWith('/api/sessions/') && pathname.length > '/api/sessions/'.length) {
+    const id = pathname.slice('/api/sessions/'.length)
+    if (!id) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ ok: false, error: 'id required' }))
+    }
+    const all = loadSessions()
+    const idx = all.findIndex((s) => s.id === id)
+    if (idx === -1) {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ ok: false, error: 'session not found' }))
+    }
+    all.splice(idx, 1)
+    saveSessions(all)
+    // 如果删的是当前 session，state 切到 Untitled/空 chat
+    if (state.sessionId === id) {
+      state.sessionId = null
+      state.mcodeSessionId = null
+      state.sessionTitle = 'Untitled'
+      state.chat = []
+      state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
+      resetContext()
+    }
+    pushState()
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    return res.end(JSON.stringify({ ok: true, deleted: id, remaining: all.length }))
+  }
+
   // POST /api/upload — save file
   if (req.method === 'POST' && pathname === '/api/upload') {
     const ctype = (req.headers['content-type'] || '').toLowerCase()
@@ -471,7 +593,29 @@ const server = http.createServer(async (req, res) => {
         pushState()
         return
       }
-      // /usage and others go through mcode exec
+      if (cmd === 'usage' || cmd === 'sessions' || cmd === 'help') {
+        // 这些是 webui 端识别的斜杠命令，跟 /api/cmd 一样本地处理
+        if (cmd === 'sessions') {
+          const all = loadSessions()
+          const t = `● 最近 ${all.length} 个会话：\n` + all.slice(0, 8).map((s, i) => `  ${i+1}. ${s.title} (${s.id.substring(0, 8)}…)`).join('\n')
+          state.chat = [...state.chat, `› /sessions`, t]
+          pushState()
+          persistCurrentChat()
+          return
+        }
+        if (cmd === 'help') {
+          const t = `● 可用命令：\n  /new — 新建会话\n  /clear — 清空当前对话\n  /status — 查看状态\n  /sessions — 最近会话列表\n  /usage — 套餐用量\n  @文件 — 引用文件`
+          state.chat = [...state.chat, `› /help`, t]
+          pushState()
+          persistCurrentChat()
+          return
+        }
+        if (cmd === 'usage') {
+          await runUsageQuery()
+          return
+        }
+      }
+      // 其他命令走 mcode exec
     }
 
     // Spawn mcode exec and stream result into state.chat
@@ -509,36 +653,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && (pathname === '/api/usage' || pathname === '/api/usage-trigger')) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: true }))
-    state.chat = [...(state.chat || []), '› /usage']
-    pushState()
-    const exec = runMcodeExec('打印 /usage 报告,只输出原始报告不要修改格式', { label: '/usage', maxSteps: 1 })
-    const r = await collectExecResult(exec)
-    if (r.answer) {
-      state.usage.raw = r.answer
-      // parse key fields: Plan / Expires / Credits / 5-hour / Weekly / Session usage
-      const plan = r.answer.match(/Plan\s+([^\n]+)/i)
-      const exp = r.answer.match(/Expires\s+([^\n]+)/i)
-      const credits = r.answer.match(/Credits\s+([0-9.,]+)/i)
-      const fiveHour = r.answer.match(/5-hour\s+(\d+)%\s*left[^]*?resets?\s*in\s+([^\n]+)/i)
-      const weekly = r.answer.match(/Weekly\s+([^\n]+)/i)
-      const session = r.answer.match(/session[^]*?input\s+([0-9.k]+)\s+output\s+([0-9.k]+)\s+total\s+([0-9.k]+)/i)
-      if (plan) state.usage.plan = plan[1].trim()
-      if (exp) state.usage.expires = exp[1].trim()
-      if (credits) state.usage.credits = parseFloat(credits[1].replace(/,/g, ''))
-      if (fiveHour) { state.usage.fiveHourPercent = parseInt(fiveHour[1]); state.usage.fiveHourReset = fiveHour[2].trim() }
-      if (weekly) state.usage.weekly = weekly[1].trim()
-      if (session) {
-        state.usage.sessionInput = parseFloat(session[1])
-        state.usage.sessionOutput = parseFloat(session[2])
-        state.usage.sessionTotal = parseFloat(session[3])
-      }
-      // v0.5.x: 标记 fetch 时间，让 webui 侧 quota 卡知道数据已就绪
-      state.usage.fetchedAt = Date.now()
-      // /usage 报告用 ● 前缀渲染为 assistant bubble，多行内容转空格保留可读性
-      state.chat = [...state.chat, `● /usage:\n${r.answer.replace(/\n/g, ' ')}`]
-    }
-    pushState()
-    persistCurrentChat()
+    await runUsageQuery()
     return
   }
 
@@ -629,34 +744,7 @@ const server = http.createServer(async (req, res) => {
       return
     }
     if (cmd === '/usage') {
-      // 复用 /api/usage 逻辑
-      state.chat = [...(state.chat || []), '› /usage']
-      pushState()
-      const exec = runMcodeExec('打印 /usage 报告,只输出原始报告不要修改格式', { label: '/usage', maxSteps: 1 })
-      const r = await collectExecResult(exec)
-      if (r.answer) {
-        state.usage.raw = r.answer
-        const plan = r.answer.match(/Plan\s+([^\n]+)/i)
-        const exp = r.answer.match(/Expires\s+([^\n]+)/i)
-        const credits = r.answer.match(/Credits\s+([0-9.,]+)/i)
-        const fiveHour = r.answer.match(/5-hour\s+(\d+)%\s*left[^]*?resets?\s*in\s+([^\n]+)/i)
-        const weekly = r.answer.match(/Weekly\s+([^\n]+)/i)
-        const session = r.answer.match(/session[^]*?input\s+([0-9.k]+)\s+output\s+([0-9.k]+)\s+total\s+([0-9.k]+)/i)
-        if (plan) state.usage.plan = plan[1].trim()
-        if (exp) state.usage.expires = exp[1].trim()
-        if (credits) state.usage.credits = parseFloat(credits[1].replace(/,/g, ''))
-        if (fiveHour) { state.usage.fiveHourPercent = parseInt(fiveHour[1]); state.usage.fiveHourReset = fiveHour[2].trim() }
-        if (weekly) state.usage.weekly = weekly[1].trim()
-        if (session) {
-          state.usage.sessionInput = parseFloat(session[1])
-          state.usage.sessionOutput = parseFloat(session[2])
-          state.usage.sessionTotal = parseFloat(session[3])
-        }
-        state.usage.fetchedAt = Date.now()  // v0.5.x: 让 renderQuota 知道有数据
-        state.chat = [...state.chat, `● /usage:\n${r.answer.replace(/\n/g, ' ')}`]
-      }
-      pushState()
-      persistCurrentChat()
+      await runUsageQuery()
       return
     }
     // 未知命令：忽略
