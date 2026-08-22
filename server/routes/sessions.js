@@ -13,6 +13,7 @@ import {
 import { applyMavisUsageToCs } from "../lib/mavis-usage.js";
 import { getMcodeModelLimit } from "../lib/models.js";
 import { pushStateFor } from "../lib/state-bus.js";
+import { MCODE_RUNTIME_DB } from "../lib/config.js";
 
 // 读 body helper
 async function readJson(req) {
@@ -199,7 +200,7 @@ export function handleDeleteSession(req, res, ctx) {
   // v0.5.bx-19: 兜底 — webui session db 找不到, 但 id 是 mvs_xxx → 当孤儿 mcode session 直接 SQL 删
   if (idx < 0) {
     if (/^mvs_[a-f0-9]{32}$/.test(id)) {
-      const mcodeDbDel = deleteMcodeSessionFromDb(id);
+      const mcodeDbDel = deleteMcodeSessionFromDb(id, { MCODE_RUNTIME_DB });
       console.log(
         `[delete] cid=${cid} ORPHAN mcode session sid=${id.substring(0, 12)}… ok=${mcodeDbDel.ok}`,
       );
