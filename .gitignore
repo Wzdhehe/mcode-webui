@@ -32,3 +32,9 @@ package-lock.json
 # coverage
 coverage/
 lcov.info
+
+# agent scratch files (one-off batch setup scripts; safe to delete)
+scripts/tmp-*.mjs
+
+# packaged plugin dist
+dist/
