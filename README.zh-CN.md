@@ -40,7 +40,7 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/Wzdhehe/mcode-webui.git
+git clone https://github.com/Wzdhehe/Mcode-webui.git
 cd Mcode-webui
 node server.js                 # Mcode CLI 自动探测
 # → http://127.0.0.1:8080/     (局域网：http://<局域网IP>:8080/)

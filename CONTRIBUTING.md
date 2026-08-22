@@ -22,7 +22,7 @@ Requirements:
 Clone and run:
 
 ```bash
-git clone https://github.com/Wzdhehe/mcode-webui.git
+git clone https://github.com/Wzdhehe/Mcode-webui.git
 cd Mcode-webui
 npm install               # only devDeps (eslint, prettier, c8)
 npm test                  # 302 unit tests

@@ -40,7 +40,7 @@ Zero npm dependencies at runtime (Node 22+ stdlib only).
 ## Quick start
 
 ```bash
-git clone https://github.com/Wzdhehe/mcode-webui.git
+git clone https://github.com/Wzdhehe/Mcode-webui.git
 cd Mcode-webui
 node server.js                 # Mcode CLI auto-detected
 # → http://127.0.0.1:8080/     (LAN: http://<lan-ip>:8080/)
