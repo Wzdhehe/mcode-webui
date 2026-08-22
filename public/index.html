@@ -741,6 +741,14 @@ a { color: var(--accent); text-decoration: none; }
 .btn-tool:hover { background: var(--bg-hover); color: var(--text); }
 .btn-tool .icon { width: 14px; height: 14px; }
 .btn-tool.active { background: var(--accent-bg); color: var(--accent-text); }
+.btn-tool .mode-icon { width: 14px; height: 14px; margin-right: 2px; }
+
+/* v0.5.x: 窄屏自适应 — 模式按钮只显示图标，隐藏 label
+   触发条件：聊天区窄于 720px 时（input-toolbar 容纳不下） */
+@media (max-width: 720px) {
+  .btn-tool #mode-label { display: none; }
+  .btn-tool#btn-mode { padding: 5px; }
+}
 .input-spacer { flex: 1; }
 .btn-send {
   width: 32px; height: 32px;
@@ -1516,6 +1524,7 @@ a { color: var(--accent); text-decoration: none; }
               </button>
               <input type="file" id="file-input" multiple hidden>
               <button class="btn-tool" id="btn-mode" title="权限模式">
+                <svg class="icon mode-icon" id="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <span id="mode-label">Default</span>
                 <svg class="icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
@@ -1786,6 +1795,15 @@ const TOKEN = tokenParam  // 给 fetch/SSE 用
 const TOKEN_QUERY = TOKEN ? `?token=${encodeURIComponent(TOKEN)}` : ''
 
 const HEADERS = TOKEN ? { 'Authorization': `Bearer ${TOKEN}` } : {}
+
+// 权限模式图标（按当前 permissions 状态切换）
+// shield=完全访问 / help=询问 / check=自动 / eye=只读
+const MODE_ICONS = {
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+}
 
 // ============================================================
 // i18n
@@ -2096,13 +2114,17 @@ function render() {
   if (state.sessionId) document.getElementById('r-session-id').textContent = state.sessionId
   if (state.sessionTitle) document.getElementById('r-session-title').textContent = state.sessionTitle
 
-  // Permissions → mode label
+  // Permissions → mode label + icon
   if (state.permissions) {
     let modeLabel = 'Default'
-    if (/完全|full/i.test(state.permissions)) modeLabel = t('mode_full')
-    else if (/ask|询问/i.test(state.permissions)) modeLabel = t('mode_ask')
-    else if (/read|只读/i.test(state.permissions)) modeLabel = t('mode_read')
+    let modeIcon = 'shield'  // full access default
+    if (/完全|full/i.test(state.permissions)) { modeLabel = t('mode_full'); modeIcon = 'shield' }
+    else if (/ask|询问/i.test(state.permissions)) { modeLabel = t('mode_ask'); modeIcon = 'help' }
+    else if (/auto|自动/i.test(state.permissions)) { modeLabel = t('mode_auto'); modeIcon = 'check' }
+    else if (/read|只读/i.test(state.permissions)) { modeLabel = t('mode_read'); modeIcon = 'eye' }
     document.getElementById('mode-label').textContent = modeLabel
+    const iconEl = document.getElementById('mode-icon')
+    if (iconEl) iconEl.innerHTML = MODE_ICONS[modeIcon] || MODE_ICONS.shield
   }
 
   // Context right (real-time usage + TPS)

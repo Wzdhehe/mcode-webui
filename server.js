@@ -52,7 +52,8 @@ const state = {
   version: '0.1.2',
   workspace: { dir: DEFAULT_WORKSPACE, branch: null, tree: null },
   model: { name: DEFAULT_MODEL, thinking: 'On', ctx: '512k' },
-  sessionId: null,
+  sessionId: null,         // v0.5.x: webui 侧边栏 session id (randomUUID)，用来在 db 里查找并更新标题
+  mcodeSessionId: null,    // v0.5.x: mcode exec 自己生成的 session id (mvs_xxx)，用作下次续接的 --session 参数
   sessionTitle: 'Untitled',
   context: {
     tokens: 0, used: 0, percent: 0, limit: 512000,
@@ -226,7 +227,7 @@ function collectExecResult(childPromise) {
         state.usage.sessionOutput = (state.usage.sessionOutput || 0) + (r.usage.outputTokens || 0)
         state.usage.sessionTotal = state.usage.sessionInput + state.usage.sessionOutput
       }
-      if (r.sessionId) state.sessionId = r.sessionId
+      if (r.sessionId) state.mcodeSessionId = r.sessionId
       pushState()
       resolve(r)
       // mcode 0.1.2 sometimes hangs after exec.result is written.
@@ -299,6 +300,7 @@ const server = http.createServer(async (req, res) => {
     all.unshift(item)
     saveSessions(all)
     state.sessionId = id
+    state.mcodeSessionId = null  // 新建 webui session 同时开新 mcode 上下文
     state.sessionTitle = item.title
     state.chat = []
     state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
@@ -330,6 +332,7 @@ const server = http.createServer(async (req, res) => {
     // 注意：mcode 自己的 sessionId（mvs_xxx）跟 webui 侧边栏 id（randomUUID）不同
     // 这里只切换 webui 侧边栏的"当前 session"标记；mcode 续接要看 sessionTitle 对应的历史消息
     state.sessionId = target.id
+    state.mcodeSessionId = null  // 切到新 webui session 后，mcode 上下文也开新
     state.sessionTitle = target.title || 'Untitled'
     state.chat = []  // 清空当前 chat 视图（不重新拉历史——mcode stream-json 没暴露历史回放 API）
     state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
@@ -386,6 +389,7 @@ const server = http.createServer(async (req, res) => {
         state.context.tokens = 0
         state.context.used = 0
         state.sessionId = null
+        state.mcodeSessionId = null
         state.sessionTitle = 'Untitled'
         pushState()
         return
@@ -400,8 +404,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Spawn mcode exec and stream result into state.chat
-    // 如果 state.sessionId 已存在（之前 mcode exec 返回的），加 --session 续接上下文
-    const exec = runMcodeExec(content, { label: 'prompt', sessionId: state.sessionId })
+    // 续接 mcode 自己的 session（mvs_xxx），存在 state.mcodeSessionId；与 webui 侧边栏 sessionId 分离
+    const exec = runMcodeExec(content, { label: 'prompt', sessionId: state.mcodeSessionId })
     const r = await collectExecResult(exec)
     // webui.html parseChatLines 角色前缀约定（见 public/index.html L2298-2340）：
     //   › / >  → user   bubble
@@ -417,12 +421,13 @@ const server = http.createServer(async (req, res) => {
       state.chat = [...state.chat, `● ${oneLine}`]
       state.context.assistantLast = oneLine
       state.context.assistantAt = Date.now()
-      // update session title from first message
-      if (!state.sessionTitle || state.sessionTitle === 'Untitled') {
-        state.sessionTitle = content.slice(0, 50)
+      // update session title from first message（默认 "Untitled" / "New session" 都算没设）
+      if (!state.sessionTitle || state.sessionTitle === 'Untitled' || state.sessionTitle === 'New session') {
+        const newTitle = content.slice(0, 50)
+        state.sessionTitle = newTitle
         const all = loadSessions()
         const existing = all.find((s) => s.id === state.sessionId)
-        if (existing) { existing.title = state.sessionTitle; saveSessions(all) }
+        if (existing) { existing.title = newTitle; saveSessions(all) }
       }
     } else if (r.status === 'failed' || r.error) {
       const oneLine = (r.error?.message || r.status).replace(/\n+/g, ' ')
@@ -462,6 +467,8 @@ const server = http.createServer(async (req, res) => {
         state.usage.sessionOutput = parseFloat(session[2])
         state.usage.sessionTotal = parseFloat(session[3])
       }
+      // v0.5.x: 标记 fetch 时间，让 webui 侧 quota 卡知道数据已就绪
+      state.usage.fetchedAt = Date.now()
       // /usage 报告用 ● 前缀渲染为 assistant bubble，多行内容转空格保留可读性
       state.chat = [...state.chat, `● /usage:\n${r.answer.replace(/\n/g, ' ')}`]
     }
@@ -474,6 +481,118 @@ const server = http.createServer(async (req, res) => {
     pushState()
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
     return res.end(JSON.stringify({ ok: true }))
+  }
+
+  // POST /api/permissions — v0.5.x: 更新 webui 端的权限模式显示
+  // 注意：实际 mcode exec 还是 hardcode --permission full（架构上无法动态切换）
+  // 这里只更新 state.permissions 让 webui 按钮 label/icon 跟着变
+  if (req.method === 'POST' && pathname === '/api/permissions') {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    let payload
+    try { payload = JSON.parse(body || '{}') } catch { payload = {} }
+    const mode = (payload.mode || 'full').toLowerCase()
+    const label = mode === 'ask' ? 'Ask'
+      : mode === 'auto' ? 'Auto'
+      : mode === 'read' ? 'Read'
+      : 'Full access'
+    state.permissions = label
+    pushState()
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    return res.end(JSON.stringify({ ok: true, permissions: label }))
+  }
+
+  // POST /api/cmd — v0.5.x: webui 的 "新建会话/查看命令/查看状态" 按钮走这个端点
+  // 内部转调对应的 mcode 功能（新建 webui session、/status 文案、/usage 查询等）
+  if (req.method === 'POST' && pathname === '/api/cmd') {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    let payload
+    try { payload = JSON.parse(body || '{}') } catch { payload = {} }
+    const cmd = (payload.cmd || '').trim()
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    res.end(JSON.stringify({ ok: true }))
+
+    if (cmd === '/new') {
+      // 等同于点 "新建会话" 按钮
+      const all = loadSessions()
+      const id = randomUUID()
+      const item = { id, title: 'New session', createdAt: Date.now() }
+      all.unshift(item)
+      saveSessions(all)
+      state.sessionId = id
+      state.mcodeSessionId = null
+      state.sessionTitle = item.title
+      state.chat = []
+      state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
+      state.context.tokens = 0
+      state.context.used = 0
+      pushState()
+      return
+    }
+    if (cmd === '/status') {
+      // 直接渲染 status 文案（不调 mcode）
+      const t = `● 当前 model=${state.model.name}\n  workspace=${state.workspace.dir}\n  权限=${state.permissions}`
+      state.chat = [...(state.chat || []), `› /status`, t]
+      pushState()
+      return
+    }
+    if (cmd === '/clear') {
+      state.chat = []
+      state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
+      state.context.tokens = 0
+      state.context.used = 0
+      state.sessionId = null
+      state.mcodeSessionId = null
+      state.sessionTitle = 'Untitled'
+      pushState()
+      return
+    }
+    if (cmd === '/sessions') {
+      const all = loadSessions()
+      const t = `● 最近 ${all.length} 个会话：\n` + all.slice(0, 8).map((s, i) => `  ${i+1}. ${s.title} (${s.id.substring(0, 8)}…)`).join('\n')
+      state.chat = [...(state.chat || []), `› /sessions`, t]
+      pushState()
+      return
+    }
+    if (cmd === '/help') {
+      const t = `● 可用命令：\n  /new — 新建会话\n  /clear — 清空当前对话\n  /status — 查看状态\n  /sessions — 最近会话列表\n  /usage — 套餐用量\n  @文件 — 引用文件`
+      state.chat = [...(state.chat || []), `› /help`, t]
+      pushState()
+      return
+    }
+    if (cmd === '/usage') {
+      // 复用 /api/usage 逻辑
+      state.chat = [...(state.chat || []), '› /usage']
+      pushState()
+      const exec = runMcodeExec('打印 /usage 报告,只输出原始报告不要修改格式', { label: '/usage', maxSteps: 1 })
+      const r = await collectExecResult(exec)
+      if (r.answer) {
+        state.usage.raw = r.answer
+        const plan = r.answer.match(/Plan\s+([^\n]+)/i)
+        const exp = r.answer.match(/Expires\s+([^\n]+)/i)
+        const credits = r.answer.match(/Credits\s+([0-9.,]+)/i)
+        const fiveHour = r.answer.match(/5-hour\s+(\d+)%\s*left[^]*?resets?\s*in\s+([^\n]+)/i)
+        const weekly = r.answer.match(/Weekly\s+([^\n]+)/i)
+        const session = r.answer.match(/session[^]*?input\s+([0-9.k]+)\s+output\s+([0-9.k]+)\s+total\s+([0-9.k]+)/i)
+        if (plan) state.usage.plan = plan[1].trim()
+        if (exp) state.usage.expires = exp[1].trim()
+        if (credits) state.usage.credits = parseFloat(credits[1].replace(/,/g, ''))
+        if (fiveHour) { state.usage.fiveHourPercent = parseInt(fiveHour[1]); state.usage.fiveHourReset = fiveHour[2].trim() }
+        if (weekly) state.usage.weekly = weekly[1].trim()
+        if (session) {
+          state.usage.sessionInput = parseFloat(session[1])
+          state.usage.sessionOutput = parseFloat(session[2])
+          state.usage.sessionTotal = parseFloat(session[3])
+        }
+        state.usage.fetchedAt = Date.now()  // v0.5.x: 让 renderQuota 知道有数据
+        state.chat = [...state.chat, `● /usage:\n${r.answer.replace(/\n/g, ' ')}`]
+      }
+      pushState()
+      return
+    }
+    // 未知命令：忽略
+    return
   }
 
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
