@@ -59,7 +59,7 @@ function init() {
 // v0.5.bx-31: 删 send() 里基于 pendingAskUser 的 Q/A 模板化兜底 + render 时设 pendingAskUser; chat 发消息永远不被套
 // v0.5.bx-28: ask_user 弹窗 X / Esc / 背景 = 彻底放弃, 不发 Q/A 给 mcode; 防御性清 pendingAskUser
 // v0.5.bx-27: 启动日志 + JS 错误捕获 — 让 reload 后能立刻看到 fatal error
-console.log('[webui] init start, version=v0.5.bx-31, build=2026-08-20')
+console.log('[webui] init start, version=v1.0.0, build=2026-08-22')
 window.addEventListener('error', (e) => {
   console.error('[webui FATAL]', e.error?.stack || e.message, '@', e.filename + ':' + e.lineno + ':' + e.colno)
   document.title = '⚠ JS ERR: ' + (e.error?.message || e.message).substring(0, 50)

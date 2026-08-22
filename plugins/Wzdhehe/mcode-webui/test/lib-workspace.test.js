@@ -14,8 +14,8 @@
 
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
-import { tmpdir } from "node:os";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { setupMocks, absPath } from "./_setup.js";
 
@@ -130,6 +130,14 @@ describe("handleWorkspaceChange — missing dir", () => {
 describe("handleWorkspaceChange — syncTui flag", () => {
   test("writes ~/.minimax/runtime/cwd.json when syncTui=true", () => {
     const tmp = mkdtempSync(join(tmpdir(), "webui-ws-test-"));
+    // v1.0: 测试卫生 — 本用例写的是真实 ~/.minimax/runtime/cwd.json (mcode TUI 的状态文件)。
+    //   之前不恢复, 每次跑完测试, 下次服务器启动的默认工作区就成了临时目录
+    //   (侧栏工作区 chip 显示 webui-ws-test-xxx, 命令探测会话也建在那里)
+    const tuiCwdFile = join(homedir(), ".minimax", "runtime", "cwd.json");
+    let savedTuiCwd = null;
+    try {
+      savedTuiCwd = readFileSync(tuiCwdFile, "utf8");
+    } catch {}
     try {
       const cs = fakeCs();
       assert.doesNotThrow(() => {
@@ -138,6 +146,10 @@ describe("handleWorkspaceChange — syncTui flag", () => {
       assert.equal(cs.workspace.dir, tmp);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
+      try {
+        if (savedTuiCwd !== null) writeFileSync(tuiCwdFile, savedTuiCwd);
+        else rmSync(tuiCwdFile, { force: true });
+      } catch {}
     }
   });
 

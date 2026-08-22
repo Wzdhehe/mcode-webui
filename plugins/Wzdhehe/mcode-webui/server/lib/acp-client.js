@@ -4,7 +4,8 @@
 // Wraps it with caching/lifecycle for webui use.
 
 import { McodeAcpClient } from "../../acp.mjs";
-import { DEFAULT_WORKSPACE } from "./config.js";
+import { DEFAULT_WORKSPACE, MCODE_RUNTIME_DB } from "./config.js";
+import { deleteMcodeSessionFromDb } from "./db.js";
 
 // v0.5.bu: 拉 mcode 真实 session 列表（mcode acp session/list 协议）
 // 数据源：mcode TUI 自己的 session 存储（不是 webui 的 .webui-sessions.json）
@@ -88,6 +89,15 @@ export function getMcodeSessionsCacheSync(workspace) {
   return null;
 }
 
+// v1.0: 过期但同 workspace 的缓存 — 返回过期列表 (宁推旧值不推空);
+//   之前 TTL 一过 caller 直接推空占位, 侧栏闪跌十来条再弹回 (删除/广播都触发)
+export function getMcodeSessionsStaleSync(workspace) {
+  if (mcodeSessionsCache.ws === workspace && mcodeSessionsCache.ws !== null) {
+    return mcodeSessionsCache.sessions;
+  }
+  return null;
+}
+
 // v0.5.bx: prompt 完成后用 mcodeSessionId 反查 mcode 真实 title
 // 数据源：mcode TUI 自己的 session 存储（不是 webui 的）
 // 用途：替换 webui "New session" / 截断首句 → 用 mcode 自动生成的标题
@@ -110,6 +120,15 @@ export async function getMcodeSessionTitle(mcodeSessionId) {
 // v0.5.bx-19: 软失效 — 只让 TTL 立即过期, 保留 cached sessions (这样切 session 不阻塞)
 export function invalidateMcodeSessionsCache() {
   mcodeSessionsCache = { ...mcodeSessionsCache, fetchedAt: 0 };
+}
+
+// v1.0: 硬剔除 — 把指定 sid 从 cached 数组里移除 (删除会话后立即从侧栏消失, 不等 30s TTL)
+export function dropMcodeSessionFromCache(sid) {
+  if (!sid) return;
+  mcodeSessionsCache = {
+    ...mcodeSessionsCache,
+    sessions: mcodeSessionsCache.sessions.filter((s) => s.sessionId !== sid),
+  };
 }
 
 // v0.5.bx-19: 进程退出时关掉 singleton mcode acp (避免僵尸)
@@ -162,7 +181,10 @@ export async function ensureMcodeCommands({
   forceRefresh = false,
   onRefresh,
 } = {}) {
-  const STALE_MS = 5 * 60 * 1000; // 5 min
+  // v1.0: 5min → 24h — 这个函数靠 newSession 触发 available_commands_update,
+  //   而 newSession 是真实持久化的 (db 里留 mvs_ 会话, 侧栏堆积 "Mcode session")。
+  //   5min TTL 下每次过期都新建一个; 命令列表只在 mcode 升级时变, 每次进程启动刷一次足够
+  const STALE_MS = 24 * 60 * 60 * 1000;
   const now = Date.now();
   if (
     !forceRefresh &&
@@ -174,6 +196,8 @@ export async function ensureMcodeCommands({
   // 去重：如果已经在 fetch，复用
   if (mcodeCommandsPromise) return mcodeCommandsPromise;
   mcodeCommandsPromise = (async () => {
+    // v1.0: 记下探测会话 sid, 拉完命令后清掉 (否则侧栏每次启动多一个 "Mcode session")
+    let probeSid = null;
     try {
       // 关掉旧 client（refresh 时）
       if (mcodeCommandsClient) {
@@ -202,6 +226,9 @@ export async function ensureMcodeCommands({
         client
           .start()
           .then(() => client.newSession(DEFAULT_WORKSPACE))
+          .then((r) => {
+            probeSid = r && r.sessionId ? r.sessionId : null;
+          })
           .catch((e) => {
             clearTimeout(timer);
             reject(e);
@@ -236,6 +263,20 @@ export async function ensureMcodeCommands({
           mcodeCommandsClient.stop();
         } catch {}
         mcodeCommandsClient = null;
+      }
+      // v1.0: 清理探测会话 — 探测 client 已 stop (无回写源), 再 SQL 删 + 缓存剔除该 sid。
+      //   不整体作废缓存 (会让侧栏闪跌后复原); TTL 自然过期后新子进程重读即可
+      if (probeSid) {
+        try {
+          shutdownMcodeAcpSingleton();
+        } catch {}
+        try {
+          const del = deleteMcodeSessionFromDb(probeSid, { MCODE_RUNTIME_DB });
+          console.log(
+            `[webui] commands probe session cleaned: ${probeSid.substring(0, 12)}… ok=${del.ok}`,
+          );
+        } catch {}
+        dropMcodeSessionFromCache(probeSid);
       }
     }
   })();

@@ -7,6 +7,7 @@ import {
   getCachedMcodeCommands,
   getMcodeSessionsForWorkspace,
   getMcodeSessionsCacheSync,
+  getMcodeSessionsStaleSync,
 } from "./acp-client.js";
 import { getLanBroadcast } from "./settings.js";
 
@@ -18,7 +19,7 @@ import { getLanBroadcast } from "./settings.js";
 // v0.5.ai: 每个 webui tab 一个独立 state。
 export function makeClientState() {
   return {
-    version: "0.1.3",
+    version: "1.0", // v1.0: 首次公开发布版本 (顶栏显示 "v" + version)
     workspace: { dir: DEFAULT_WORKSPACE, branch: null, tree: null }, // v0.5.bb: 默认 null（之前是 MCODE_ROOT）
     model: { name: DEFAULT_MODEL, thinking: "On", ctx: "512k" },
     sessionId: null, // webui 侧边栏 session id (randomUUID)
@@ -109,35 +110,46 @@ export const SSE_HEADERS = {
 //   opts.lanBroadcast: 当前 LAN 广播状态（从 settings.js 注入）
 //   opts.mcodeSessions: 已过滤的 mcode sessions 数组（从 acp-client.js 注入）
 // v0.5.bx-31: cache miss 时 fire-and-forget 拉一次, 拉完自动 push 给所有 SSE 客户端
+// v1.0: 推送带 mcodeSessionsPending 标记 — 占位推送 (cache miss 空数组) 为 true, 权威推送为 false;
+//   fetch 失败也要推终态 (否则 client 侧栏 ready 门控永远等不到权威值, loading 卡死)
 const _mcodeSessionsFetchPending = new Set(); // workspace keys currently being fetched
 function ensureMcodeSessionsFetchedAndPush(workspace) {
   if (_mcodeSessionsFetchPending.has(workspace)) return;
   _mcodeSessionsFetchPending.add(workspace);
+  const pushAuthoritative = () => {
+    for (const [c, res] of sseByCid) {
+        const ccs = clients.get(c) || makeClientState();
+        const cws = (ccs.workspace && ccs.workspace.dir) || "";
+        // v1.0: 权威推送优先 fresh cache, 退而求其次 stale (同 ws 过期列表), 避免空列表闪跌
+        const cached =
+          getMcodeSessionsCacheSync(cws) ??
+          getMcodeSessionsStaleSync(cws) ??
+          [];
+      const snapshot = {
+        ...ccs,
+        sessions: loadSessions(),
+        mcodeSessions: cached,
+        mcodeSessionsPending: false,
+        availableCommands: getCachedMcodeCommands(),
+        onlineCount: sseByCid.size,
+        lanBroadcast: getLanBroadcast(),
+      };
+      try {
+        res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
+      } catch {}
+    }
+  };
   getMcodeSessionsForWorkspace(workspace)
     .then(() => {
       _mcodeSessionsFetchPending.delete(workspace);
-      for (const [c, res] of sseByCid) {
-        const ccs = clients.get(c) || makeClientState();
-        const cws = (ccs.workspace && ccs.workspace.dir) || "";
-        const cached = getMcodeSessionsCacheSync(cws) || [];
-        const snapshot = {
-          ...ccs,
-          sessions: loadSessions(),
-          mcodeSessions: cached,
-          availableCommands: getCachedMcodeCommands(),
-          onlineCount: sseByCid.size,
-          lanBroadcast: getLanBroadcast(),
-        };
-        try {
-          res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
-        } catch {}
-      }
+      pushAuthoritative();
     })
     .catch((e) => {
       _mcodeSessionsFetchPending.delete(workspace);
       console.warn(
         `[webui] ensureMcodeSessionsFetchedAndPush failed: ${e.message}`,
       );
+      pushAuthoritative(); // v1.0: 失败也推终态 (用当前 cache 值, 可能是空数组 — 合法)
     });
 }
 
@@ -150,21 +162,14 @@ export function pushStateFor(cid, opts = {}) {
     for (const [c, res] of sseByCid) {
       const ccs = clients.get(c) || makeClientState();
       const cws = (ccs.workspace && ccs.workspace.dir) || "";
-      let cmcodeSessions;
-      if (opts.mcodeSessions !== undefined) {
-        cmcodeSessions = opts.mcodeSessions;
-      } else {
-        const cached = getMcodeSessionsCacheSync(cws);
-        if (cached !== null) cmcodeSessions = cached;
-        else {
-          cmcodeSessions = [];
-          ensureMcodeSessionsFetchedAndPush(cws);
-        }
-      }
+      const fields =
+        opts.mcodeSessions !== undefined
+          ? { mcodeSessions: opts.mcodeSessions, mcodeSessionsPending: false }
+          : mcodeSessionsSnapshotFields(cws);
       const snapshot = {
         ...ccs,
         sessions: loadSessions(),
-        mcodeSessions: cmcodeSessions,
+        ...fields,
         availableCommands: cachedCmds,
         onlineCount: sseByCid.size,
         lanBroadcast,
@@ -176,24 +181,17 @@ export function pushStateFor(cid, opts = {}) {
     return;
   }
   const cs = getClient(cid);
-  let mcodeSessions;
-  if (opts.mcodeSessions !== undefined) {
-    mcodeSessions = opts.mcodeSessions;
-  } else {
-    const cws = (cs.workspace && cs.workspace.dir) || "";
-    const cached = getMcodeSessionsCacheSync(cws);
-    if (cached !== null) mcodeSessions = cached;
-    else {
-      mcodeSessions = [];
-      ensureMcodeSessionsFetchedAndPush(cws);
-    }
-  }
+  // v1.0: 统一走 mcodeSessionsSnapshotFields — 过期缓存推旧值 (pending=true), 不推空占位
+  const fields =
+    opts.mcodeSessions !== undefined
+      ? { mcodeSessions: opts.mcodeSessions, mcodeSessionsPending: false }
+      : mcodeSessionsSnapshotFields((cs.workspace && cs.workspace.dir) || "");
   // 注入 sessions 列表（来自磁盘 db）— 让 webui 侧边栏 "最近会话" 不被 SSE 推送覆盖
   // v0.5.bv: 同步带 mcodeSessions（cache 命中，0 cost；cache miss 才 await）
   const snapshot = {
     ...cs,
     sessions: loadSessions(),
-    mcodeSessions,
+    ...fields,
     availableCommands: cachedCmds,
     onlineCount: sseByCid.size,
     lanBroadcast,
@@ -207,6 +205,25 @@ export function pushStateFor(cid, opts = {}) {
   }
 }
 
+// v1.0: 统一的 mcodeSessions 快照字段构造 — 所有 SSE 推送点必须带这两个字段。
+//   之前 pushOnlineCount / SSE 首推不带, 客户端整包替换 state 后 mcodeSessions 变 undefined,
+//   侧栏随机从 ~36 条闪跌到 ~16 条 (只剩 webui 本地条目), 下次完整推送又弹回。
+//   v1.0 (改): 缓存过期但同 workspace 时推过期列表 (pending=true), 不再推空占位 —
+//   过期值好过空值, 权威值到达前侧栏不闪跌
+export function mcodeSessionsSnapshotFields(workspace) {
+  const ws = workspace || "";
+  const cached = getMcodeSessionsCacheSync(ws);
+  if (cached !== null) {
+    return { mcodeSessions: cached, mcodeSessionsPending: false };
+  }
+  ensureMcodeSessionsFetchedAndPush(ws);
+  const stale = getMcodeSessionsStaleSync(ws);
+  if (stale !== null) {
+    return { mcodeSessions: stale, mcodeSessionsPending: true };
+  }
+  return { mcodeSessions: [], mcodeSessionsPending: true };
+}
+
 // v0.5.ak: SSE 客户端数变化时广播（让所有 tab 实时看到 onlineCount）
 export function pushOnlineCount(lanBroadcast) {
   const cachedCmds = getCachedMcodeCommands();
@@ -215,6 +232,7 @@ export function pushOnlineCount(lanBroadcast) {
     const snapshot = {
       ...cs,
       sessions: loadSessions(),
+      ...mcodeSessionsSnapshotFields((cs.workspace && cs.workspace.dir) || ""),
       availableCommands: cachedCmds,
       onlineCount: sseByCid.size,
       lanBroadcast,

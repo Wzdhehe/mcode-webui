@@ -2,10 +2,10 @@
 
 > **作者**：Mavis（Mavis 0.5.bx 系列负责轮）
 > **日期**：2026-08-21
-> **目标读者**：接手的强 LLM（被 Ponkan 叫来"打补丁"的）
+> **目标读者**：接手的强 LLM（被 Wzdhehe 叫来"打补丁"的）
 > **当前分支**：`refactor/modularization`（已 commit 到 `d2db672`，HEAD clean）
 > **当前状态**：**全部 4 批完成**（批次1 `5fe70c4` / 批次2 `037a108` / 批次3 `258a825` / 批次4 `cfc9406`+`cd569a4`）。main.js 4410 行 → 77 行 bootstrap + i18n/util/state/render/events 五模块。未 push。
-> **重要**：所有路径**都是 `C:\Users\mjc39\.minimax-code\webui\`**（**带 `.`**，很容易写错成 `minimax-code` 没点）
+> **重要**：所有路径**都是 `~\.minimax-code\webui\`**（**带 `.`**，很容易写错成 `minimax-code` 没点）
 
 ---
 
@@ -20,14 +20,14 @@
 - `public/app/main.js`（**4410 行 monolith**）— 前端 SPA，零依赖、零 build、ESM `<script>`
 - `public/index.html`、`public/styles/main.css`（~2400 行）
 
-**用户 Ponkan 风格**：
+**用户 Wzdhehe 风格**：
 - 不喜欢问问题但会主动承认"什么都没学"
 - 喜欢"口播稿"风格
 - 中文为主
 - 不要主动 push 到 GitHub（**硬规则**：见下方 §6）
 - 偏好"分批"做（一波 commit = 一次 review）
 
-**Mavis 跟 Ponkan 协作的硬规矩**（**别违反**）：
+**Mavis 跟 Wzdhehe 协作的硬规矩**（**别违反**）：
 1. `webui/server` 端任何文件改动 → commit 后**必须告诉用户"server 需要重启才能生效"** + 立刻重启 server
 2. `public/app/*.js` 跟 `public/styles/*.css` 已有 no-cache（v0.5.bx-35/36），用户**不需要 hard refresh**
 3. 改 webui CSS 前**必须先看 HTML 父子结构**（v0.5.bx-37 改 #5 教训）
@@ -39,7 +39,7 @@
 ## 1. 项目布局（关键文件清单）
 
 ```
-C:\Users\mjc39\.minimax-code\webui\
+~\.minimax-code\webui\
 ├── package.json              ← Zero deps, "type": "module", node 22+
 ├── server.js                 ← HTTP+SSE 入口
 ├── server/
@@ -77,9 +77,9 @@ C:\Users\mjc39\.minimax-code\webui\
 ```
 
 **外部依赖**：
-- mcode CLI：`C:\Users\mjc39\.minimax-code\mcode.cmd` (acp 0.1.5)
-- mavis desktop db：`C:\Users\mjc39\.minimax\v2\sqlite\runtime-state.sqlite`（**别去动它**，670MB；测试用 `test/fixtures/v2/sqlite/runtime-state.sqlite`）
-- sqlite3 binary：`C:\Users\mjc39\anaconda3\Library\bin\sqlite3.exe`（绝对路径，不在 PATH）
+- mcode CLI：`~\.minimax-code\mcode.cmd` (acp 0.1.5)
+- mavis desktop db：`~\.minimax\v2\sqlite\runtime-state.sqlite`（**别去动它**，670MB；测试用 `test/fixtures/v2/sqlite/runtime-state.sqlite`）
+- sqlite3 binary：`~\anaconda3\Library\bin\sqlite3.exe`（绝对路径，不在 PATH）
 
 ---
 
@@ -265,7 +265,7 @@ export const absPath = (rel) => pathToFileURL(resolve(SERVER_DIR, rel)).href
 
 **位置**：`test/fixtures/v2/sqlite/runtime-state.sqlite`
 
-**为什么是这个路径**：跟真 mavis 路径结构一致（`MAVIS_DATA_DIR/v2/sqlite/runtime-state.sqlite`）。设 `process.env.MAVIS_DATA_DIR = 'C:\Users\mjc39\.minimax-code\webui\test\fixtures'`，config.js 解析后 `MAVIS_DB_PATH` 直接指向 fixture，**不需要 symlink**。
+**为什么是这个路径**：跟真 mavis 路径结构一致（`MAVIS_DATA_DIR/v2/sqlite/runtime-state.sqlite`）。设 `process.env.MAVIS_DATA_DIR = '~\.minimax-code\webui\test\fixtures'`，config.js 解析后 `MAVIS_DB_PATH` 直接指向 fixture，**不需要 symlink**。
 
 **3 个 session ID**（**必须只含 [a-f0-9] 字符**，见 §5.4）：
 - `mvs_feeddead0000000000000000000aaaa` — 3 行（happy path + per-turn）
@@ -411,12 +411,12 @@ Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" |
 Stop-Process -Id <webui_pid> -Force
 
 # 3. 启动新 (PORT 是 v0.5.bx-38 默认 8080, HOST 默认 0.0.0.0)
-cd C:\Users\mjc39\.minimax-code\webui
+cd ~\.minimax-code\webui
 $env:PORT="8080"; $env:HOST="0.0.0.0"
 Start-Process -FilePath "node" -ArgumentList "server.js" `
   -RedirectStandardOutput "$env:TEMP\webui-8080.out.log" `
   -RedirectStandardError "$env:TEMP\webui-8080.err.log" `
-  -WorkingDirectory "C:\Users\mjc39\.minimax-code\webui" `
+  -WorkingDirectory "~\.minimax-code\webui" `
   -WindowStyle Hidden
 ```
 
@@ -430,7 +430,7 @@ Start-Process -FilePath "node" -ArgumentList "server.js" `
 
 之前 webui 默认 7890，**跟 mavis 桌面端 冲突**。所以改成 8080（用户手机/平板/局域网访问用 8080）。如需测试用 7890：`PORT=7890 node server.js`。
 
-URL：`http://192.168.31.95:8080/`
+URL：`http://192.168.1.50:8080/`
 
 ### 5.7 Git 默认不自动 push（**用户硬规则**）
 
@@ -540,11 +540,11 @@ URL：`http://192.168.31.95:8080/`
 | Fixture 重建 | `node test/fixtures/create-test-db.mjs` |
 | Mock 框架 | `test/_setup.js`（200 行，核心抽象） |
 | Server stderr/out | `$env:TEMP\webui-8080.{out,err}.log` |
-| 真实 mavis db（**别动**） | `C:\Users\mjc39\.minimax\v2\sqlite\runtime-state.sqlite`（670MB） |
-| 真实 sqlite3 binary | `C:\Users\mjc39\anaconda3\Library\bin\sqlite3.exe`（不在 PATH） |
-| Webui URL | `http://192.168.31.95:8080/` |
-| Lan IP | `192.168.31.95` |
-| 项目根 | `C:\Users\mjc39\.minimax-code\webui\`（**带 `.`**） |
+| 真实 mavis db（**别动**） | `~\.minimax\v2\sqlite\runtime-state.sqlite`（670MB） |
+| 真实 sqlite3 binary | `~\anaconda3\Library\bin\sqlite3.exe`（不在 PATH） |
+| Webui URL | `http://192.168.1.50:8080/` |
+| Lan IP | `192.168.1.50` |
+| 项目根 | `~\.minimax-code\webui\`（**带 `.`**） |
 | 当前分支 | `refactor/modularization` |
 | HEAD commit | `d2db672` |
 

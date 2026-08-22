@@ -7,11 +7,11 @@ description: Browser-based chat frontend for the mcode agent runtime. Streams mc
 
 > 🌐 Browser-based chat frontend for the mcode agent runtime.
 
-- **Version**: 0.5.0
-- **Author**: Ponkan
+- **Version**: 1.0.0
+- **Author**: Wzdhehe
 - **License**: MIT
 - **Entry**: `server.js` (Node 22.19+)
-- **Default port**: 7890 (LAN-accessible on `0.0.0.0`)
+- **Default port**: 8080 (LAN-accessible on `0.0.0.0`)
 
 A Kimi-Code-style web UI for the mcode CLI. Streams `mcode acp` (Agent
 Client Protocol) and `mcode exec` sessions to the browser in real time:
@@ -27,7 +27,7 @@ Trigger when the user wants any of:
 | "open mcode webui" / "start the mcode webui" | start `server.js` and tell the user the URL |
 | "launch mcode browser" | start server + (optional) open browser |
 | "mcode webui status" | report running / port / last error |
-| "show mcode webui url" | print `http://<lan-ip>:7890/` |
+| "show mcode webui url" | print `http://<lan-ip>:8080/` |
 | "mcode webui config" | list environment variables below |
 
 Do not use this Skill for: editing the webui source code itself, debugging
@@ -35,7 +35,7 @@ the mcode agent runtime, or anything not about the webui HTTP/SSE server.
 
 ## Capabilities
 
-13 capabilities, all implemented and live in v0.5.bx:
+13 capabilities, all implemented and live in v1.0:
 
 - **chat-streaming** — SSE-delivered streamed model output
 - **tool-execution** — bash / edit / read tool events shown inline
@@ -57,7 +57,7 @@ All optional. Defaults shown. See `server/lib/config.js` for full list.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PORT` | `7890` | HTTP listen port |
+| `PORT` | `8080` | HTTP listen port (default was `7890` before v0.5) |
 | `HOST` | `0.0.0.0` | bind address (loopback-only or all interfaces) |
 | `TOKEN` | (empty) | if set, non-local requests must include `?token=` or `Authorization: Bearer` |
 | `MCODE_MODEL` | `minimax_api/MiniMax-M3` | default model |
@@ -70,7 +70,7 @@ All optional. Defaults shown. See `server/lib/config.js` for full list.
 - **Node**: `>=22.19 <23 || >=24 <27`
 - **Platforms**: Windows, Linux, macOS
 - **Entry**: `server.js` (project root)
-- **Default port**: 7890
+- **Default port**: 8080
 - **Bind**: `0.0.0.0` (LAN-accessible by default; override `HOST` for loopback-only)
 
 ## Triggers (Real example prompts + expected results)
@@ -80,12 +80,12 @@ All optional. Defaults shown. See `server/lib/config.js` for full list.
 **Expected**:
 1. Run `node server.js` (foreground or background, your call)
 2. Wait for the SSE `open` log line on stdout
-3. Tell the user: "webui running at http://127.0.0.1:7890/  (or http://<lan-ip>:7890/ for LAN)"
+3. Tell the user: "webui running at http://127.0.0.1:8080/  (or http://<lan-ip>:8080/ for LAN)"
 
 **Prompt 2** — User: `mcode webui status`
 
 **Expected**:
-1. Check if port 7890 is in use (`netstat -an | findstr 7890` on Win / `lsof -iTCP:7890` on Unix)
+1. Check if port 8080 is in use (`netstat -an | findstr 8080` on Win / `lsof -iTCP:8080` on Unix)
 2. If listening: report "running" + URL; if not: report "not running"
 3. Optionally read `C:\...\minimax-code\.server.err` for last error
 
@@ -140,21 +140,23 @@ contribution workflow, see `docs/DEVELOPMENT.md`.
 - `SKILL.md` — this file
 - `LICENSE` — MIT
 - `README.md` — user-facing quick start
-- `docs/` — ARCHITECTURE, API, CAPABILITIES, DEVELOPMENT, TROUBLESHOOTING, REFACTORING
-- `server/` — Node.js HTTP + SSE server (junction to project root)
-- `public/` — static frontend SPA (junction to project root)
-- `test/` — node:test unit tests (junction to project root)
+- `docs/` — ARCHITECTURE, API, CAPABILITIES, DEVELOPMENT, TROUBLESHOOTING
+- `server/` — Node.js HTTP + SSE server (real directory, kept in sync with project root)
+- `public/` — static frontend SPA (real directory, kept in sync with project root)
+- `test/` — node:test unit tests (real directory, kept in sync with project root)
 - `package.json` — project metadata (copy of root)
 
 ## Development vs Release layout
 
-- **In this repo (development)**: `plugins/Ponkan/mcode-webui/{server,public,test}`
-  are **Windows junctions** pointing at the project root. Edit files in
-  `server/`, `public/`, `test/` at the project root as usual — the plugin
-  directory sees the changes immediately.
+- **In this repo (development)**: `plugins/Wzdhehe/mcode-webui/{server,public,test}`
+  are **real directory copies** of the project-root `server/`, `public/`,
+  `test/` (earlier revisions used Windows junctions; the trees have since
+  been expanded). Keep both copies in sync when editing — the plugin tree is
+  the source of truth for the release artifact.
 - **For release** (the artifact pushed to the community plugin repo):
-  `npm run package:plugin` expands the junctions into a real `dist/Ponkan/
-  mcode-webui/` tree and zips it. The resulting artifact contains zero
+  `npm run package:plugin` copies the plugin tree into a real `dist/Wzdhehe/
+  mcode-webui/` tree and zips it, verifying the output contains zero
   symlinks/junctions, satisfying the mcode-plugin-guide contract.
 
-To re-establish junctions on a fresh clone: `npm run setup:plugin`.
+`npm run setup:plugin` is the historical junction-setup script; on the
+current layout it is a no-op for existing directories.

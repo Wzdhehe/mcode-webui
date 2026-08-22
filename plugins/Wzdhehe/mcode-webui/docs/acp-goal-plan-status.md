@@ -79,12 +79,12 @@ cmd /c "set MCODE_USAGE_DEBUG=1&& set MCODE_ACP_DEBUG=1&& set DEBUG_INJECT=1&& n
 
 ```powershell
 $body = '{"plan":{"active":true,"planId":"plan_1","title":"Test","summary":"Test","options":[{"label":"Agree","description":"Start"}]}, "goal":{"active":true,"text":"目标","status":"in_progress","duration":"1h"}, "enterPlanMode":{"active":true,"prompt":"Use Plan mode?"}, "appendChat":["Plan: 升级 plan", "## Summary", "描述", "", "Plan complete.", "1. Agree", "2. Skip"]}'
-Invoke-WebRequest -Uri "http://127.0.0.1:7890/api/debug/inject" -Method POST -Body $body -ContentType "application/json" -Headers @{"X-CID"="test-cid"} -UseBasicParsing
+Invoke-WebRequest -Uri "http://127.0.0.1:8080/api/debug/inject" -Method POST -Body $body -ContentType "application/json" -Headers @{"X-CID"="test-cid"} -UseBasicParsing
 ```
 
 查 state:
 ```powershell
-Invoke-WebRequest -Uri "http://127.0.0.1:7890/api/debug/state" -Headers @{"X-CID"="test-cid"} -UseBasicParsing
+Invoke-WebRequest -Uri "http://127.0.0.1:8080/api/debug/state" -Headers @{"X-CID"="test-cid"} -UseBasicParsing
 ```
 
 浏览器刷新 `?d=64` 应该看到:

@@ -16,7 +16,7 @@ import {
   registerSessionsStore,
 } from "./_setup.js";
 
-let pushStateFor;
+let pushStateFor, mcodeSessionsSnapshotFields;
 let clients, sseByCid, makeClientState;
 let acpFetchCalls, cachedByWs;
 
@@ -24,6 +24,7 @@ before(async (t) => {
   await setupMocks(t);
   const mod = await import(absPath("lib/state-bus.js"));
   pushStateFor = mod.pushStateFor;
+  mcodeSessionsSnapshotFields = mod.mcodeSessionsSnapshotFields;
   clients = mod.clients;
   sseByCid = mod.sseByCid;
   makeClientState = mod.makeClientState;
@@ -40,6 +41,7 @@ beforeEach(async () => {
     },
     getMcodeSessionsCacheSync: (ws) =>
       cachedByWs.has(ws) ? cachedByWs.get(ws) : null,
+    getMcodeSessionsStaleSync: () => null,
   });
   // Clear clients / sseByCid between tests
   clients.clear();
@@ -308,5 +310,75 @@ describe("getClient + getCidFromReq", () => {
     const req = { url: "not-a-valid-url" };
     // URL constructor will throw on bad input → caught → return ""
     assert.equal(getCidFromReq(req), "");
+  });
+});
+
+// ============================================================
+// v1.0 推送字段回归 — 侧栏闪跌三连修:
+//   1) pushOnlineCount / SSE 首推曾不带 mcodeSessions → 客户端 undefined 闪跌
+//   2) 缓存过期时曾推空占位 → 闪跌后弹回
+//   3) 统一走 mcodeSessionsSnapshotFields, 过期推旧值 (pending=true)
+// ============================================================
+describe("v1.0 push fields — mcodeSessions 永不缺失、永不空占位", () => {
+  test("pushOnlineCount 的推送必须带 mcodeSessions 字段 (fresh cache)", () => {
+    cachedByWs.set("/w", [{ id: "s1" }]);
+    const cid = "cid-1";
+    const cs = makeClientState();
+    cs.workspace.dir = "/w";
+    clients.set(cid, cs);
+    sseByCid.set(cid, fakeSse());
+    pushOnlineCount(true);
+    const payload = JSON.parse(sseByCid.get(cid).writes[0].slice(6));
+    assert.ok(Array.isArray(payload.mcodeSessions),
+      "回归: pushOnlineCount 曾不带该字段, 客户端整包替换后 undefined → 侧栏闪跌");
+    assert.equal(payload.mcodeSessions.length, 1);
+    assert.equal(payload.mcodeSessionsPending, false);
+  });
+
+  test("pushOnlineCount 缓存过期时推过期列表, 不推空占位", () => {
+    // fresh miss (cachedByWs 空) + stale hit → 旧值 + pending
+    registerAcpMock({ getMcodeSessionsStaleSync: () => [{ id: "stale-1" }, { id: "stale-2" }] });
+    const cid = "cid-2";
+    const cs = makeClientState();
+    cs.workspace.dir = "/w";
+    clients.set(cid, cs);
+    sseByCid.set(cid, fakeSse());
+    pushOnlineCount(true);
+    const payload = JSON.parse(sseByCid.get(cid).writes[0].slice(6));
+    assert.ok(Array.isArray(payload.mcodeSessions));
+    assert.equal(payload.mcodeSessions.length, 2, "过期值好过空值 — 不允许闪跌到空列表");
+    assert.equal(payload.mcodeSessionsPending, true);
+  });
+
+  test("mcodeSessionsSnapshotFields: fresh / stale / 全miss 三态", () => {
+    // fresh
+    cachedByWs.set("/w", [{ id: "f" }]);
+    assert.deepEqual(mcodeSessionsSnapshotFields("/w"),
+      { mcodeSessions: [{ id: "f" }], mcodeSessionsPending: false });
+    // stale (fresh miss, stale hit)
+    cachedByWs.delete("/w");
+    registerAcpMock({ getMcodeSessionsStaleSync: () => [{ id: "s" }] });
+    assert.deepEqual(mcodeSessionsSnapshotFields("/w"),
+      { mcodeSessions: [{ id: "s" }], mcodeSessionsPending: true });
+    // 全 miss → 空占位 + 触发后台拉取
+    registerAcpMock({ getMcodeSessionsStaleSync: () => null });
+    acpFetchCalls.length = 0;
+    const fields = mcodeSessionsSnapshotFields("/other-ws");
+    assert.deepEqual(fields, { mcodeSessions: [], mcodeSessionsPending: true });
+    assert.ok(acpFetchCalls.includes("/other-ws"), "miss 时必须 fire-and-forget 拉取");
+  });
+
+  test("pushStateFor (单播) 在 stale 缓存下带 pending 标记且列表非空", () => {
+    registerAcpMock({ getMcodeSessionsStaleSync: () => [{ id: "stale-x" }] });
+    const cid = "cid-3";
+    const cs = makeClientState();
+    cs.workspace.dir = "/w";
+    clients.set(cid, cs);
+    sseByCid.set(cid, fakeSse());
+    pushStateFor(cid);
+    const payload = JSON.parse(sseByCid.get(cid).writes[0].slice(6));
+    assert.ok(Array.isArray(payload.mcodeSessions));
+    assert.equal(payload.mcodeSessions.length, 1);
+    assert.equal(payload.mcodeSessionsPending, true);
   });
 });

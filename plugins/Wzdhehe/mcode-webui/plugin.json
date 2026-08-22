@@ -1,13 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "mcode-webui",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "Browser-based chat frontend for the mcode agent runtime. Streams mcode acp / exec sessions with real-time tool events, plan review, ask-user prompts, context usage, and quota. Zero npm dependencies; runs on Node 22+.",
   "author": {
-    "name": "Ponkan"
+    "name": "Wzdhehe"
   },
-  "homepage": "https://github.com/Ponkan/mcode-webui",
-  "repository": "https://github.com/Ponkan/mcode-webui.git",
+  "homepage": "https://github.com/Wzdhehe/mcode-webui",
+  "repository": "https://github.com/Wzdhehe/mcode-webui.git",
   "license": "MIT",
   "keywords": [
     "mcode",

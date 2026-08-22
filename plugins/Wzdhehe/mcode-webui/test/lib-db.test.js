@@ -22,7 +22,7 @@ import { pathToFileURL } from "node:url";
 
 const absPath = (rel) => pathToFileURL(join(import.meta.dirname, "..", "server", rel)).href;
 
-// Find sqlite3 binary. On this host: C:\Users\mjc39\anaconda3\Library\bin\sqlite3.exe
+// Find sqlite3 binary. On this host: C:\Users\<you>\anaconda3\Library\bin\sqlite3.exe
 // On CI: system PATH
 const SQLITE3_BIN = process.env.SQLITE3_BIN || "sqlite3";
 

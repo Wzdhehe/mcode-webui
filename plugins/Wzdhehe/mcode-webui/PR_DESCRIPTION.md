@@ -13,8 +13,8 @@
   - `README.md` (user-facing quick start)
   - `references/SECURITY-NOTES.md` (canonical security disclosure)
   - `docs/` (ARCHITECTURE, API, CAPABILITIES, DEVELOPMENT, TROUBLESHOOTING)
-  - `server/`, `public/`, `test/` (junctions to project root in this repo;
-    expanded to real directories in `dist/` for the release artifact)
+  - `server/`, `public/`, `test/` (real directory copies, kept in sync with
+    the project root; packaged as-is into `dist/` for the release artifact)
   - `package.json` (copy of project root, with `setup:plugin` and
     `package:plugin` scripts)
 
@@ -32,19 +32,19 @@ stream real-time tool events, switch workspaces, and use the
 Expected:
 1. Run `node server.js` (foreground or background, your call)
 2. Wait for the SSE `open` log line on stdout
-3. Tell the user: "webui running at http://127.0.0.1:7890/  (or http://<lan-ip>:7890/ for LAN)"
+3. Tell the user: "webui running at http://127.0.0.1:8080/  (or http://<lan-ip>:8080/ for LAN)"
 
 **Prompt 2** — User: "mcode webui status"
 
 Expected:
-1. Check if port 7890 is in use
+1. Check if port 8080 is in use
 2. If listening: report "running" + URL; if not: report "not running"
 3. Optionally read `.server.err` for last error
 
 **Prompt 3** — User: "show mcode webui url"
 
 Expected:
-1. Print `http://<lan-ip>:7890/`
+1. Print `http://<lan-ip>:8080/`
 2. (If `TOKEN` is set) also print the full URL with `?token=…`
 
 Full trigger list in [`SKILL.md`](SKILL.md#when-to-use-this-skill).
@@ -60,7 +60,7 @@ Full trigger list in [`SKILL.md`](SKILL.md#when-to-use-this-skill).
 
 ## Network & data behavior
 
-- **Binds `0.0.0.0:7890` by default** — loopback-only via `HOST=127.0.0.1`
+- **Binds `0.0.0.0:8080` by default** — loopback-only via `HOST=127.0.0.1`
 - **`?token=` query string** supported (browser convenience);
   `Authorization: Bearer` header also accepted
 - **No outbound network** — only local subprocesses (`mcode`, `mmx quota`)
@@ -78,12 +78,12 @@ Full disclosure: [`references/SECURITY-NOTES.md`](references/SECURITY-NOTES.md).
 
 ```
 $ npm test
-ℹ tests 262
-ℹ suites 79
-ℹ pass 261
+ℹ tests 291
+ℹ suites 86
+ℹ pass 290
 ℹ fail 0
 ℹ skipped 1
-ℹ duration_ms ~450
+ℹ duration_ms ~550
 
 $ npm run lint
 > eslint server/ test/
@@ -107,14 +107,20 @@ CI: GitHub Actions on Node 22 / Node 24, Windows + Linux + macOS.
 
 - Installed plugin via `mavis plugin install` (path mode)
 - Set `TOKEN=$(openssl rand -hex 16)`
-- Opened `http://127.0.0.1:7890/?token=…` in browser — SSE stream
+- Opened `http://127.0.0.1:8080/?token=…` in browser — SSE stream
   connected, model stream rendered
 - Opened same URL on phone (LAN) — token auth accepted, mobile
   layout responsive
 - Ran a multi-turn session with tool calls (Bash, Read, Edit) —
   all events rendered, quota panel updated
 - Toggled `lanBroadcast: false` — phone got 403 with friendly page
-- Deleted a session — log shows rows removed from 9 tables
+- Deleted a session — log shows rows removed from all session-keyed
+  tables. v1.0 E2E evidence: ran the real-delete path against a copy of
+  the production `runtime-state.sqlite` (713 MB) via
+  `MCODE_RUNTIME_DB=<copy>`; a session with 11,176 rows across 12 tables
+  was reduced to 7 rows (only `questionnaire_requests` remains, skipped
+  by design — not `local_runtime_*`-prefixed). The table list covers
+  32 of the 33 session-keyed tables in the mcode schema.
 - Re-ran delete with `?dryRun=true` — preview shows row count, no
   modification
 - Restarted server — orphan mcode acp child cleaned up via SIGTERM
@@ -143,6 +149,6 @@ CI: GitHub Actions on Node 22 / Node 24, Windows + Linux + macOS.
 - [x] README.md present and non-empty
 - [x] No symlinks (release artifact expands junctions)
 - [x] No UTF-8 BOM in any text file
-- [x] No `TODO` in shipped files
+- [x] No placeholder markers in shipped files
 - [x] No `hooks` / unsupported capability fields
 - [x] One plugin per PR (this PR is only `plugins/Wzdhehe/mcode-webui/`)

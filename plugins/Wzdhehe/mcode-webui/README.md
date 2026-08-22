@@ -16,7 +16,7 @@ export TOKEN="$(openssl rand -hex 16)"
 # 3. Start the plugin
 node server.js
 # 4. Open in browser
-#    http://127.0.0.1:7890/?token=$TOKEN
+#    http://127.0.0.1:8080/?token=$TOKEN
 ```
 
 ## What's in the box
@@ -43,7 +43,7 @@ list. Most relevant:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PORT` | `7890` | HTTP listen port |
+| `PORT` | `8080` | HTTP listen port (default was `7890` before v0.5) |
 | `HOST` | `0.0.0.0` | Bind address (override to `127.0.0.1` for loopback-only) |
 | `TOKEN` | (empty) | Required token for non-local requests |
 
@@ -78,6 +78,6 @@ MIT — see [LICENSE](LICENSE).
 
 ## Maintainer
 
-- **Author**: Ponkan
+- **Author**: Wzdhehe
 - **Repository**: https://github.com/Wzdhehe/mcode-webui
 - **Homepage**: https://github.com/Wzdhehe/mcode-webui

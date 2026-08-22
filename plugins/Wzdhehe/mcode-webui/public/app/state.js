@@ -58,12 +58,19 @@ export function connect() {
   es.onmessage = (ev) => {
     try {
       // v0.5.bx-8: 保留 askUserAnswers (webui-only, server 不存) — SSE 推送整 state 会覆盖
+      // v1.0: 同理保留 mcodeSessions — pushOnlineCount 等推送点若缺该字段, 整包替换后
+      //   mcodeSessions 变 undefined, 侧栏闪跌; 旧值好过没值
       const preserved = state?.askUserAnswers
+      const preservedMcodeSessions = state?.mcodeSessions
       state = JSON.parse(ev.data)
       if (preserved) state.askUserAnswers = preserved
-      // v0.5.bx-31: mcodeSessions 第一次非空时 sidebarReady=true, renderSessions 切到真实列表
-      //   之前没这判断, 首次 render 用空 mcodeSessions 渲染, 用户点删除/切时 race
-      if (!sidebarReady && Array.isArray(state.mcodeSessions) && state.mcodeSessions.length > 0) {
+      if (state.mcodeSessions === undefined && Array.isArray(preservedMcodeSessions)) {
+        state.mcodeSessions = preservedMcodeSessions
+      }
+      // v0.5.bx-31 + v1.0: 收到权威 mcodeSessions 推送即 ready。
+      //   旧门控要求 length>0 — 工作区会话被全删后列表合法为空, loading 永不消失;
+      //   现在用 server 的 mcodeSessionsPending 区分占位推送 (cache miss 空数组) 与权威推送
+      if (!sidebarReady && Array.isArray(state.mcodeSessions) && !state.mcodeSessionsPending) {
         console.log('[webui] sidebar ready: mcodeSessions.length=' + state.mcodeSessions.length)
         sidebarReady = true
       }

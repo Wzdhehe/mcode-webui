@@ -42,7 +42,12 @@ export function getMcodeBetterSqlite3({ MCODE_RUNTIME_DB: _ignored } = {}) {
 
 // 删 mcode session 涉及的所有关联表 (含 FTS5 external content + 各种 state 表)
 //   ON DELETE CASCADE 需要 PRAGMA foreign_keys=ON 才生效 (SQLite 默认 OFF), 这里不用 cascade, 全手动删
+// v1.0: 覆盖面对齐真实 schema — 实测 ~/.minimax/v2/sqlite 里有 28 张 session_id 键控表,
+//   旧清单只删 9 张, 会把 message_rows(消息本体)/token_usage/pi_history 等大量数据留成孤儿行。
+//   现按 "local_runtime_* 前缀 + PRAGMA 确认有 session_id 列" 全量收录;
+//   questionnaire_requests 无 local_runtime 前缀、归属不明, 暂不删 (缺失表由调用处 try/catch 跳过)。
 export const MCODE_SESSION_DELETE_TABLES = [
+  // — 会话本体与索引 —
   "local_runtime_sessions",
   "local_runtime_sessions_fts", // external content FTS5 (会话标题搜索)
   "local_runtime_session_fts_keys",
@@ -51,7 +56,34 @@ export const MCODE_SESSION_DELETE_TABLES = [
   "local_runtime_session_asset_index_state",
   "local_runtime_session_agent_state",
   "local_runtime_workspace_indexing_sessions",
+  "local_runtime_workspace_indexing_revisions",
   "local_runtime_session_assets",
+  // — 消息本体 (v1.0 补) —
+  "local_runtime_messages",
+  "local_runtime_message_rows",
+  "local_runtime_message_row_migrations",
+  "local_runtime_pi_history_rows",
+  "local_runtime_pi_history_row_migrations",
+  "local_runtime_pi_history_file_migrations",
+  // — turn / 队列 (v1.0 补) —
+  "local_runtime_turn_ingress",
+  "local_runtime_turn_ingress_client_requests",
+  "local_runtime_turn_diffs",
+  "local_runtime_turn_diff_journal",
+  "local_runtime_turn_diff_rewind_operations",
+  "local_runtime_queues",
+  "local_runtime_queue_items",
+  "local_runtime_queue_row_migrations",
+  "local_runtime_queue_migration_quarantine",
+  // — 用量与账目 (v1.0 补) —
+  "local_runtime_token_usage",
+  "local_runtime_ledger_watermarks",
+  // — 关联实体 (v1.0 补) —
+  "local_runtime_thread_goals",
+  "local_runtime_cron_session_history",
+  "local_runtime_v2_cron_runs",
+  "local_runtime_file_api_uploads",
+  "local_runtime_query_view_states",
 ];
 
 export function deleteMcodeSessionFromDb(

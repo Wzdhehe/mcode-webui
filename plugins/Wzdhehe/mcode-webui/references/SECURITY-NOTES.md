@@ -37,7 +37,7 @@
 
 | Surface | Default | Override | Notes |
 |---------|---------|----------|-------|
-| HTTP bind | `0.0.0.0:7890` | `HOST` / `PORT` env | `0.0.0.0` is a deliberate default — browser/phone/LAN access is the primary use case. On a public / untrusted network, set `HOST=127.0.0.1` immediately. |
+| HTTP bind | `0.0.0.0:8080` | `HOST` / `PORT` env | `0.0.0.0` is a deliberate default — browser/phone/LAN access is the primary use case. On a public / untrusted network, set `HOST=127.0.0.1` immediately. |
 | LAN broadcast toggle | `true` (UI) | `/api/settings` POST `{lanBroadcast: false}` | Server returns 403 with a friendly page when off and request is non-local. Toggle is **runtime**; resets to default on restart. |
 | Outbound network | **none** | n/a | The webui does not call any external service. The only outbound traffic is the `mcode` CLI subprocess and `mmx quota show` (local binary). |
 | Inbound auth | none (loopback) / `?token=` or `Authorization: Bearer` (non-loopback) | `TOKEN` env | See §3. |
@@ -69,7 +69,7 @@ The webui only forwards stdin / parses stdout / renders the SSE stream.
   way to configure the auth token is the `TOKEN` environment variable.
 
 ### 2.3 Token in URL query string
-- Browser opens `http://<host>:7890/?token=<TOKEN>` and the webui
+- Browser opens `http://<host>:8080/?token=<TOKEN>` and the webui
   auto-injects the token into every `fetch` / `EventSource` call as
   `?token=` AND as `Authorization: Bearer`.
 - **Risk**: query string ends up in browser history, server access logs
@@ -94,20 +94,25 @@ The webui only forwards stdin / parses stdout / renders the SSE stream.
 ### 3.1 `DELETE /api/sessions/:id` — **cross-deletes into mavis sqlite**
 
 When a webui session is deleted, the plugin ALSO deletes the
-corresponding row from `local_runtime_sessions` (and 8 related tables)
+corresponding row from `local_runtime_sessions` (and 31 related tables)
 in `~/.minimax/v2/sqlite/runtime-state.sqlite` — the **real mavis
 runtime database** the user shares with their `mavis` desktop install.
 
 **Why**: `mcode acp` `session/delete` returns "Method not found" (a known
 mcode 0.1.4 protocol gap). Without a server-side cross-delete, the
-mcode side would keep orphaned sessions forever.
+mcode side would keep orphaned sessions forever. v1.0 extended the
+table list from 9 to 32: the mcode schema has 33 session-keyed tables,
+and the old 9-table list left `local_runtime_message_rows` (message
+bodies), `local_runtime_token_usage`, and `local_runtime_pi_history_rows`
+orphaned. Only `questionnaire_requests` is deliberately skipped (not
+`local_runtime_*`-prefixed, ownership unclear).
 
 **Mitigations**:
 1. **Preview first**: `DELETE /api/sessions/<id>?dryRun=true` returns
    `{ok: true, dryRun: true, log: [...], totalRows: N}` without
    modifying any file. Use this before committing.
 2. **Atomicity**: the actual delete runs in a SQLite `transaction()` —
-   either all 9 related tables update or none do. No partial state.
+   either all 32 tables update or none do. No partial state.
 3. **FK table awareness**: missing tables (older mcode schema) are
    swallowed per-table, not as a transaction-wide failure.
 4. **Idempotent**: re-running DELETE on an already-deleted sid is a
@@ -207,5 +212,5 @@ log + a disabled feature) — it does not crash.
 ## 8. Reporting issues
 
 Security-relevant bugs: open a private advisory on the
-[mavis/plugins GitHub repo](https://github.com/Ponkan/mcode-webui/security/advisories)
+[mavis/plugins GitHub repo](https://github.com/Wzdhehe/mcode-webui/security/advisories)
 (once published). Non-security bugs: use the issue tracker.

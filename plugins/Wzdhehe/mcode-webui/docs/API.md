@@ -8,7 +8,7 @@ All non-API routes return static files (`server.js` → `serveStatic` /
 
 ## Conventions
 
-- **Base URL**: `http://127.0.0.1:7890` (or LAN IP if enabled)
+- **Base URL**: `http://127.0.0.1:8080` (or LAN IP if enabled)
 - **Path prefix**: `/api/`
 - **Content-Type**: `application/json; charset=utf-8` for both request and response
 - **Auth header**: if `TOKEN` env is set, every request must include either
@@ -33,10 +33,10 @@ Returns server status. No auth required, no CID required.
 ```json
 {
   "ok": true,
-  "port": 7890,
+  "port": 8080,
   "defaultModel": "minimax_api/MiniMax-M3",
-  "defaultWorkspace": "C:\\Users\\mjc39\\.minimax-code\\webui",
-  "mcodeCmd": "C:\\Users\\mjc39\\.minimax-code\\mcode.cmd",
+  "defaultWorkspace": "C:\\Users\\you\\.minimax-code\\webui",
+  "mcodeCmd": "C:\\Users\\you\\.minimax-code\\mcode.cmd",
   "mcodeVersion": "0.1.2",
   "maxConcurrent": 3
 }
@@ -284,11 +284,11 @@ locking themselves out.
 {
   "ok": true,
   "lanBroadcast": true,
-  "port": 7890,
+  "port": 8080,
   "host": "0.0.0.0",
-  "lanIp": "192.168.31.95",
-  "lanUrl": "http://192.168.31.95:7890",
-  "localUrl": "http://127.0.0.1:7890",
+  "lanIp": "192.168.1.50",
+  "lanUrl": "http://192.168.1.50:8080",
+  "localUrl": "http://127.0.0.1:8080",
   "mcodeCmd": "C:\\…\\mcode.cmd",
   "mcodeVersion": "0.1.2",
   "defaultWorkspace": "C:\\…",

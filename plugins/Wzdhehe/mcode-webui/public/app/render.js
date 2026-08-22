@@ -199,7 +199,7 @@ export function renderContext() {
   const isEstimated = ctx.estimated === true
   const usageSource = ctx.usageSource || (isEstimated ? 'estimate' : 'mcode-rusage')
   const hasData = spent > 0
-  // v0.5.bx-20: used 显示 "264.9k/512k" 格式 (used / limit) — Ponkan 反馈
+  // v0.5.bx-20: used 显示 "264.9k/512k" 格式 (used / limit) — Wzdhehe 反馈
   //   之前只显示 used 数字 + 下面 progress bar + percent
   //   现在把限额拼到数字后面, 一眼看到 used 占 limit 的比例
   //   没有 limit (model 未识别) 时降级为只用数字
@@ -221,7 +221,7 @@ export function renderContext() {
       srcEl.style.display = ''
       srcEl.textContent = usageSource === 'mavis-db' ? 'mavis db' : (isEstimated ? '估算' : 'mcode')
       srcEl.title = usageSource === 'mavis-db'
-        ? '数据源: mavis 桌面端 sqlite db (C:\\Users\\mjc39\\.minimax\\v2\\sqlite\\runtime-state.sqlite)'
+        ? '数据源: mavis 桌面端 sqlite db (C:\\Users\\you\\.minimax\\v2\\sqlite\\runtime-state.sqlite)'
         : (isEstimated
             ? '估算: mcode 0.1.4 不返 usage, 临时估算'
             : '数据源: mcode 0.1.5+ 直接返回的 usage')
@@ -243,7 +243,7 @@ export function renderContext() {
     }
   }
   // v0.5.bx-10: cache chip — 显示多少 token 是从 cache 来的 (input 的子集, 不算 context)
-  // v0.5.bx-20: 主显示改 "cache 89%" 命中率, hover 显示详细数字 — Ponkan 反馈
+  // v0.5.bx-20: 主显示改 "cache 89%" 命中率, hover 显示详细数字 — Wzdhehe 反馈
   //   mavis db schema: input_tokens = "新" input, cache_read_tokens = 从 cache 读, 真实 total = 两者之和
   //   真实命中率 = cache_read / (input + cache_read) — server 算好塞 cs.usage.sessionCacheHitRate
   const cacheEl = document.getElementById('r-cache-read')
@@ -587,12 +587,12 @@ export async function switchSession(sessionId) {
         // 直接用 server 返回的 session 数据更新本地 state（避免 SSE race condition）
         state.sessionId = data.session.id
         state.sessionTitle = data.session.title
-        // v0.5.bx-20 (改): 切 session 不再关闭 ask_user 弹窗 — Ponkan 反馈
+        // v0.5.bx-20 (改): 切 session 不再关闭 ask_user 弹窗 — Wzdhehe 反馈
         //   "切换对话再切回来也保留弹窗" → 弹窗绑 module-level, 切走不清
         //   v0.5.bx-15 改 #4 移除 (之前是切 session 关弹窗, 行为反了)
-        // v0.5.bx-25 (改): 切 session 关掉旧 session 的弹窗 — Ponkan 反馈
+        // v0.5.bx-25 (改): 切 session 关掉旧 session 的弹窗 — Wzdhehe 反馈
         //   "触发问题弹窗后, 切到其他对话, 弹窗还在" — 弹窗应属于触发它的 session, 切走就关
-        //   跟 v0.5.bx-20 "保留弹窗" 立场相反, 但 v0.5.bx-20 时 Ponkan 没表达"切走也要保留", 是 v0.5.bx-15 改 #4 那次的原话误读
+        //   跟 v0.5.bx-20 "保留弹窗" 立场相反, 但 v0.5.bx-20 时 Wzdhehe 没表达"切走也要保留", 是 v0.5.bx-15 改 #4 那次的原话误读
         //   现在按 "弹窗属于触发它的 session" 理解: 切走关, 切回不自动重弹 (主动点 inline ask indicator 才重开)
         if (typeof closeAskModal === 'function') {
           closeAskModal()
@@ -1273,7 +1273,7 @@ export function askModalNextOrSend() {
 
 // 弹窗 "跳过" — 整个 questionnaire 跳过 (提交所有未答题为 "未回答" 给 mcode)
 // v0.5.bx-15 (改): 之前是 "跳当前题 + 进下一题", 用户反馈 "问题弹窗关不掉" — 改成整个跳过
-// v0.5.bx-20 (改): 关闭弹窗不持久化 dismiss — Ponkan 反馈
+// v0.5.bx-20 (改): 关闭弹窗不持久化 dismiss — Wzdhehe 反馈
 //   "如果跳过, 点叉号关掉, 回复未回答就可以" → 关闭即关, 下次 mcode 发新 ask_user 仍要弹窗
 //   v0.5.bx-15 改 #3 (state.askUserDismissed + saveAskDismissed 持久化) 移除
 export function askModalSkip() {

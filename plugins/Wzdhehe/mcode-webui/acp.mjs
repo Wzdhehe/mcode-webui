@@ -18,8 +18,22 @@
 
 import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
+import { homedir } from 'node:os'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 const DEFAULT_CWD = process.cwd()
+
+// v1.0: mcode 可执行文件动态解析 — 之前硬编码 C:\Users\<author>\... 绝对路径,
+//   插件分发到别人机器上必然失效。优先级: env MCODE_CMD > ~/.minimax-code/mcode.cmd > PATH 里的 mcode
+function resolveMcodeCmd() {
+  if (process.env.MCODE_CMD) return process.env.MCODE_CMD
+  if (process.platform === 'win32') {
+    const p = join(homedir(), '.minimax-code', 'mcode.cmd')
+    if (existsSync(p)) return p
+  }
+  return 'mcode'
+}
 
 export class McodeAcpClient extends EventEmitter {
   constructor({ mcodeCmd = 'mcode', cwd = DEFAULT_CWD, debug = false } = {}) {
@@ -46,7 +60,7 @@ export class McodeAcpClient extends EventEmitter {
     //  - shell:true → Node 内置 cmd.exe 解释，但会输出 Windows 横幅污染 JSON
     //  - cmd.exe /c <.cmd> → cmd.exe 作为父进程，不解释不打印横幅，只 exec mcode.cmd
     const args = process.platform === 'win32'
-      ? ['/c', 'C:\\Users\\mjc39\\.minimax-code\\mcode.cmd', 'acp']
+      ? ['/c', resolveMcodeCmd(), 'acp']
       : ['acp']
     const cmd = process.platform === 'win32' ? 'cmd.exe' : 'mcode'
     this.child = spawn(cmd, args, {
@@ -80,9 +94,7 @@ export class McodeAcpClient extends EventEmitter {
   }
 
   get cmd() {
-    return process.platform === 'win32'
-      ? 'C:\\Users\\mjc39\\.minimax-code\\mcode.cmd'
-      : 'mcode'
+    return process.platform === 'win32' ? resolveMcodeCmd() : 'mcode'
   }
 
   // 解析 stdout（每行一条 JSON）

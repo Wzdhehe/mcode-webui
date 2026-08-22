@@ -52,6 +52,8 @@ const _acpMock = {
   getMcodeServerInfo: () => null,
   invalidateMcodeSessionsCache: () => {},
   shutdownMcodeAcpSingleton: () => {},
+  dropMcodeSessionFromCache: () => {}, // v1.0: 删除路由防复活用
+  getMcodeSessionsStaleSync: () => null, // v1.0: 过期缓存读取 (推送防闪跌用)
 };
 
 let _sessionsStore = [];
@@ -131,6 +133,10 @@ export async function setupMocks(t, overrides = {}) {
         _acpMock.invalidateMcodeSessionsCache(...a),
       shutdownMcodeAcpSingleton: (...a) =>
         _acpMock.shutdownMcodeAcpSingleton(...a),
+      dropMcodeSessionFromCache: (...a) =>
+        _acpMock.dropMcodeSessionFromCache(...a),
+      getMcodeSessionsStaleSync: (...a) =>
+        _acpMock.getMcodeSessionsStaleSync(...a),
     },
   });
 

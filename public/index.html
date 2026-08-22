@@ -20,7 +20,7 @@
     <div class="topbar-brand">
       <img class="topbar-logo" id="topbar-logo" src="/brand-logo.png" alt="mcode" title="双击重置 ask_user 弹窗（如果之前被 dismiss 了）" />
       <span data-i18n="title">mcode Web UI</span>
-      <span class="topbar-version" id="version">v0.1.3</span>
+      <span class="topbar-version" id="version">v1.0</span>
       <!-- v0.5.bx-37: BETA 标识 — webui 还活跃开发, 提醒用户可能不稳定 -->
       <span class="topbar-beta" data-i18n-title="topbar_beta_title" title="Beta 测试版">BETA</span>
     </div>
@@ -46,7 +46,7 @@
         </svg>
         <span id="chip-lan-link-text">—</span>
       </a>
-      <!-- v0.5.by: 顶栏 tok/s 移除 (侧栏 CONTEXT 已有, 重复) — Ponkan 反馈 -->
+      <!-- v0.5.by: 顶栏 tok/s 移除 (侧栏 CONTEXT 已有, 重复) — Wzdhehe 反馈 -->
     </div>
     <button class="btn-mobile-toggle" id="btn-toggle-right" title="详情" style="margin-left:auto">
       <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>
@@ -133,7 +133,7 @@
           <svg class="icon btn-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
 
-        <!-- v0.5.ak: 改为 GitHub 链接（指向 Ponkan 的开源仓库） -->
+        <!-- v0.5.ak: 改为 GitHub 链接（指向 Wzdhehe 的开源仓库） -->
         <a class="user-footer github-link" id="user-footer" href="https://github.com/Wzdhehe/mcode-webui" target="_blank" rel="noopener noreferrer" title="mcode-webui on GitHub">
           <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.69-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.79 0c2.21-1.49 3.18-1.18 3.18-1.18.63 1.58.23 2.75.11 3.04.74.81 1.18 1.83 1.18 3.09 0 4.42-2.7 5.39-5.27 5.68.41.36.78 1.06.78 2.13 0 1.54-.01 2.78-.01 3.16 0 .31.21.67.8.56C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
           <span>GitHub</span>
@@ -179,7 +179,7 @@
               </button>
               <input type="file" id="file-input" multiple hidden>
               <!-- v0.5.by: btn-mode 隐藏 (mcode 0.1.5 acp 不支持 session/set_config_option, 切 mode 等于没切)
-                   仍保留 mode-label 节点让 state push 不报错, 但整按钮 hidden — Ponkan 反馈 -->
+                   仍保留 mode-label 节点让 state push 不报错, 但整按钮 hidden — Wzdhehe 反馈 -->
               <span class="btn-mode-static" id="btn-mode" title="mcode 0.1.5 不支持 mid-session 改 permission mode (实测 probe)" hidden>
                 <svg class="icon mode-icon" id="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <span id="mode-label">Default</span>
@@ -223,7 +223,7 @@
               <!-- v0.5.by: Plan 模式按钮删除
                    mcode 0.1.5 acp 不支持 session/set_mode (实测 "Method not found")
                    之前 v0.5.bx-9 的 plan template workaround 仍 work, 但按钮没法真接 RPC
-                   Ponkan 反馈 "删掉 plan" — 直接干掉按钮
+                   Wzdhehe 反馈 "删掉 plan" — 直接干掉按钮
                    想用 plan 还是输 "/plan <text>" slash cmd 走 mcode 自身解析 -->
             </div>
             <!-- v0.5.ak: model picker popover（btn-model 点击弹出） -->
@@ -245,7 +245,7 @@
               <div class="workspace-picker-title" data-i18n="workspace_picker_title">切换工作区</div>
               <div class="workspace-picker-current" id="workspace-picker-current">—</div>
               <input class="workspace-picker-input" id="workspace-picker-input" placeholder="C:\Users\your-name\project-path" />
-              <!-- v0.5.by: Switch/Use TUI/Reset 三按钮删除 (Ponkan 反馈 不需要)
+              <!-- v0.5.by: Switch/Use TUI/Reset 三按钮删除 (Wzdhehe 反馈 不需要)
                    想换工作区直接输路径 + 回车 即可 -->
               <label class="workspace-picker-sync">
                 <input type="checkbox" id="workspace-picker-sync" />
@@ -346,7 +346,7 @@
       <!-- CONTEXT (real-time usage + TPS) -->
       <div class="right-section">
         <!-- v0.5.bx-20 (改): mavis db badge 从 Used 行挪到 CONTEXT 标题后面 (同行, 右上)
-             Ponkan 反馈 "把数据来源挪到这里后面" — 跟 section title 同一行, 不挤在 used 数字旁 -->
+             Wzdhehe 反馈 "把数据来源挪到这里后面" — 跟 section title 同一行, 不挤在 used 数字旁 -->
         <div class="right-section-title" data-i18n="section_context">CONTEXT<span class="kv-usage-source" id="r-usage-source" style="display:none"></span></div>
         <div class="kv-row"><span class="kv-label" data-i18n="r_used">已用</span><span class="kv-value" id="r-used">—</span> <span class="kv-mavis-model" id="r-mavis-model" style="display:none"></span> <span class="kv-cache-read" id="r-cache-read" style="display:none"></span></div>
         <div class="context-bar"><div class="context-bar-fill" id="r-context-bar" style="width:0%"></div></div>
@@ -535,18 +535,10 @@
 <!-- v9: v0.5.bx-31 删 send() 里基于 pendingAskUser 的 Q/A 模板化兜底 + render 时设 pendingAskUser; chat 发消息永远不被套 -->
 <script type="module" src="/app/main.js?v=9"></script>
 
-<div class="lan-url-popover" id="lan-url-popover" hidden>
-  <div class="lan-url-title">访问地址</div>
-  <div class="lan-url-row">
-    <span class="lan-url-label">本机</span>
-    <code class="lan-url-value" id="lan-url-local">—</code>
-  </div>
-  <div class="lan-url-row">
-    <span class="lan-url-label">局域网</span>
-    <code class="lan-url-value" id="lan-url-lan">—</code>
-  </div>
-  <div class="lan-url-hint">手机/其他电脑用局域网 URL 访问（需在同一 WiFi）</div>
-</div>
+<!-- v1.0: 全局 toast 容器 — #toast 元素此前缺失, showToast() 一直静默空转 (LAN 开关/复制/用量刷新全无提示) -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- v0.5.bx-40: LAN URL hover popover 已删除 — 访问地址在顶栏 chip-lan-link（点击复制） -->
 
 <!-- v0.5.bx-NN: in-page debug log (collapsed by default; auto-expand on error) -->
 <div id="debug-log-panel" hidden style="position:fixed;bottom:8px;right:8px;width:min(420px,calc(100vw - 16px));max-height:240px;background:#1e1e1e;color:#0f0;font:11px/1.4 ui-monospace,Consolas,monospace;border:1px solid #444;border-radius:6px;padding:6px 8px;z-index:99999;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.4)">

@@ -1,6 +1,6 @@
 {
   "name": "mcode-webui",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "HTTP/SSE wrapper for mcode exec --output-format stream-json. Zero deps, Node 22+.",

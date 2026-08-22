@@ -47,7 +47,7 @@ of date and the browser is running an old main.js.
    the line number. Look up the element ID in that line and
    either restore it in `index.html` or remove the JS reference.
 
-## `Failed to load resource: net::ERR_CONNECTION_REFUSED` to `127.0.0.1:7890`
+## `Failed to load resource: net::ERR_CONNECTION_REFUSED` to `127.0.0.1:8080`
 
 **Symptoms**: devtools shows the SSE or `/api/state` request failing
 with "connection refused". UI shows "init fail" or is stuck on
@@ -57,7 +57,7 @@ with "connection refused". UI shows "init fail" or is stuck on
 port.
 
 **Fix**:
-1. Check the server is up: `curl http://127.0.0.1:7890/api/health`
+1. Check the server is up: `curl http://127.0.0.1:8080/api/health`
    should return JSON.
 2. If not running, start it: `cd webui; node server.js`.
 3. If running on a different port, set `$env:PORT = <port>` and
@@ -84,7 +84,7 @@ appear in the webui's session list.
 mcode sqlite via `GET /api/acp-sessions` on init.
 
 **Fix**:
-1. Check `curl 'http://127.0.0.1:7890/api/acp-sessions?cid=<your-cid>'`
+1. Check `curl 'http://127.0.0.1:8080/api/acp-sessions?cid=<your-cid>'`
    — should return a list of sessions.
 2. If empty, the mcode database is empty or the path is wrong.
    Check `$env:USERPROFILE\.minimax\v2\sqlite\runtime-state.sqlite`
@@ -213,7 +213,7 @@ or shows the wrong value.
 `state` events.
 
 **Fix**:
-1. Check `curl 'http://127.0.0.1:7890/api/state?cid=<cid>' | jq .permissions`
+1. Check `curl 'http://127.0.0.1:8080/api/state?cid=<cid>' | jq .permissions`
 2. If empty, mcode hasn't reported the current permission mode.
    Send any message — the next SSE event will include it.
 3. If the webui shows the wrong value, it's because mcode 0.1.5
@@ -233,17 +233,17 @@ cache.
 the main.js response — it should include the version comment
 "v0.5.bx-NN".
 
-## Server won't start: "EADDRINUSE :::7890"
+## Server won't start: "EADDRINUSE :::8080"
 
 **Symptoms**: `node server.js` exits with EADDRINUSE.
 
-**Cause**: another process is already listening on port 7890.
+**Cause**: another process is already listening on port 8080.
 Usually a previous webui process that didn't clean up.
 
 **Fix**:
 1. Find the conflicting process:
    ```powershell
-   Get-NetTCPConnection -State Listen -LocalPort 7890
+   Get-NetTCPConnection -State Listen -LocalPort 8080
    ```
 2. Kill it: `Stop-Process -Id <PID> -Force`
 3. Or use a different port: `$env:PORT = 7891; node server.js`
@@ -256,13 +256,13 @@ Usually a previous webui process that didn't clean up.
 client isn't sending it. Or the token mismatch.
 
 **Fix**:
-1. Check `curl http://127.0.0.1:7890/api/health` — should work
+1. Check `curl http://127.0.0.1:8080/api/health` — should work
    without auth (health is exempt).
 2. Check the URL the webui is using: it should have `?token=…`
    appended, OR the request should have `Authorization: Bearer …`.
 3. The webui auto-injects the token from the URL query string.
-   Make sure you opened `http://127.0.0.1:7890/?token=…`, not
-   `http://127.0.0.1:7890/`.
+   Make sure you opened `http://127.0.0.1:8080/?token=…`, not
+   `http://127.0.0.1:8080/`.
 
 ## Server starts but no mcode subprocess spawns
 
@@ -271,10 +271,10 @@ does nothing.
 
 **Cause**: the mcode binary is not at the expected path. The
 default is `<webui-root>/../../mcode.cmd` (which resolves to
-`C:\Users\mjc39\.minimax-code\mcode.cmd`).
+`%USERPROFILE%\.minimax-code\mcode.cmd`).
 
 **Fix**:
-1. Verify the path: `Test-Path C:\Users\mjc39\.minimax-code\mcode.cmd`
+1. Verify the path: `Test-Path %USERPROFILE%\.minimax-code\mcode.cmd`
 2. If it's elsewhere, set `$env:MCODE_CMD = 'C:\path\to\mcode.cmd'`
 3. Restart the server.
 

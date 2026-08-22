@@ -16,9 +16,9 @@ Requirements:
 
 Zero npm install. Clone, run:
 ```powershell
-cd C:\Users\mjc39\.minimax-code\webui
+cd ~/.minimax-code/webui
 node server.js
-# → http://127.0.0.1:7890
+# → http://127.0.0.1:8080
 ```
 
 If you want a debug session (verbose SSE, no cache, injectable events):
@@ -143,7 +143,7 @@ command; the webui picks it up on connect.
 ## Testing without mcode
 
 1. Set `$env:DEBUG_INJECT = '1'` before `node server.js`.
-2. Open `http://127.0.0.1:7890/?debug=1` (or just check the right
+2. Open `http://127.0.0.1:8080/?debug=1` (or just check the right
    panel — the debug panel is always visible).
 3. In the browser console:
    ```js
@@ -212,7 +212,7 @@ The webui will spawn a fresh one on the next send.
 The `/api/settings` endpoint is exempt from the LAN guard by design.
 From any machine on the LAN, even with `lanBroadcast: false`:
 ```bash
-curl -X POST http://192.168.31.95:7890/api/settings \
+curl -X POST http://192.168.1.50:8080/api/settings \
   -H 'Content-Type: application/json' \
   -d '{"lanBroadcast": true}'
 ```

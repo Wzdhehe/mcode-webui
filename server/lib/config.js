@@ -31,7 +31,16 @@ function detectTuiCwd() {
 }
 
 export const MCODE_ROOT = resolve(__dirname, "..", "..", ".."); // webui/server/lib → ../../../ → .minimax-code
-export const MCODE_CMD = join(MCODE_ROOT, "mcode.cmd");
+// v1.0: mcode.cmd 检测链 — 之前只有 MCODE_ROOT 相对路径一种, 插件装到其他位置时启动即 fatal。
+//   优先级: env MCODE_CMD > 仓库/开发布局 (MCODE_ROOT) > 用户安装布局 (~/.minimax-code) > PATH 裸名
+export const MCODE_CMD = (() => {
+  if (process.env.MCODE_CMD) return process.env.MCODE_CMD;
+  const repoLayout = join(MCODE_ROOT, "mcode.cmd");
+  if (existsSync(repoLayout)) return repoLayout;
+  const homeLayout = join(homedir(), ".minimax-code", "mcode.cmd");
+  if (existsSync(homeLayout)) return homeLayout;
+  return "mcode"; // PATH fallback
+})();
 // v0.5.bx-38: 默认端口 8080 — 之前 7890 太常被 desktop / mavis 桌面端占, 端口冲突频繁
 //   8080 是常见 HTTP alt, 也跟 web UI 语义对得上 (web = 80, 8080 = alt)
 //   仍可被 process.env.PORT 覆盖 (比如临时用 7890 跑测试)
@@ -49,13 +58,16 @@ export const SESSIONS_DB =
   process.env.MCODE_WEBUI_SESSIONS_DB ||
   join(MCODE_ROOT, ".webui-sessions.json");
 // v0.5.bx-19: mcode session 物理存储位置
-export const MCODE_RUNTIME_DB = join(
-  homedir(),
-  ".minimax",
-  "v2",
-  "sqlite",
-  "runtime-state.sqlite",
-);
+// v1.0: 支持 MCODE_RUNTIME_DB 环境变量覆盖 — E2E 测试用真实库副本跑真删路径, 不碰真库
+export const MCODE_RUNTIME_DB =
+  process.env.MCODE_RUNTIME_DB ||
+  join(
+    homedir(),
+    ".minimax",
+    "v2",
+    "sqlite",
+    "runtime-state.sqlite",
+  );
 // v0.5.bx-10: mavis 桌面端 sqlite db — local_runtime_token_usage 表存真实 token usage
 export const MAVIS_DATA_DIR =
   process.env.MAVIS_DATA_DIR || join(homedir(), ".minimax");

@@ -4,6 +4,53 @@ All notable changes to this project are documented here. Versions
 follow `v0.5.bx-NN` where `bx` is the modularization branch and
 `NN` is the iteration counter.
 
+## v1.0.0 (2026-08-22) — First public release
+
+> Scope: visual redesign, several silent-bug fixes, delete-coverage
+> overhaul, and version alignment ahead of the first push.
+
+### Fixed
+
+- **Global toast was silently dead** — `showToast()` writes to
+  `#toast`, but the element never existed in `index.html`; every toast
+  in the app (LAN toggle, usage refresh, copy confirmations) was a
+  no-op. Added the element + a single consolidated `.toast` rule
+  (an earlier duplicate rule pair produced a stretched-box bug where
+  `top: 50%` + `bottom: 96px` with no height made one-line toasts
+  render screen-tall).
+- **GitHub link covered by LAN popover** — the LAN URL hover popover
+  positioned itself directly below the LAN card, on top of the GitHub
+  link. The popover was removed entirely (the topbar LAN chip already
+  shows + copies the access URL); LAN card now only toggles.
+- **Session delete left ~19k-row orphans per active session** — the
+  cross-delete covered 9 of 33 session-keyed tables in the mcode
+  schema, missing `local_runtime_message_rows` (message bodies),
+  `local_runtime_token_usage`, `local_runtime_pi_history_rows`, and
+  more. Table list extended to 32 (all `local_runtime_*` tables with a
+  `session_id` column; `questionnaire_requests` skipped — ownership
+  unclear). Verified by E2E: real-delete against a 713 MB copy of the
+  production db reduced an 11,176-row session to 7 rows (the skipped
+  table only).
+
+### Changed
+
+- **Theme: "Ink & Brass" → "Ink & Paper"** — full monochrome
+  black/white palette; accent is near-white (dark) / near-black
+  (light); new `--on-accent` token keeps text readable on accent
+  backgrounds; success/warning desaturated to grays, danger kept as
+  muted red. LAN wifi icon keeps a functional green (`--status-on`)
+  when broadcast is on.
+- **LAN toggle toast copy** (zh/en): "局域网已开启 — 局域网内其他设备
+  可访问" / "LAN access on — other devices on this network can access"
+  (and the off variants).
+- **Version → v1.0** everywhere: topbar `v1.0`, manifests `1.0.0`.
+
+### Added
+
+- `MCODE_RUNTIME_DB` env override — lets tests run the real-delete
+  path against a copy of the mcode runtime db instead of the live one.
+- Historical port note: default port is 8080 (was 7890 before v0.5).
+
 ## v0.5.bx (2026-08-20) — Documentation rewrite
 
 > Scope: technical-tone rewrite of the entire documentation set, plus
@@ -54,7 +101,7 @@ follow `v0.5.bx-NN` where `bx` is the modularization branch and
 ### Notes
 
 - `docs/acp-goal-plan-status.md` kept as-is (archaeology only).
-- The plugin at `C:\Users\mjc39\.minimax\plugins\mcode-webui\`
+- The plugin at `~\.minimax\plugins\mcode-webui\`
   (the mavis-level install) was not updated in this pass; its
   `SKILL.md` is a different artifact (mavis skill format, with
   the install steps for the mcode.ps1 shim injection).

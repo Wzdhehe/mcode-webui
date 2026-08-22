@@ -139,7 +139,7 @@ export async function setMode(mode) {
   hideMode()
   if (mode === 'plan') {
     state.planMode = !state.planMode
-    showToast(state.planMode ? '已开 Plan 模式 (下次发消息时 mcode 会按 Plan: 格式输出)' : '已关 Plan 模式', 'info', 2500)
+    showToast(state.planMode ? t('plan_mode_on') : t('plan_mode_off'), 2500)
     return
   }
   // 权限 mode (ask/auto/full/read) — mcode 0.1.5 acp 不支持 mid-session 改 permissionMode
@@ -153,7 +153,7 @@ export async function setMode(mode) {
     const j = await r.json().catch(() => ({}))
     if (state.planMode) state.planMode = false
     if (j && j.ok === true) {
-      showToast('权限 mode 仅更新 webui UI, mcode 实际 mode 由启动 --permission 标志决定 (0.1.5 不支持 mid-session 改)', 'info', 4500)
+        showToast(t('perm_mode_note'), 4500)
     }
   } catch (e) { console.error(e) }
 }
@@ -699,7 +699,7 @@ export function attachEvents() {
       breadcrumb.appendChild(span)
       return
     }
-    // 拆路径：["C:", "Users", "mjc39", ...]
+    // 拆路径：["C:", "Users", "<user>", ...]
     const sep = dir.includes('\\') ? '\\' : '/'
     const isWin = dir.match(/^[A-Z]:/i)
     const parts = dir.split(/[\\\/]/).filter(Boolean)
@@ -888,11 +888,8 @@ export function attachEvents() {
     }
   } catch {}
 
-  // v0.5.aq: chip-lan toggle — 点 chip 切换 LAN 访问，hover 看访问 URL
+  // v0.5.aq: chip-lan toggle — 点 chip 切换 LAN 访问（访问 URL 在顶栏 chip，点击复制）
   const chipLan = document.getElementById('chip-lan')
-  const lanPopover = document.getElementById('lan-url-popover')
-  const lanUrlLocal = document.getElementById('lan-url-local')
-  const lanUrlLan = document.getElementById('lan-url-lan')
   // v0.5.bp: 顶栏 LAN 访问链接 chip（LAN on 时显示当前 IP，点复制完整 URL）
   const chipLanLink = document.getElementById('chip-lan-link')
   const chipLanLinkText = document.getElementById('chip-lan-link-text')
@@ -902,8 +899,6 @@ export function attachEvents() {
       const r = await fetch('/api/settings' + API_SUFFIX, { headers: HEADERS })
       const d = await r.json()
       if (!d.ok) return
-      if (lanUrlLocal) lanUrlLocal.textContent = d.localUrl || '—'
-      if (lanUrlLan) lanUrlLan.textContent = d.lanUrl || '—'
       // v0.5.bp: 顶栏链接 chip 始终更新 URL（data-lan-url 留着点复制时用），可见性由 render() 决定
       if (chipLanLink) {
         chipLanLink.setAttribute('data-lan-url', d.lanUrl || '')
@@ -958,43 +953,8 @@ export function attachEvents() {
   })
   }
 
-  // hover chip = 显示 popover（带本机/局域网 URL，点 URL 复制）
-  function positionLanPopover() {
-    if (!chipLan || !lanPopover) return
-    const rect = chipLan.getBoundingClientRect()
-    lanPopover.style.top = (rect.bottom + 6) + 'px'
-    lanPopover.style.right = Math.max(8, window.innerWidth - rect.right) + 'px'
-  }
-  if (chipLan) {
-    chipLan.addEventListener('mouseenter', () => {
-      positionLanPopover()
-      if (lanPopover) lanPopover.hidden = false
-    })
-  }
-  if (chipLan && lanPopover) {
-    chipLan.addEventListener('mouseleave', () => {
-      // 延迟关闭：允许鼠标从 chip 滑到 popover 上
-      setTimeout(() => {
-        if (!lanPopover.matches(':hover')) lanPopover.hidden = true
-      }, 150)
-    })
-    lanPopover.addEventListener('mouseleave', () => { lanPopover.hidden = true })
-  }
-  // 点 URL 复制
-  ;[lanUrlLocal, lanUrlLan].forEach(el => {
-    if (!el) return
-    el.addEventListener('click', async (e) => {
-      e.stopPropagation()
-      const text = el.textContent
-      if (text === '—') return
-      try {
-        await navigator.clipboard.writeText(text)
-        showToast(t('copy_success') + ': ' + text, 1500)
-      } catch (err) {
-        alert(t('copy_failed_manual') + ': ' + text)
-      }
-    })
-  })
+  // v0.5.bx-40: LAN URL hover popover 已删除 — 顶栏 chip-lan-link 已展示访问地址（点击复制），
+  //   且旧 popover 定位在 LAN 卡片正下方，会盖住 GitHub 链接
 
   // New chat
   // v0.5.ar: 新建会话 → 弹工作区选择 popover（选完工作区再调 /api/sessions）
@@ -1199,7 +1159,7 @@ export function attachEvents() {
     }
   })
   // v0.5.bx-21: 鼠标 hover slash item 切 active idx (跟键盘 ArrowUp/Down 一致)
-  //   之前只有 click → 直接 selectSlash, 没切换高亮. Ponkan 反馈 "鼠标点别的, 只会选中help"
+  //   之前只有 click → 直接 selectSlash, 没切换高亮. Wzdhehe 反馈 "鼠标点别的, 只会选中help"
   //   修: mouseenter 切 slashActiveIdx + 重新渲染 active class
   //   注意: 不绑 mouseleave, 否则用户键盘移到 /new 后鼠标移走又跳回 /help
   slashResults.addEventListener('mouseover', (e) => {
@@ -1532,7 +1492,7 @@ export function attachModalEvents() {
       const hadKeys = ASK_MODAL_STATE.presentedKeys.size > 0
       ASK_MODAL_STATE.presentedKeys.clear()
       if (typeof showToast === 'function') {
-        showToast(hadKeys ? '✓ ask_user 弹窗已重新开启 (清空 presentedKeys)' : 'ask_user 弹窗未开启过 (无需重置)', 'info')
+        showToast(hadKeys ? t('ask_reopened') : t('ask_no_reset'))
       }
     })
   }

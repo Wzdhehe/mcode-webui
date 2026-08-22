@@ -2,7 +2,7 @@
 // Unit tests for server/routes/sessions.js — handleSwitchSession
 //
 // Why this test exists: v0.5.bx-32 — handleSwitchSession must NOT
-// write cs.lastUsedWorkspace. Ponkan's feedback: "点 c 区任意对话
+// write cs.lastUsedWorkspace. Wzdhehe's feedback: "点 c 区任意对话
 // (不发消息),c 区就自动置顶了,我想的是发消息才置顶". Switching
 // session is browsing, not sending, so lastUsedWorkspace is only
 // written by handleSend.
@@ -10,7 +10,7 @@
 import { test, describe, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
-import { setupMocks, absPath, registerSessionsStore, getSessionsStore } from "./_setup.js";
+import { setupMocks, absPath, registerSessionsStore, getSessionsStore, registerAcpMock } from "./_setup.js";
 
 let deleteMcodeSessionFromDb, SQLITE3_BIN;
 
@@ -485,5 +485,131 @@ describe("handleAcpSessionTitle", () => {
     const body = JSON.parse(res._body);
     assert.equal(body.ok, true);
     assert.equal(body.title, "My Title");
+  });
+});
+
+// ============================================================
+// v1.0: 删除防复活 (killMcodeSessionResurrection) — 常驻 acp 子进程内存里
+// 持有 session 且会回写 db, 真删前必须先杀子进程 + 从推送缓存剔除 sid。
+// 这里断言路由正确调用了这两步, 以及 dryRun 不触发。
+// ============================================================
+describe("handleDeleteSession — v1.0 anti-resurrection", () => {
+  const MVS_SID = "mvs_aaaa1111222233334444555566667777";
+
+  function trackAntiResurrection() {
+    const calls = { shutdown: 0, drop: [] };
+    registerAcpMock({
+      shutdownMcodeAcpSingleton: () => {
+        calls.shutdown++;
+      },
+      dropMcodeSessionFromCache: (sid) => {
+        calls.drop.push(sid);
+      },
+    });
+    return calls;
+  }
+
+  test("real delete with mcodeSessionId kills acp singleton + drops sid from cache", async () => {
+    const calls = trackAntiResurrection();
+    registerSessionsStore({
+      initial: [
+        ...initialSessions,
+        {
+          id: "webui-ar",
+          mcodeSessionId: MVS_SID,
+          title: "AR target",
+          workspace: "/ws-A",
+          createdAt: 9,
+          updatedAt: 9,
+          chat: [],
+        },
+      ],
+    });
+    const cs = makeClientState();
+    cs.workspace = { dir: "/ws-A", branch: null, tree: null };
+    const cid = "cid-1";
+    clients.set(cid, cs);
+    const res = fakeRes();
+    const ctx = { cs, cid, pathname: "/api/sessions/" + MVS_SID };
+    await handleDeleteSession(fakeReq({}), res, ctx);
+    assert.equal(res._status, 200);
+    assert.equal(calls.shutdown, 1, "singleton must be killed exactly once before db delete");
+    assert.deepEqual(calls.drop, [MVS_SID], "deleted sid must be dropped from push cache");
+  });
+
+  test("dryRun does NOT kill singleton or drop cache (readonly preview)", async () => {
+    const calls = trackAntiResurrection();
+    registerSessionsStore({
+      initial: [
+        ...initialSessions,
+        {
+          id: "webui-ar2",
+          mcodeSessionId: MVS_SID,
+          title: "AR dry",
+          workspace: "/ws-A",
+          createdAt: 9,
+          updatedAt: 9,
+          chat: [],
+        },
+      ],
+    });
+    const cs = makeClientState();
+    cs.workspace = { dir: "/ws-A", branch: null, tree: null };
+    const cid = "cid-1";
+    clients.set(cid, cs);
+    const res = fakeRes();
+    const req = { url: "/api/sessions/" + MVS_SID + "?dryRun=true" };
+    const ctx = { cs, cid, pathname: "/api/sessions/" + MVS_SID };
+    await handleDeleteSession(req, res, ctx);
+    assert.equal(res._status, 200);
+    assert.equal(JSON.parse(res._body).dryRun, true);
+    assert.equal(calls.shutdown, 0, "dryRun must not kill the singleton");
+    assert.equal(calls.drop.length, 0, "dryRun must not touch the push cache");
+  });
+
+  test("resets EVERY client referencing the deleted sid (multi-tab)", async () => {
+    trackAntiResurrection();
+    registerSessionsStore({
+      initial: [
+        ...initialSessions,
+        {
+          id: "webui-mc",
+          mcodeSessionId: MVS_SID,
+          title: "MC target",
+          workspace: "/ws-A",
+          createdAt: 9,
+          updatedAt: 9,
+          chat: [],
+        },
+      ],
+    });
+    // tab-1: 当前会话就是目标 (by sessionId)
+    const cs1 = makeClientState();
+    cs1.sessionId = "webui-mc";
+    cs1.mcodeSessionId = MVS_SID;
+    cs1.chat = ["x"];
+    clients.set("tab-1", cs1);
+    // tab-2: 另一个 client 挂着同一个 mcode sid
+    const cs2 = makeClientState();
+    cs2.mcodeSessionId = MVS_SID;
+    cs2.chat = ["y"];
+    clients.set("tab-2", cs2);
+    // tab-3: 无关 client, 不应被动
+    const cs3 = makeClientState();
+    cs3.sessionId = "webui-B";
+    cs3.chat = ["keep"];
+    clients.set("tab-3", cs3);
+
+    const res = fakeRes();
+    const ctx = { cs: cs1, cid: "tab-1", pathname: "/api/sessions/" + MVS_SID };
+    await handleDeleteSession(fakeReq({}), res, ctx);
+    assert.equal(res._status, 200);
+    assert.equal(cs1.sessionId, null, "tab-1 reset");
+    assert.equal(cs1.mcodeSessionId, null);
+    assert.deepEqual(cs1.chat, []);
+    assert.equal(cs2.mcodeSessionId, null, "tab-2 (other client, same sid) reset");
+    assert.deepEqual(cs2.chat, []);
+    assert.equal(cs3.sessionId, "webui-B", "unrelated client untouched");
+    assert.deepEqual(cs3.chat, ["keep"]);
   });
 });

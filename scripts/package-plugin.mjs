@@ -169,7 +169,8 @@ const manifest = {
   fileCount,
   totalSizeBytes: totalSize,
 };
-writeFileSync(join(DEST, "PACKAGE-MANIFEST.json"), JSON.stringify(manifest, null, 2));
+// v1.0: manifest 写到 dist 根 (DEST_PARENT) — 之前写进 DEST 会混进插件产物/zip
+writeFileSync(join(DEST_PARENT, "PACKAGE-MANIFEST.json"), JSON.stringify(manifest, null, 2));
 console.log(`Wrote PACKAGE-MANIFEST.json`);
 
 // Zip via PowerShell Compress-Archive (Windows built-in; cross-platform

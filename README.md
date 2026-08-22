@@ -5,7 +5,7 @@
 > web UI. Zero npm dependencies. Runs on Node 22+.
 
 ```
-[Browser :7890]  ←─  SSE  /api/events  ←─  [Node server.js]  ←─  mcode acp / exec subprocess
+[Browser :8080]  ←─  SSE  /api/events  ←─  [Node server.js]  ←─  mcode acp / exec subprocess
        ▲                                  │
        └───  REST  /api/*  ──────────────┘
 ```
@@ -52,12 +52,12 @@ directly. Two backend transports are supported:
 
 ```powershell
 # 1. Install (zero deps)
-cd C:\Users\mjc39\.minimax-code\webui
-node server.js            # binds 0.0.0.0:7890 by default
+cd ~\.minimax-code\webui
+node server.js            # binds 0.0.0.0:8080 by default
 
 # 2. Open
-#    http://127.0.0.1:7890/                   (local)
-#    http://192.168.31.95:7890/               (LAN — toggle "局域网访问" in sidebar)
+#    http://127.0.0.1:8080/                   (local)
+#    http://192.168.1.50:8080/               (LAN — toggle "局域网访问" in sidebar)
 ```
 
 Override defaults via env:

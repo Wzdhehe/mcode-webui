@@ -6,6 +6,7 @@ import {
   getCidFromReq,
   pushStateFor,
   pushOnlineCount,
+  mcodeSessionsSnapshotFields,
   getSseClient,
   setSseClient,
   endSseClient,
@@ -30,7 +31,12 @@ export async function handleEvents(req, res, ctx) {
     } catch {}
   }
   res.writeHead(200, SSE_HEADERS);
-  const snapshot = { ...cs, sessions: loadSessions() };
+  // v1.0: 首推也必须带 mcodeSessions 字段 (之前缺, 侧栏先渲染 webui 本地条目再闪回全量)
+  const snapshot = {
+    ...cs,
+    sessions: loadSessions(),
+    ...mcodeSessionsSnapshotFields((cs.workspace && cs.workspace.dir) || ""),
+  };
   res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
   setSseClient(cid, res);
   const ping = setInterval(() => {

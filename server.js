@@ -11,7 +11,7 @@
 // for the URL → handler mapping.
 //
 // Run from inside the .minimax-code root:
-//   cd C:\Users\mjc39\.minimax-code\webui
+//   cd ~/.minimax-code/webui
 //   node server.js
 
 import http from 'node:http'
@@ -25,10 +25,11 @@ import { shutdownMcodeAcpSingleton } from './server/lib/acp-client.js'
 
 installGlobalErrorHandlers()
 
-// v0.5.ai: preflight — mcode.cmd 必须存在；uploads 目录必须能写
-if (!existsSync(MCODE_CMD)) {
-  console.error(`[fatal] mcode.cmd not found at ${MCODE_CMD}`)
-  process.exit(1)
+// v0.5.ai: preflight — uploads 目录必须能写
+// v1.0: mcode 不在已知位置时降级启动 (UI/静态资源仍可用, mcode 相关功能请求时报错) —
+//   之前直接 process.exit(1), 插件装到非 .minimax-code 布局的目录时整包不可用
+if (!existsSync(MCODE_CMD) && MCODE_CMD !== 'mcode') {
+  console.warn(`[webui] mcode.cmd not found at ${MCODE_CMD} — chat features will fail; set MCODE_CMD or install mcode`)
 }
 mkdirSync(UPLOAD_DIR, { recursive: true })
 

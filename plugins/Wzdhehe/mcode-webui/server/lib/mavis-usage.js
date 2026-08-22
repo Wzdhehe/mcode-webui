@@ -17,12 +17,12 @@ export async function getMavisTokenUsage(mvsSessionId) {
   return await new Promise((resolve) => {
     // v0.5.bx-20 (改): 用 per-turn 命中率 (最近一行的 cache_read / total input)
     //   之前算的是累计 (SUM(cache_read) / SUM(input + cache_read)) — 但 context limit 只有 512k,
-    //   累计 cache_read 13 轮能到 6519.5k, 跟 "上下文一共最高才 512k" 矛盾 (Ponkan 反馈)
+    //   累计 cache_read 13 轮能到 6519.5k, 跟 "上下文一共最高才 512k" 矛盾 (Wzdhehe 反馈)
     //   per-turn 反映"当前一轮 prompt" 的 cache 复用 — 这才是 user 关心的"当前 context 命中率"
     //   稳态 session per-turn 95-100%, 早期/大 input session 低一些 (因为新加 input 多, cache miss 多)
     // v0.5.by: 改 SQL 拿最近一行的全部字段 (input/output/cache_read/cache_write/reasoning)
     //   之前只拿 cache_read/input/cache_write, context 用 totalInput+totalOutput+totalReasoning (累计),
-    //   导致 13 轮累计能到 566k / 512k — Ponkan 反馈 "我最大才 512, 确定没有统计错误吗"
+    //   导致 13 轮累计能到 566k / 512k — Wzdhehe 反馈 "我最大才 512, 确定没有统计错误吗"
     //   改 per-turn 后, context 数字 = 最近一轮 LLM 调用的 input + output + reasoning, 永远不会超 limit
     const sql = `SELECT
       COALESCE(SUM(input_tokens),0) AS total_input,

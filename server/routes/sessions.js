@@ -1,7 +1,7 @@
 // webui/server/routes/sessions.js
 // GET/POST /api/sessions, POST /api/sessions/switch, DELETE /api/sessions/:id,
 // GET /api/acp-sessions, GET /api/acp-session-title
-// (v0.5.bx-33: 删 POST /api/sessions/cleanup-orphans — Ponkan 不要这个 UI,API 一起删)
+// (v0.5.bx-33: 删 POST /api/sessions/cleanup-orphans — Wzdhehe 不要这个 UI,API 一起删)
 
 import { randomUUID } from "node:crypto";
 import { loadSessions, saveSessions, resetContext } from "../lib/sessions.js";
@@ -9,11 +9,26 @@ import { deleteMcodeSessionFromDb } from "../lib/db.js";
 import {
   getMcodeSessionTitle,
   getMcodeSessionsForWorkspace,
+  shutdownMcodeAcpSingleton,
+  dropMcodeSessionFromCache,
 } from "../lib/acp-client.js";
 import { applyMavisUsageToCs } from "../lib/mavis-usage.js";
 import { getMcodeModelLimit } from "../lib/models.js";
-import { pushStateFor } from "../lib/state-bus.js";
+import { pushStateFor, clients } from "../lib/state-bus.js";
 import { MCODE_RUNTIME_DB } from "../lib/config.js";
+
+// v1.0: 防"删了又出现" — webui 常驻的 mcode acp 子进程内存里还持有该 session,
+//   且会把注册表回写 db (删除后 local_runtime_sessions 行被重建 + session/list 仍返回)。
+//   真删前必须: 1) 杀掉常驻子进程 (停掉回写源)  2) 再 SQL 删  3) 从推送缓存只剔除该 sid。
+//   v1.0 (改): 不再整体作废缓存 — 之前 invalidate 后紧跟的推送带空占位 mcodeSessions,
+//   侧栏从 42 条闪跌到 16 条 (只剩 webui 本地条目), 几秒后重拉又回 42, 像"删了又回来"。
+//   现在: 缓存剔除该 sid 后仍视为新鲜, 即时推送带 41 条; TTL 自然过期后新子进程重读 db, 依旧 41。
+function killMcodeSessionResurrection(mcodeSid) {
+  try {
+    shutdownMcodeAcpSingleton();
+  } catch {}
+  dropMcodeSessionFromCache(mcodeSid);
+}
 
 // 读 body helper
 async function readJson(req) {
@@ -143,7 +158,7 @@ export async function handleSwitchSession(req, res, ctx) {
   //   排序: client renderSessions 用 lastUsedWorkspace 作 currentWs,子分类按 updatedAt 排序
   //
   // v0.5.bx-32: 切 session 不再写 lastUsedWorkspace
-  //   Ponkan 反馈: '点击 c 区任意对话 (不发消息),c 区就自动置顶了,我想的是发消息才置顶'
+  //   Wzdhehe 反馈: '点击 c 区任意对话 (不发消息),c 区就自动置顶了,我想的是发消息才置顶'
   //   切 session 只是浏览,不算'发消息',所以 lastUsedWorkspace 只在 send prompt 时写
   //   之前的逻辑导致用户点哪个工作区的对话,那个工作区就置顶 — 体验不对
   //
@@ -212,6 +227,7 @@ export function handleDeleteSession(req, res, ctx) {
   // v0.5.bx-19: 兜底 — webui session db 找不到, 但 id 是 mvs_xxx → 当孤儿 mcode session 直接 SQL 删
   if (idx < 0) {
     if (/^mvs_[a-f0-9]{32}$/.test(id)) {
+      if (!dryRun) killMcodeSessionResurrection(id); // 先杀常驻子进程(回写源)再删 db 行
       const mcodeDbDel = deleteMcodeSessionFromDb(id, { MCODE_RUNTIME_DB, dryRun });
       console.log(
         `[delete] cid=${cid} ORPHAN mcode session sid=${id.substring(0, 12)}… ok=${mcodeDbDel.ok}` +
@@ -287,6 +303,7 @@ export function handleDeleteSession(req, res, ctx) {
   const mcodeSid = deletedItem.mcodeSessionId;
   let mcodeDbDel = null;
   if (mcodeSid) {
+    killMcodeSessionResurrection(mcodeSid); // 先杀常驻子进程(回写源)再删 db 行
     mcodeDbDel = deleteMcodeSessionFromDb(mcodeSid, { MCODE_RUNTIME_DB });
     console.log(
       `[delete] cid=${cid} mcode db delete sid=${mcodeSid.substring(0, 12)}… ok=${mcodeDbDel.ok}` +
@@ -295,21 +312,28 @@ export function handleDeleteSession(req, res, ctx) {
           : ` reason=${mcodeDbDel.reason || "-"} error=${mcodeDbDel.error || "-"}`),
     );
   }
-  // v0.5.bx-5: 当前会话可能是被删的 webui session，也可能是它的 mcode sibling
-  if (cs.sessionId === id || cs.mcodeSessionId === id) {
-    cs.sessionId = null;
-    cs.mcodeSessionId = null;
-    cs.sessionTitle = "Untitled";
-    cs.chat = [];
-    cs.usage = {
-      ...cs.usage,
-      sessionInput: 0,
-      sessionOutput: 0,
-      sessionTotal: 0,
-    };
-    resetContext(cs);
+  // v0.5.bx-5 + v1.0: 当前会话可能是被删的 webui session，也可能是它的 mcode sibling
+  //   v1.0 扩展到所有 client — 其他 tab 把该 session 当"当前会话"时也要清,
+  //   否则那个 tab 的下次交互 (switch/chat) 会为同一 mvs sid 自动重建 webui 条目
+  let touchedCids = [];
+  for (const [c, ccs] of clients) {
+    if (ccs.sessionId === deletedItem.id || ccs.mcodeSessionId === id) {
+      ccs.sessionId = null;
+      ccs.mcodeSessionId = null;
+      ccs.sessionTitle = "Untitled";
+      ccs.chat = [];
+      ccs.usage = {
+        ...ccs.usage,
+        sessionInput: 0,
+        sessionOutput: 0,
+        sessionTotal: 0,
+      };
+      resetContext(ccs);
+      touchedCids.push(c);
+    }
   }
-  pushStateFor(cid);
+  if (touchedCids.length === 0) touchedCids = [cid];
+  for (const c of touchedCids) pushStateFor(c);
   console.log(
     `[delete] cid=${cid} OK match=${matchKind} deleted.webuiId=${deletedItem.id.substring(0, 8)}… remaining=${all.length}`,
   );

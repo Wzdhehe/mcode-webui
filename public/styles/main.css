@@ -1,35 +1,39 @@
 /* ============================================================
-   主题变量 — v2 "Ink & Brass"（墨与铜）
-   深墨暖黑表面 + 黄铜点缀 + 器物感细节。语义色保持可辨识。
+   主题变量 — v3 "Ink & Paper"（墨与纸）
+   纯黑白灰单色配色：中性表面 + 白/黑 accent + 器物感细节。
+   语义色降饱和（success/warning 灰阶，danger 保留哑红用于报错）。
+   --on-accent: accent 背景上的反色文字（深色主题=墨黑，浅色主题=纸白）。
    ============================================================ */
 /* v0.5.bh: 首次加载无 data-theme 时跟随系统 — 避免 light 闪一下 */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e0d0b;
-    --bg-elevated: #161512;
-    --bg-sidebar: #121110;
-    --bg-hover: #1d1b16;
-    --bg-active: #27241c;
-    --bg-input: #141310;
-    --text: #ece7dc;
-    --text-secondary: #a49c8d;
-    --text-tertiary: #6f6858;
-    --border: #282419;
-    --border-light: #1d1b15;
-    --accent: #d9a860;
-    --accent-hover: #e6bb78;
-    --accent-bg: rgba(217, 168, 96, 0.13);
-    --accent-text: #e8c489;
-    --success: #79b879;
-    --warning: #e08a3c;
-    --danger: #d9705f;
+    --bg: #0b0b0c;
+    --bg-elevated: #141416;
+    --bg-sidebar: #101012;
+    --bg-hover: #1c1c1f;
+    --bg-active: #26262a;
+    --bg-input: #131315;
+    --text: #ececee;
+    --text-secondary: #a2a2a8;
+    --text-tertiary: #6d6d74;
+    --border: #26262a;
+    --border-light: #1d1d20;
+    --accent: #f4f4f5;
+    --accent-hover: #ffffff;
+    --accent-bg: rgba(244, 244, 245, 0.10);
+    --accent-text: #e4e4e7;
+    --on-accent: #101012;
+    --success: #9d9da3;
+    --warning: #c8c8cd;
+    --danger: #cc6b5c;
+    --status-on: #3fbf7f; /* v3: 功能性"开启"状态绿 (LAN 图标等), 单色主题下唯一保留的语义绿 */
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
     --shadow-md: 0 4px 10px rgba(0,0,0,0.42);
     --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
-    --user-accent: #d9a860;
+    --user-accent: #f4f4f5;
     /* v2 新增 */
-    --accent-glow: rgba(217, 168, 96, 0.16);
-    --hairline: rgba(236, 231, 220, 0.08);
+    --accent-glow: rgba(244, 244, 245, 0.12);
+    --hairline: rgba(236, 236, 238, 0.08);
     --font-mono: ui-monospace, "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
     --radius-sm: 6px;
     --radius-md: 10px;
@@ -37,62 +41,66 @@
   }
 }
 :root[data-theme="light"] {
-  --bg: #faf8f3;
-  --bg-elevated: #fffefb;
-  --bg-sidebar: #f3efe6;
-  --bg-hover: #ece7da;
-  --bg-active: #e2dbc9;
-  --bg-input: #fffefb;
-  --text: #26221a;
-  --text-secondary: #6d6656;
-  --text-tertiary: #9b937f;
-  --border: #e3dccb;
-  --border-light: #eee9dc;
-  --accent: #a1782e;
-  --accent-hover: #8c6624;
-  --accent-bg: #f4ebd5;
-  --accent-text: #7c5c20;
-  --success: #4e9464;
-  --warning: #bd6f22;
+  --bg: #fafafa;
+  --bg-elevated: #ffffff;
+  --bg-sidebar: #f4f4f5;
+  --bg-hover: #ededee;
+  --bg-active: #e2e2e4;
+  --bg-input: #ffffff;
+  --text: #1a1a1c;
+  --text-secondary: #5f5f66;
+  --text-tertiary: #98989e;
+  --border: #e2e2e4;
+  --border-light: #ededee;
+  --accent: #17171a;
+  --accent-hover: #000000;
+  --accent-bg: #ededee;
+  --accent-text: #2a2a2e;
+  --on-accent: #ffffff;
+  --success: #75757c;
+  --warning: #4f4f56;
   --danger: #bf5645;
-  --shadow-sm: 0 1px 2px rgba(60,50,30,0.05);
-  --shadow: 0 4px 14px rgba(60,50,30,0.09);
-  --shadow-lg: 0 14px 38px rgba(60,50,30,0.14);
-  --user-accent: #a1782e;
+  --status-on: #1e9e5a; /* v3: 功能性"开启"状态绿 */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 4px 14px rgba(0,0,0,0.09);
+  --shadow-lg: 0 14px 38px rgba(0,0,0,0.14);
+  --user-accent: #17171a;
   /* v2 新增 */
-  --accent-glow: rgba(161, 120, 46, 0.14);
-  --hairline: rgba(38, 34, 26, 0.08);
+  --accent-glow: rgba(23, 23, 26, 0.10);
+  --hairline: rgba(26, 26, 28, 0.08);
   --font-mono: ui-monospace, "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
 }
 :root[data-theme="dark"] {
-  --bg: #0e0d0b;
-  --bg-elevated: #161512;
-  --bg-sidebar: #121110;
-  --bg-hover: #1d1b16;
-  --bg-active: #27241c;
-  --bg-input: #141310;
-  --text: #ece7dc;
-  --text-secondary: #a49c8d;
-  --text-tertiary: #6f6858;
-  --border: #282419;
-  --border-light: #1d1b15;
-  --accent: #d9a860;
-  --accent-hover: #e6bb78;
-  --accent-bg: rgba(217, 168, 96, 0.13);
-  --accent-text: #e8c489;
-  --success: #79b879;
-  --warning: #e08a3c;
-  --danger: #d9705f;
+  --bg: #0b0b0c;
+  --bg-elevated: #141416;
+  --bg-sidebar: #101012;
+  --bg-hover: #1c1c1f;
+  --bg-active: #26262a;
+  --bg-input: #131315;
+  --text: #ececee;
+  --text-secondary: #a2a2a8;
+  --text-tertiary: #6d6d74;
+  --border: #26262a;
+  --border-light: #1d1d20;
+  --accent: #f4f4f5;
+  --accent-hover: #ffffff;
+  --accent-bg: rgba(244, 244, 245, 0.10);
+  --accent-text: #e4e4e7;
+  --on-accent: #101012;
+  --success: #9d9da3;
+  --warning: #c8c8cd;
+  --danger: #cc6b5c;
+  --status-on: #3fbf7f; /* v3: 功能性"开启"状态绿 (LAN 图标等), 单色主题下唯一保留的语义绿 */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
   --shadow: 0 4px 14px rgba(0,0,0,0.45);
   --shadow-lg: 0 14px 38px rgba(0,0,0,0.55);
-  --user-accent: #d9a860;
+  --user-accent: #f4f4f5;
   /* v2 新增 */
-  --accent-glow: rgba(217, 168, 96, 0.16);
-  --hairline: rgba(236, 231, 220, 0.08);
+  --accent-glow: rgba(244, 244, 245, 0.12);
+  --hairline: rgba(236, 236, 238, 0.08);
   --font-mono: ui-monospace, "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -176,12 +184,12 @@ a { color: var(--accent); text-decoration: none; }
   border-radius: 4px;
   margin-left: -2px;
 }
-/* v0.5.bx-37: BETA 标识 — 警示色 (橙/黄), 提醒用户这是开发版, 可能有 bug */
+/* v0.5.bx-37: BETA 标识 — v3 单色化: 跟随 accent (premium.css 有皮肤层覆盖) */
 .topbar-beta {
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: var(--on-accent);
+  background: var(--accent);
   padding: 2px 6px;
   border-radius: 4px;
   letter-spacing: 0.5px;
@@ -322,8 +330,8 @@ a.chip-lan-link .icon {
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .btn-workspace-action:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); border-color: var(--accent); color: var(--text); }
-.btn-workspace-action.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-.btn-workspace-action.primary:hover { background: var(--accent-hover, #4a6cf7); }
+.btn-workspace-action.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn-workspace-action.primary:hover { background: var(--accent-hover, #ffffff); }
 .workspace-picker-sync {
   display: flex; align-items: center; gap: 6px; margin-top: 10px;
   font-size: 11px; color: var(--text-tertiary); cursor: pointer;
@@ -345,53 +353,12 @@ a.chip-lan-link .icon {
 .btn-lan-toggle .chip-lan-icon {
   transition: stroke 0.15s;
 }
-.btn-lan-toggle[data-lan="on"] .chip-lan-icon { stroke: var(--success, #22c55e); }
+.btn-lan-toggle[data-lan="on"] .chip-lan-icon { stroke: var(--status-on, #3fbf7f); }
 .btn-lan-toggle[data-lan="off"] .chip-lan-icon { stroke: var(--text-tertiary); }
 /* v0.5.bh: chip-lan 只在本机显示，LAN 设备上隐藏（不需要这个开关） */
 body.is-remote .btn-lan-toggle { display: none; }
 
-/* v0.5.aq: LAN URL popover（hover chip-lan 时显示） */
-.lan-url-popover {
-  position: fixed;
-  width: 320px;
-  max-width: calc(100vw - 24px);
-  background: var(--bg-elevated, #fff);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-  z-index: 200;
-  font-size: 12px;
-}
-.lan-url-title {
-  font-size: 12px; font-weight: 600; color: var(--text);
-  margin-bottom: 8px;
-}
-.lan-url-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 0;
-}
-.lan-url-label {
-  font-size: 11px; color: var(--text-tertiary);
-  min-width: 36px; flex-shrink: 0;
-}
-.lan-url-value {
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-  color: var(--text);
-  background: var(--bg-input, var(--bg));
-  padding: 3px 8px;
-  border-radius: 4px;
-  flex: 1; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  cursor: pointer;
-}
-.lan-url-value:hover { background: var(--bg-hover, rgba(0,0,0,0.05)); }
-.lan-url-hint {
-  font-size: 11px; color: var(--text-tertiary);
-  margin-top: 8px; padding-top: 8px;
-  border-top: 1px solid var(--border-light, var(--border));
-}
+/* v0.5.bx-40: LAN URL popover CSS 已删除（顶栏 chip-lan-link 已展示访问地址） */
 
 /* v0.5.am: 可视化目录树 */
 .workspace-picker-browse { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
@@ -437,7 +404,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .workspace-tree-node:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); color: var(--text); }
 .workspace-tree-node.current { background: var(--accent-faint, rgba(99,102,241,0.12)); color: var(--accent); font-weight: 500; }
-.workspace-tree-node.selected { background: var(--accent); color: #fff; }
+.workspace-tree-node.selected { background: var(--accent); color: var(--on-accent); }
 .workspace-tree-chevron {
   display: inline-block; width: 14px; text-align: center; flex-shrink: 0;
   color: var(--text-tertiary); font-size: 9px;
@@ -805,8 +772,8 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .workspace-group-current-badge {
   font-size: 9px;
-  background: var(--accent-bg, #dbeafe);
-  color: var(--accent-text, #1d4ed8);
+  background: var(--accent-bg, #ededee);
+  color: var(--accent-text, #e4e4e7);
   padding: 1px 6px;
   border-radius: 8px;
   font-weight: 600;
@@ -892,8 +859,8 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .ws-picker-item:hover { background: var(--bg-hover); }
 .ws-picker-item.current {
-  background: var(--accent-bg, #dbeafe);
-  color: var(--accent-text, #1d4ed8);
+  background: var(--accent-bg, #ededee);
+  color: var(--accent-text, #e4e4e7);
 }
 .ws-picker-item .ws-picker-item-icon {
   width: 14px; height: 14px;
@@ -921,7 +888,7 @@ body.is-remote .btn-lan-toggle { display: none; }
   position: relative;  /* 容纳 usage-popover 的绝对定位锚点 */
 }
 /* v0.5.bx-37 (改 #3): 撤销上一版的 left-bottom sticky+max-height 方案
-   Ponkan 反馈: "底部从用量到github要强制全部显示, 只有对话列表的长度是自适应"
+   Wzdhehe 反馈: "底部从用量到github要强制全部显示, 只有对话列表的长度是自适应"
    新方案: .left-bottom 高度根据内容自适应 (强制全显示, 不滚), 真正的滚动容器是 #sessions-scroll
    #sessions-list 自身不滚, 渲染时只把内容写到内层 div
    v0.5.bx-38 (改 #4): 之前错把 flex:1 给 #sessions-list, 应该给 #sessions-scroll
@@ -999,26 +966,33 @@ body.is-remote .btn-lan-toggle { display: none; }
 .usage-error { color: var(--danger); padding: 4px 0; line-height: 1.5; word-break: break-word; }
 .usage-empty { color: var(--text-muted); padding: 4px 0; font-style: italic; }
 
-/* v0.5.bb: toast 通知（用量刷新成功提示） */
+/* v0.5.bb: toast 通知（用量刷新成功提示）
+   v1.0: #toast 元素补齐（此前 index.html 缺该元素, showToast 一直空转）;
+   改底部居中单行样式 — 旧块曾与新块叠加出 top+bottom 无 height 的拉伸 bug, 现合并为唯一定义 */
 .toast {
   position: fixed;
-  top: 50%;
   left: 50%;
-  transform: translate(-50%, calc(-50% + 8px));
-  background: var(--text);
-  color: var(--bg);
-  padding: 10px 20px;
+  bottom: 96px;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 14px;
+  padding: 8px 16px;
+  font-size: 13px;
   font-weight: 500;
-  z-index: 9999;
+  line-height: 1.4;
+  z-index: 10000; /* 高于 modal/popover, 低于 debug 面板 */
   opacity: 0;
-  transition: opacity 0.2s, transform 0.2s;
+  transition: opacity 0.18s ease, transform 0.18s ease;
   pointer-events: none;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-lg);
   white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.toast.show { opacity: 1; transform: translate(-50%, -50%); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* 移动端（窄屏）：弹层改为向下展开到按钮下方，避免被 sidebar 边界裁掉 */
 @media (max-width: 600px) {
@@ -1234,7 +1208,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .msg.user .msg-avatar { background: linear-gradient(135deg, #6b7280, #4b5563); }
 .msg.assistant .msg-avatar { background: transparent; padding: 0; }  /* v0.5.bs: 透出来让 brand-logo 满框 */
-.msg.system .msg-avatar { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.msg.system .msg-avatar { background: linear-gradient(135deg, #4b5563, #374151); }
 /* v0.5.bs: assistant avatar 用 img 填充整个 avatar 框 */
 .msg-avatar-img {
   width: 100%; height: 100%;
@@ -1386,8 +1360,8 @@ body.is-remote .btn-lan-toggle { display: none; }
   text-transform: lowercase;
   letter-spacing: 0.3px;
 }
-.msg-tool-status.done { background: color-mix(in srgb, #10b981 20%, transparent); color: #10b981; }
-.msg-tool-status.failed { background: color-mix(in srgb, #ef4444 20%, transparent); color: #ef4444; }
+.msg-tool-status.done { background: color-mix(in srgb, var(--success) 20%, transparent); color: var(--success); }
+.msg-tool-status.failed { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
 .msg-tool-status.running { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
 .msg-tool-status.pending { background: var(--bg-hover); color: var(--text-tertiary); }
 .msg-tool-body {
@@ -1426,11 +1400,11 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .msg-tool-error {
   font-size: 11.5px;
-  color: #ef4444;
-  background: color-mix(in srgb, #ef4444 10%, transparent);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
   padding: 6px 8px;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
   font-family: var(--font-mono, monospace);
   white-space: pre-wrap;
   word-break: break-all;
@@ -1461,9 +1435,9 @@ body.is-remote .btn-lan-toggle { display: none; }
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .msg-tool-loc.copied {
-  background: color-mix(in srgb, #10b981 18%, transparent);
-  border-color: color-mix(in srgb, #10b981 40%, transparent);
-  color: #10b981;
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+  color: var(--success);
 }
 .msg-tool-loc-icon { flex-shrink: 0; font-size: 11px; }
 .msg-tool-loc-path {
@@ -1581,7 +1555,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .ask-opt.clicked .ask-opt-letter {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .ask-opt-label { flex: 1; }
@@ -1683,7 +1657,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .ask-submit.primary {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .ask-submit.primary:hover {
@@ -1755,13 +1729,13 @@ body.is-remote .btn-lan-toggle { display: none; }
   padding: 14px 16px;
   background: var(--bg-sidebar);
   border: 1px solid var(--border);
-  border-left: 3px solid #5e8bff;
+  border-left: 3px solid var(--accent);
   border-radius: 6px;
   font-size: 13px;
 }
 .plan-block-header {
   display: flex; align-items: center; gap: 8px;
-  color: #5e8bff; font-weight: 600;
+  color: var(--accent-text); font-weight: 600;
   margin-bottom: 8px;
 }
 .plan-block-title { font-size: 15px; }
@@ -1774,7 +1748,7 @@ body.is-remote .btn-lan-toggle { display: none; }
   background: var(--bg-hover);
   font-size: 12.5px;
 }
-.plan-action.primary { background: var(--accent); color: white; border-color: var(--accent); }
+.plan-action.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .plan-action:hover { filter: brightness(0.95); }
 
 /* v0.5.ab: Modal 覆盖层（Plan/Ask 弹窗） */
@@ -1798,7 +1772,7 @@ body.is-remote .btn-lan-toggle { display: none; }
   padding: 12px 18px;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 10px;
-  font-weight: 600; color: #5e8bff;
+  font-weight: 600; color: var(--accent-text);
 }
 .modal-header-title { font-size: 15px; }
 .modal-header-meta { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-weight: normal; }
@@ -1839,7 +1813,7 @@ body.is-remote .btn-lan-toggle { display: none; }
   pointer-events: none;
 }
 .ask-modal-backdrop {
-  display: none;  /* v0.5.bx-15 (改): 不要全屏半透明遮罩, Ponkan 明确不要 */
+  display: none;  /* v0.5.bx-15 (改): 不要全屏半透明遮罩, Wzdhehe 明确不要 */
 }
 .ask-modal-content {
   position: relative;
@@ -1925,7 +1899,7 @@ body.is-remote .btn-lan-toggle { display: none; }
   flex-shrink: 0;
 }
 .ask-modal-opt.clicked .ask-modal-opt-letter {
-  background: var(--accent); color: white; border-color: var(--accent);
+  background: var(--accent); color: var(--on-accent); border-color: var(--accent);
 }
 .ask-modal-opt-label { flex: 1; font-size: 13.5px; }
 .ask-modal-no-options {
@@ -1959,7 +1933,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 .ask-modal-btn-primary {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .ask-modal-btn-primary:disabled {
@@ -2098,7 +2072,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 .btn-send {
   width: 32px; height: 32px;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-radius: 8px;
   display: grid; place-items: center;
   transition: background 0.1s;
@@ -2321,9 +2295,9 @@ body.is-remote .btn-lan-toggle { display: none; }
   vertical-align: middle;
   cursor: help;
 }
-.kv-usage-source.estimate { background: rgba(255, 184, 0, 0.15); color: #b88a00; border: 1px solid rgba(255, 184, 0, 0.3); }
-.kv-usage-source.real { background: rgba(40, 200, 100, 0.15); color: #2d8a4e; border: 1px solid rgba(40, 200, 100, 0.3); }
-.kv-usage-source.mcode { background: rgba(100, 150, 255, 0.15); color: #2a4ea0; border: 1px solid rgba(100, 150, 255, 0.3); }
+.kv-usage-source.estimate { background: rgba(160, 160, 170, 0.15); color: var(--text-secondary); border: 1px solid rgba(160, 160, 170, 0.3); }
+.kv-usage-source.real { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); }
+.kv-usage-source.mcode { background: color-mix(in srgb, var(--text-secondary) 12%, transparent); color: var(--text-secondary); border: 1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); }
 /* v0.5.bx-10: mavis 记录的 model 名 (拿不到就隐藏) */
 .kv-mavis-model {
   display: inline-block;
@@ -2340,7 +2314,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 }
 /* v0.5.bx-10: cache read/write chip (从 mavis db)
    v0.5.bx-20 (改): 改成纯文本样式 — 去掉 box (background/border/padding/border-radius 都去掉)
-   Ponkan 反馈 "这个不需要做成框框, 纯文本就行" — 跟 Used 数字同字号同色, 看着不打架 */
+   Wzdhehe 反馈 "这个不需要做成框框, 纯文本就行" — 跟 Used 数字同字号同色, 看着不打架 */
 .kv-cache-read {
   display: inline-block;
   margin-left: 6px;
@@ -2808,7 +2782,7 @@ body.is-remote .btn-lan-toggle { display: none; }
 .plan-option:hover { background: var(--bg-hover); border-color: var(--text-tertiary); }
 .plan-option.primary {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .plan-option.primary:hover { background: var(--accent-hover); }
