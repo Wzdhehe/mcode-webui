@@ -149,6 +149,18 @@ a { color: var(--accent); text-decoration: none; }
   border-radius: 4px;
   margin-left: -2px;
 }
+/* v0.5.bx-37: BETA 标识 — 警示色 (橙/黄), 提醒用户这是开发版, 可能有 bug */
+.topbar-beta {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  margin-left: 2px;
+  user-select: none;
+}
 .topbar-status {
   margin-left: auto;
   display: flex;
@@ -177,6 +189,42 @@ a.chip-lan-link {
 a.chip-lan-link:hover {
   background: color-mix(in srgb, var(--accent) 12%, var(--bg-hover));
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+/* v0.5.bx-37: 强制刷新按钮 — 手机/平板浏览器 hard refresh 麻烦, 一键绕过 HTTP cache */
+button.chip-force-reload {
+  cursor: pointer;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  transition: all 0.15s;
+}
+button.chip-force-reload:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button.chip-force-reload:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+button.chip-force-reload.loading svg {
+  animation: force-reload-spin 0.8s linear infinite;
+}
+button.chip-force-reload .icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+@keyframes force-reload-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 a.chip-lan-link .icon {
   width: 12px;
@@ -402,14 +450,30 @@ body.is-remote .btn-lan-toggle { display: none; }
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  /* v0.5.bx-37 (改 #2): 之前整体 overflow-y:auto 让 sessions 跟底部一起滚, 平板体验差
+     改为: left-panel 自身不滚, left-section (含 sessions-list) 内部滚, left-bottom 强制全部显示
+     底部 4 个 btn-menu + GitHub 链接高度固定 (200px 左右), 不被截 */
+  /* v0.5.bx-39: 改 overflow: hidden → visible
+     根因: usage-popover position:absolute 算到 btn-usage, width 260, 跨出 left-panel 右边界 7px
+     之前 overflow:hidden 把跨出部分裁掉, popover 完全不可见 (用户报"点不动"实际是 click 触发了 toggle 但 popover 被裁)
+     滚动由 .sessions-scroll (L720) 自己的 overflow-y:auto 负责, left-panel 自身不需要 hidden
+     注意: overflow-x/y 不混用 (visible + auto 会被强制 both auto), 这里直接 visible 两个轴 */
   overflow: visible;
   position: relative;
   z-index: 20;
   min-width: 0;
+  min-height: 0;
 }
 .left-section {
   padding: 12px;
   border-bottom: 1px solid var(--border-light);
+  /* v0.5.bx-38 (改 #5): 撤销 flex:1!
+     之前错以为 left-section 跟 sessions-scroll 是父子关系, 实际看 HTML 它们是左 panel 的两个平级 flex 子
+     HTML 结构: <left-panel> { <left-section> + <sessions-scroll> + <left-bottom> } (sessions-scroll 不在 left-section 里)
+     两边都设 flex:1 会平分 left-panel 剩余空间, sessions-scroll 被压扁
+     正确: left-section auto (内容高度 New Chat + Search ~ 88px), sessions-scroll flex:1 (吃剩余)
+     .sessions-scroll 在 L720 已经有 flex:1 + min-height:0 + overflow-y:auto, 不需要重复 */
+  /* 删 flex:1, 让高度按内容自然 */
 }
 .btn-new {
   display: flex;
@@ -828,6 +892,21 @@ body.is-remote .btn-lan-toggle { display: none; }
   border-top: 1px solid var(--border);
   background: var(--bg-sidebar);
   position: relative;  /* 容纳 usage-popover 的绝对定位锚点 */
+}
+/* v0.5.bx-37 (改 #3): 撤销上一版的 left-bottom sticky+max-height 方案
+   Ponkan 反馈: "底部从用量到github要强制全部显示, 只有对话列表的长度是自适应"
+   新方案: .left-bottom 高度根据内容自适应 (强制全显示, 不滚), 真正的滚动容器是 #sessions-scroll
+   #sessions-list 自身不滚, 渲染时只把内容写到内层 div
+   v0.5.bx-38 (改 #4): 之前错把 flex:1 给 #sessions-list, 应该给 #sessions-scroll
+     错误结果: search-box 跟 SESSIONS 标题之间有大块空白 (因为 sessions-list 被推到中段)
+     正确: sessions-scroll 吃 left-section 剩余高度, 内部 sessions-list 内容自然流 */
+#sessions-scroll {
+  /* 吃 left-section 剩余高度 + 内部滚
+     flex:1 + min-height:0 是 flex 容器允许子元素 shrink 的关键 (默认 min-height:auto 让 flex 容器被撑爆) */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* v0.5.z: 套餐用量按钮 + 右侧弹层（mmx quota + 本机时间自算） */

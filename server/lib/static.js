@@ -31,7 +31,13 @@ export function serveStatic(pathname, res) {
       : ext === '.gif' ? 'image/gif'
       : ext === '.webp' ? 'image/webp'
       : 'application/octet-stream'
-    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=3600' })
+    // v0.5.bx-35: app/*.js 不缓存 (改得频繁, browser cache 旧版 = 用户看不到 fix)
+    // v0.5.bx-36: styles/*.css 也加 no-cache (CSS 改得也不少, 跟 main.js 同等频繁度)
+    //   其它静态资源 (img/png 等) 保持 1h 缓存
+    const isAppJs = safe.startsWith('app/') && ext === '.js'
+    const isAppCss = safe.startsWith('styles/') && ext === '.css'
+    const noCache = isAppJs || isAppCss
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': noCache ? 'no-cache' : 'public, max-age=3600' })
     return res.end(readFileSync(filePath))
   }
   return false

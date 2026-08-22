@@ -31,7 +31,10 @@ function detectTuiCwd() {
 
 export const MCODE_ROOT = resolve(__dirname, '..', '..', '..')  // webui/server/lib → ../../../ → .minimax-code
 export const MCODE_CMD = join(MCODE_ROOT, 'mcode.cmd')
-export const PORT = Number(process.env.PORT) || 7890
+// v0.5.bx-38: 默认端口 8080 — 之前 7890 太常被 desktop / mavis 桌面端占, 端口冲突频繁
+//   8080 是常见 HTTP alt, 也跟 web UI 语义对得上 (web = 80, 8080 = alt)
+//   仍可被 process.env.PORT 覆盖 (比如临时用 7890 跑测试)
+export const PORT = Number(process.env.PORT) || 8080
 // v0.5.ao: web UI 默认监听所有网卡（不限制本机）— 用户在浏览器/手机/局域网访问是主场景
 export const HOST = process.env.HOST || '0.0.0.0'
 export const DEFAULT_MODEL = process.env.MCODE_MODEL || 'minimax_api/MiniMax-M3'

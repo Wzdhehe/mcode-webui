@@ -228,6 +228,10 @@ const I18N = {
     chip_online_title: '当前连到 webui server 的 tab 数',
     chip_online_single: '1 台',
     chip_online_plural: '{n} 台',
+    // v0.5.bx-37: 顶栏 BETA 标识 + 强制刷新按钮 i18n
+    topbar_beta_title: 'Beta 测试版',
+    force_reload: '强制刷新',
+    force_reload_title: '强制刷新 (绕过浏览器缓存)',
     chip_offline: '离线',
     workspace_use_tui: '切换到 mcode TUI 当前的工作区',
     workspace_reset: '恢复 webui 启动时检测到的默认工作区',
@@ -363,6 +367,10 @@ const I18N = {
     chip_online_title: 'WebUI tabs currently connected to server',
     chip_online_single: '1 dev',
     chip_online_plural: '{n} devs',
+    // v0.5.bx-37: 顶栏 BETA 标识 + 强制刷新按钮 i18n
+    topbar_beta_title: 'Beta version',
+    force_reload: 'Force reload',
+    force_reload_title: 'Force reload (bypass browser cache)',
     chip_offline: 'offline',
     workspace_use_tui: 'Use mcode TUI\'s current workspace',
     workspace_reset: 'Reset to default workspace detected at startup',
@@ -411,9 +419,16 @@ function applyI18n() {
 // ============================================================
 // v0.5.bh: 首次加载跟随系统（prefers-color-scheme），有缓存时用缓存
 let theme = localStorage.getItem('webui-theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+// v0.5.bx-34: 外观按钮 icon 跟随主题切换 (亮色=太阳,暗色=月亮)
+//   之前: applyTheme 只改 data-theme 跟文字, 按钮的 SVG 永远是太阳, 暗色模式下不直观
+//   修法: applyTheme 同步切 #appearance-icon 的 innerHTML (sun SVG ↔ moon SVG)
+const APPEARANCE_ICON_SUN = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+const APPEARANCE_ICON_MOON = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', theme)
   document.getElementById('appearance-value').textContent = t(theme === 'light' ? 'appearance_light' : 'appearance_dark')
+  const icon = document.getElementById('appearance-icon')
+  if (icon) icon.innerHTML = (theme === 'light') ? APPEARANCE_ICON_SUN : APPEARANCE_ICON_MOON
 }
 function toggleTheme() {
   theme = theme === 'light' ? 'dark' : 'light'
@@ -3959,6 +3974,21 @@ function attachEvents() {
   }
 
   // Mobile toggles
+  // v0.5.bx-37: 强制刷新按钮 — 手机/平板浏览器 hard refresh 麻烦, 一键绕过 HTTP cache
+  //   行为: fetch 关键资源 (main.js/main.css/index.html) 用 cache:'reload' 覆盖 HTTP cache
+  //   之后再 location.reload() 加载新版本
+  document.getElementById('chip-force-reload').addEventListener('click', async () => {
+    const btn = document.getElementById('chip-force-reload')
+    if (btn) { btn.disabled = true; btn.classList.add('loading') }
+    try {
+      await Promise.allSettled([
+        fetch('/app/main.js', { cache: 'reload' }),
+        fetch('/styles/main.css', { cache: 'reload' }),
+        fetch('/', { cache: 'reload' }),
+      ])
+    } catch {}
+    location.reload()
+  })
   document.getElementById('btn-toggle-left').addEventListener('click', () => {
     leftOpen = !leftOpen
     document.getElementById('left-panel').classList.toggle('open', leftOpen)
