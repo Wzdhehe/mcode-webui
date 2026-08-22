@@ -1962,6 +1962,7 @@ let rightOpen = false
 let lastTpsValue = null
 let lastTpsTime = null
 let spentSinceLastUsage = 0
+let sessionSearchQuery = ''   // v0.5.x: 侧边栏会话搜索词
 
 // Modal state (v0.4.0 新增)
 let askOpen = false
@@ -2199,15 +2200,26 @@ function renderTodo() {
 function renderSessions() {
   const list = document.getElementById('sessions-list')
   const sessions = state?.sessions || []
-  if (sessions.length === 0) {
-    list.innerHTML = `<div class="session-title-empty">${t('no_sessions')}</div>`
+  const q = (sessionSearchQuery || '').trim().toLowerCase()
+  let filtered = sessions
+  if (q) {
+    filtered = sessions.filter(s => {
+      const title = (s.title || s.raw || s.id || '').toLowerCase()
+      const id = (s.id || '').toLowerCase()
+      return title.includes(q) || id.includes(q)
+    })
+  }
+  if (filtered.length === 0) {
+    const msg = q ? (currentLang === 'zh' ? '没有匹配的会话' : 'No matching sessions') : t('no_sessions')
+    list.innerHTML = `<div class="session-title-empty">${msg}</div>`
     return
   }
-  // 取前 8 个，按 raw 顺序
-  const html = sessions.slice(0, 8).map(s => {
+  // 取前 8 个
+  const html = filtered.slice(0, 8).map(s => {
     const title = s.title || s.raw || s.id
     const short = escapeHtml(title.substring(0, 30))
-    return `<div class="session-item" data-id="${escapeHtml(s.id)}" title="${escapeHtml(title)}">
+    const active = s.id === state?.sessionId ? ' active' : ''
+    return `<div class="session-item${active}" data-id="${escapeHtml(s.id)}" title="${escapeHtml(title)}">
       <div class="session-dot"></div>
       <div class="session-info">
         <div class="session-name">${short}</div>
@@ -2216,11 +2228,11 @@ function renderSessions() {
     </div>`
   }).join('')
   list.innerHTML = html
-  // 点击 session（占位：复制 id）
+  // 点击 session：切到那个 session（设置 state.sessionId 并请求服务器）
   list.querySelectorAll('.session-item').forEach(el => {
     el.addEventListener('click', () => {
       const id = el.getAttribute('data-id')
-      navigator.clipboard?.writeText(id).catch(() => {})
+      switchSession(id)
     })
   })
 }
@@ -2230,24 +2242,49 @@ async function refreshSessions() {
   if (btn) { btn.disabled = true; btn.classList.add('loading') }
   try {
     // 双通道：先 mavis CLI（独立、快），再 mcode /sessions（兜底）
-    const r = await fetch('/api/sessions' + TOKEN_QUERY, { method: 'GET', headers: HEADERS })
-    if (r.ok) {
-      const data = await r.json()
-      if (data.ok && data.sessions && data.sessions.length > 0) {
-        state = state || {}
-        state.sessions = data.sessions
-        render()
-        return
+    let got = false
+    try {
+      const r = await fetch('/api/sessions' + TOKEN_QUERY, { method: 'GET', headers: HEADERS })
+      if (r.ok) {
+        const data = await r.json()
+        if (data.ok && data.sessions && data.sessions.length > 0) {
+          state = state || {}
+          state.sessions = data.sessions
+          render()
+          got = true
+        }
       }
+    } catch {}
+    if (!got) {
+      // fallback: 触发 mcode /sessions
+      try { await fetch('/api/sessions' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
     }
-  } catch {}
-  // fallback: 触发 mcode /sessions
-  try {
-    await fetch('/api/sessions' + TOKEN_QUERY, { method: 'POST', headers: HEADERS })
-  } catch {}
-  finally {
+  } finally {
     if (btn) { btn.disabled = false; btn.classList.remove('loading') }
   }
+}
+
+// v0.5.x: 点击 sidebar session 切到该会话（#1 反馈修复）
+async function switchSession(sessionId) {
+  if (!sessionId) return
+  try {
+    const r = await fetch('/api/sessions/switch' + TOKEN_QUERY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...HEADERS },
+      body: JSON.stringify({ id: sessionId }),
+    })
+    if (r.ok) {
+      const data = await r.json()
+      if (data.ok) {
+        // 服务器会推 SSE，state 自动更新；这里只做视觉高亮
+        state.sessionId = data.session.id
+        state.sessionTitle = data.session.title
+        state.chat = []
+        renderSessions()
+        render()
+      }
+    }
+  } catch (e) { console.error('switchSession', e) }
 }
 
 function renderUserFooter() {
@@ -2357,7 +2394,7 @@ function renderMessage(msg) {
       </div>`).join('')}
     </div>`
   }
-  const avatar = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'AI' : 'i'
+  const avatar = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'M' : 'i'
   const role = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Mcode' : 'System'
   return `<div class="msg ${msg.role}">
     <div class="msg-avatar">${avatar}</div>
@@ -2662,8 +2699,8 @@ function init() {
     .then(s => { state = s; render() })
     .catch(e => console.error('initial state', e))
   // v0.4.1: 启动后自动拉一次 sessions 列表（mavis CLI 路径，不走 mcode）
-  // 注意：不自动触发 /status / /usage（避免干扰用户），用户点 Usage 按钮才触发
-  setTimeout(refreshSessions, 1500)
+  // v0.5.x: 改成立即拉，不延时轮询（避免刷新图标一直转的视觉噪音）
+  refreshSessions()
 }
 
 function attachEvents() {
@@ -2708,6 +2745,12 @@ function attachEvents() {
 
   // Refresh sessions button
   document.getElementById('btn-refresh-sessions')?.addEventListener('click', refreshSessions)
+
+  // Search sessions input — 实时过滤 sidebar 列表
+  document.getElementById('search-input')?.addEventListener('input', (e) => {
+    sessionSearchQuery = e.target.value || ''
+    renderSessions()
+  })
 
   // Attach
   document.getElementById('btn-attach').addEventListener('click', () => fileInput.click())

@@ -309,6 +309,37 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, session: item }))
   }
 
+  // POST /api/sessions/switch — 切换到指定 session（点击 sidebar item）
+  if (req.method === 'POST' && pathname === '/api/sessions/switch') {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    let payload
+    try { payload = JSON.parse(body || '{}') } catch { payload = {} }
+    const id = (payload.id || '').trim()
+    if (!id) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ ok: false, error: 'id required' }))
+    }
+    const all = loadSessions()
+    const target = all.find((s) => s.id === id)
+    if (!target) {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      return res.end(JSON.stringify({ ok: false, error: 'session not found' }))
+    }
+    // 切换 server 端 state：清空当前 chat/usage，下次 mcode exec 用新 sessionId
+    // 注意：mcode 自己的 sessionId（mvs_xxx）跟 webui 侧边栏 id（randomUUID）不同
+    // 这里只切换 webui 侧边栏的"当前 session"标记；mcode 续接要看 sessionTitle 对应的历史消息
+    state.sessionId = target.id
+    state.sessionTitle = target.title || 'Untitled'
+    state.chat = []  // 清空当前 chat 视图（不重新拉历史——mcode stream-json 没暴露历史回放 API）
+    state.usage = { ...state.usage, sessionInput: 0, sessionOutput: 0, sessionTotal: 0 }
+    state.context.tokens = 0
+    state.context.used = 0
+    pushState()
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    return res.end(JSON.stringify({ ok: true, session: { id: target.id, title: state.sessionTitle } }))
+  }
+
   // POST /api/upload — save file
   if (req.method === 'POST' && pathname === '/api/upload') {
     const ctype = (req.headers['content-type'] || '').toLowerCase()
