@@ -381,29 +381,35 @@ a { color: var(--accent); text-decoration: none; }
 .left-bottom {
   border-top: 1px solid var(--border);
   background: var(--bg-sidebar);
+  position: relative;  /* 容纳 usage-popover 的绝对定位锚点 */
 }
 
-/* v0.5.y: 套餐用量卡片（kimi 风格，mmx quota show 直拉） */
-.quota-card {
-  margin: 8px 12px 4px;
+/* v0.5.z: 套餐用量按钮 + 右侧弹层（mmx quota + 本机时间自算） */
+.btn-menu#btn-usage { position: relative; }
+.btn-menu#btn-usage[aria-expanded="true"] { background: var(--bg-hover); }
+.usage-popover {
+  position: absolute;
+  bottom: 0;
+  left: calc(100% + 8px);
+  width: 260px;
+  background: var(--bg-card, var(--bg-sidebar));
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-card, var(--bg-sidebar));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  z-index: 50;
+  font-size: 12px;
   overflow: hidden;
 }
-.quota-header {
+.usage-popover[hidden] { display: none; }
+.usage-popover-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 10px 6px;
+  padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border);
 }
-.quota-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-}
-.quota-refresh {
+.usage-popover-title { font-weight: 600; color: var(--text); font-size: 13px; }
+.usage-popover-refresh {
   border: none;
   background: transparent;
   padding: 2px 4px;
@@ -414,38 +420,40 @@ a { color: var(--accent); text-decoration: none; }
   border-radius: 4px;
   transition: background 0.1s;
 }
-.quota-refresh:hover { color: var(--text); background: var(--bg-hover); }
-.quota-refresh .icon { width: 12px; height: 12px; display: block; }
-.quota-refresh.loading .icon { animation: spin 1s linear infinite; }
+.usage-popover-refresh:hover { color: var(--text); background: var(--bg-hover); }
+.usage-popover-refresh .icon { width: 12px; height: 12px; display: block; }
+.usage-popover-refresh.loading .icon { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
-.quota-body {
-  padding: 8px 10px;
-  font-size: 12px;
-  color: var(--text);
-}
-.quota-loading { color: var(--text-muted); font-style: italic; padding: 2px 0; }
-.quota-error { color: var(--danger); padding: 2px 0; line-height: 1.5; word-break: break-word; }
-.quota-section { padding: 4px 0; }
-.quota-section + .quota-section { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
-.quota-model {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-.quota-row {
+.usage-popover-body { padding: 10px 12px 12px; }
+.usage-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 2px 0;
+  padding: 4px 0;
+  color: var(--text);
 }
-.quota-label { color: var(--text); }
-.quota-percent { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
-.quota-percent.low { color: var(--danger); }
-.quota-reset {
+.usage-row + .usage-row { border-top: 1px solid var(--border); margin-top: 2px; padding-top: 6px; }
+.usage-row-label { color: var(--text-secondary); }
+.usage-row-value { font-weight: 500; font-variant-numeric: tabular-nums; }
+.usage-row-value.low { color: var(--danger); }
+.usage-reset {
   font-size: 11px;
   color: var(--text-muted);
-  padding: 0 0 2px;
+  padding: 0 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-loading { color: var(--text-muted); font-style: italic; padding: 4px 0; }
+.usage-error { color: var(--danger); padding: 4px 0; line-height: 1.5; word-break: break-word; }
+.usage-empty { color: var(--text-muted); padding: 4px 0; font-style: italic; }
+
+/* 移动端（窄屏）：弹层改为向下展开到按钮下方，避免被 sidebar 边界裁掉 */
+@media (max-width: 600px) {
+  .usage-popover {
+    left: 0;
+    top: calc(100% + 4px);
+    width: 100%;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  }
 }
 
 .btn-menu {
@@ -1465,15 +1473,23 @@ a { color: var(--accent); text-decoration: none; }
       </div>
 
       <div class="left-bottom">
-        <!-- v0.5.y: 套餐用量卡片（kimi 风格，mmx quota show 直拉，无 AI 参与） -->
-        <div class="quota-card" id="quota-card">
-          <div class="quota-header">
-            <span class="quota-title" data-i18n="usage">套餐用量</span>
-            <button class="quota-refresh" id="quota-refresh" title="刷新" aria-label="刷新用量">
+        <!-- v0.5.z: 套餐用量按钮（btn-menu 风格，点开右侧弹层，mmx quota + 本机时间） -->
+        <button class="btn-menu" id="btn-usage" aria-haspopup="true" aria-expanded="false">
+          <svg class="icon btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="3" y1="20" x2="21" y2="20"/>
+          </svg>
+          <span class="btn-text" data-i18n="usage">套餐用量</span>
+          <span class="btn-value" id="usage-value">—</span>
+          <svg class="icon btn-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <div class="usage-popover" id="usage-popover" role="dialog" aria-label="套餐用量详情" hidden>
+          <div class="usage-popover-header">
+            <span class="usage-popover-title" data-i18n="usage">套餐用量</span>
+            <button class="usage-popover-refresh" id="usage-popover-refresh" title="刷新" aria-label="刷新用量">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>
           </div>
-          <div class="quota-body" id="quota-body">
+          <div class="usage-popover-body" id="usage-popover-body">
             <div class="quota-loading" data-i18n="usage_loading">加载中...</div>
           </div>
         </div>
@@ -2154,8 +2170,8 @@ function render() {
   // Sessions list (左栏 RECENT)
   renderSessions()
 
-  // Quota card (左下角, kimi 风格, mmx 直拉)
-  renderQuota()
+  // Quota card (左下角, btn-menu 风格 + popover, mmx 直拉 + 本机时间)
+  renderUsage()
 
   // Chat
   renderChat()
@@ -2646,12 +2662,61 @@ function toggleSettings() {
 function hideSettings() { settingsOpen = false; settingsMenu.hidden = true }
 
 // ============================================================
-// Quota card: v0.5.y kimi 风格，mmx quota show 直拉（不再走 AI 瞎编）
-// 状态从 state.usage.raw 解析；点刷新按钮或首次加载触发 /api/usage
+// v0.5.z: 套餐用量（btn-menu 按钮 + 右侧 popover，mmx quota + 本机时间自算）
+// - % 从 mmx API 拿
+// - 重置时间纯前端算：5h 窗口边界 (0/5/10/15/20) + 周日半夜周刷新
+// - 只展示 general（不显示 video）
+// - 时间格式 "X天 Y小时 Z分 后重置"（去掉"钟"避免"分分钟"重复）
 // ============================================================
-function formatDurationMs(ms) {
-  // kimi 风格："6天 15小时 46分 分钟后重置" / "1小时 46分 分钟后重置" / "46分 分钟后重置"
-  if (!ms || ms < 0) return '—'
+
+// 5h 窗口边界（最后一个是 4h 20→24）
+const FIVE_HOUR_BOUNDARIES = [5, 10, 15, 20, 24]
+
+function nextFiveHourReset(now = new Date()) {
+  // 返回下一次 5h 窗口的本地时间
+  const h = now.getHours()
+  const m = now.getMinutes()
+  const s = now.getSeconds()
+  for (const b of FIVE_HOUR_BOUNDARIES) {
+    if (h < b) {
+      const t = new Date(now)
+      t.setHours(b, 0, 0, 0)
+      return t
+    }
+  }
+  // h >= 20 但 < 24：b=24 (今日午夜)
+  // 实际上 h<24 时已经会被 b=20 截掉当 h<20
+  // 如果 h>=24 不可能 (setHours clamp)，兜底：
+  const t = new Date(now)
+  t.setDate(t.getDate() + 1)
+  t.setHours(5, 0, 0, 0)
+  return t
+}
+
+function nextWeeklyReset(now = new Date()) {
+  // 周日半夜 (周日 00:00) 刷新周限额
+  // 如果现在还没到本周周日 00:00：days = (7 - day) % 7, 0 = 今天就是周日
+  // 如果今天是周日且已过 00:00 (0:00 ~ 现在)，下一次是下周日
+  const t = new Date(now)
+  t.setHours(0, 0, 0, 0)
+  const day = now.getDay()  // 0=周日
+  let daysUntil = (7 - day) % 7
+  if (daysUntil === 0) {
+    // 今天就是周日，看是否已过 00:00
+    if (now.getHours() === 0 && now.getMinutes() === 0 && now.getSeconds() === 0) {
+      return t  // 正好 0 点
+    }
+    // 已过 0 点，下一次是下周日
+    daysUntil = 7
+  }
+  t.setDate(t.getDate() + daysUntil)
+  return t
+}
+
+function formatTimeUntil(target, now = new Date()) {
+  // 输出 "X天 Y小时 Z分 后重置"，去掉"钟"避免"分 分钟"重复
+  const ms = target.getTime() - now.getTime()
+  if (ms <= 0) return '现在'
   const total = Math.floor(ms / 1000)
   const d = Math.floor(total / 86400)
   const h = Math.floor((total % 86400) / 3600)
@@ -2660,13 +2725,22 @@ function formatDurationMs(ms) {
   if (d > 0) parts.push(`${d}天`)
   if (h > 0) parts.push(`${h}小时`)
   if (m > 0 || parts.length === 0) parts.push(`${m}分`)
-  return `${parts.join(' ')} 分钟后重置`
+  return `${parts.join(' ')} 后重置`
 }
 
-function renderQuota() {
-  const body = document.getElementById('quota-body')
-  const btn = document.getElementById('quota-refresh')
-  if (!body) return
+function formatResetTime(target) {
+  // 显示绝对时间 "15:00" 或 "周日 00:00"（比"X小时Y分"更直观）
+  const h = target.getHours()
+  const m = target.getMinutes()
+  const hm = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  // 检查是否本周日（day === 0）
+  const today = new Date()
+  if (target.getDay() === 0) return `周日 ${hm}`
+  return hm
+}
+
+function getGeneralQuota() {
+  // 从 state.usage.raw 拿 general 模型的数据（不返回 video）
   const raw = state?.usage?.raw
   let data = null
   if (typeof raw === 'string') {
@@ -2674,45 +2748,86 @@ function renderQuota() {
   } else if (raw && typeof raw === 'object') {
     data = raw
   }
-  if (!data?.model_remains?.length) {
-    return  // 保留之前的 loading / error 状态
+  if (!data?.model_remains?.length) return null
+  return data.model_remains.find((m) => m.model_name === 'general') || data.model_remains[0] || null
+}
+
+function renderUsagePopover() {
+  const body = document.getElementById('usage-popover-body')
+  const btn = document.getElementById('usage-popover-refresh')
+  if (!body) return
+  const g = getGeneralQuota()
+  const now = new Date()
+  if (!g) {
+    body.innerHTML = `<div class="usage-empty" data-i18n="usage_loading">点击套餐用量加载...</div>`
+    return
   }
-  body.innerHTML = data.model_remains.map((m) => {
-    const ip = m.current_interval_remaining_percent
-    const wp = m.current_weekly_remaining_percent
-    const ir = formatDurationMs(m.remains_time)
-    const wr = formatDurationMs(m.weekly_remains_time)
-    const ipClass = (typeof ip === 'number' && ip < 20) ? ' low' : ''
-    const wpClass = (typeof wp === 'number' && wp < 20) ? ' low' : ''
-    const name = escapeHtml(m.model_name || 'model')
-    return `<div class="quota-section">
-      <div class="quota-model">${name}</div>
-      <div class="quota-row">
-        <span class="quota-label">5 小时限额</span>
-        <span class="quota-percent${ipClass}">${ip ?? '—'}% 剩余</span>
-      </div>
-      <div class="quota-reset">${escapeHtml(ir)}</div>
-      <div class="quota-row">
-        <span class="quota-label">每周限额</span>
-        <span class="quota-percent${wpClass}">${wp ?? '—'}% 剩余</span>
-      </div>
-      <div class="quota-reset">${escapeHtml(wr)}</div>
-    </div>`
-  }).join('')
-  // 数据已就绪，停掉刷新按钮的 loading 动画
+  const ip = g.current_interval_remaining_percent
+  const wp = g.current_weekly_remaining_percent
+  const ipClass = (typeof ip === 'number' && ip < 20) ? ' low' : ''
+  const wpClass = (typeof wp === 'number' && wp < 20) ? ' low' : ''
+  const next5h = nextFiveHourReset(now)
+  const nextWk = nextWeeklyReset(now)
+  body.innerHTML = `
+    <div class="usage-row">
+      <span class="usage-row-label">5 小时限额</span>
+      <span class="usage-row-value${ipClass}">${ip ?? '—'}% 剩余</span>
+    </div>
+    <div class="usage-reset">下次重置 ${escapeHtml(formatResetTime(next5h))}（${escapeHtml(formatTimeUntil(next5h, now))}）</div>
+    <div class="usage-row">
+      <span class="usage-row-label">每周限额</span>
+      <span class="usage-row-value${wpClass}">${wp ?? '—'}% 剩余</span>
+    </div>
+    <div class="usage-reset">下次重置 ${escapeHtml(formatResetTime(nextWk))}（${escapeHtml(formatTimeUntil(nextWk, now))}）</div>
+  `
   if (btn) btn.classList.remove('loading')
 }
 
-async function refreshQuota() {
-  const body = document.getElementById('quota-body')
-  const btn = document.getElementById('quota-refresh')
+function renderUsageValue() {
+  // 按钮右侧的 value 字段，显示最关键的 5h 剩余%
+  const val = document.getElementById('usage-value')
+  if (!val) return
+  const g = getGeneralQuota()
+  if (!g || typeof g.current_interval_remaining_percent !== 'number') {
+    val.textContent = '—'
+    val.classList.remove('low')
+    return
+  }
+  const ip = g.current_interval_remaining_percent
+  val.textContent = `${ip}%`
+  if (ip < 20) val.classList.add('low')
+  else val.classList.remove('low')
+}
+
+function renderUsage() {
+  renderUsageValue()
+  // 弹层只在打开时才更新内容（避免每秒重算浪费）
+  const popover = document.getElementById('usage-popover')
+  if (popover && !popover.hidden) renderUsagePopover()
+}
+
+function toggleUsagePopover(forceState) {
+  const popover = document.getElementById('usage-popover')
+  const btn = document.getElementById('btn-usage')
+  if (!popover || !btn) return
+  const willOpen = typeof forceState === 'boolean' ? forceState : popover.hidden
+  popover.hidden = !willOpen
+  btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false')
+  if (willOpen) {
+    // 打开时立即刷新一次（让时间显示是新的）
+    refreshUsage()
+  }
+}
+
+async function refreshUsage() {
+  const btn = document.getElementById('usage-popover-refresh')
   if (btn) btn.classList.add('loading')
-  if (body) body.innerHTML = `<div class="quota-loading">加载中…</div>`
   try {
     await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS })
-    // state.usage 会由 SSE 推过来，render() → renderQuota() 自动刷新
+    // state.usage 由 SSE 推过来，render() → renderUsage() 自动刷新
   } catch (e) {
-    if (body) body.innerHTML = `<div class="quota-error">加载失败：${escapeHtml(e.message || String(e))}</div>`
+    const body = document.getElementById('usage-popover-body')
+    if (body) body.innerHTML = `<div class="usage-error">加载失败：${escapeHtml(e.message || String(e))}</div>`
     if (btn) btn.classList.remove('loading')
   }
 }
@@ -2817,8 +2932,13 @@ function init() {
   // v0.4.1: 启动后自动拉一次 sessions 列表（mavis CLI 路径，不走 mcode）
   // v0.5.x: 改成立即拉，不延时轮询（避免刷新图标一直转的视觉噪音）
   refreshSessions()
-  // v0.5.y: 启动后自动拉一次 quota（mmx quota show 直拉, kimi 风格卡片用）
-  refreshQuota()
+  // v0.5.z: 启动后自动拉一次 quota（mmx quota show 直拉，按钮 value 用）
+  refreshUsage()
+  // v0.5.z: 定时刷新 popover 的本机时间倒计时（30s 一次，避免分钟级过期）
+  setInterval(() => {
+    const popover = document.getElementById('usage-popover')
+    if (popover && !popover.hidden) renderUsagePopover()
+  }, 30_000)
 }
 
 function attachEvents() {
@@ -2865,7 +2985,7 @@ function attachEvents() {
   document.getElementById('btn-refresh-sessions')?.addEventListener('click', refreshSessions)
 
   // Quota card refresh button
-  document.getElementById('quota-refresh')?.addEventListener('click', refreshQuota)
+  document.getElementById('usage-popover-refresh')?.addEventListener('click', refreshUsage)
 
   // Search sessions input — 实时过滤 sidebar 列表
   document.getElementById('search-input')?.addEventListener('input', (e) => {
@@ -2920,6 +3040,12 @@ function attachEvents() {
   // Appearance / Language buttons
   document.getElementById('btn-appearance').addEventListener('click', () => { toggleTheme() })
   document.getElementById('btn-language').addEventListener('click', () => { toggleLang() })
+
+  // Usage button → toggle popover
+  document.getElementById('btn-usage').addEventListener('click', (e) => {
+    e.stopPropagation()
+    toggleUsagePopover()
+  })
 
   // New chat
   document.getElementById('btn-new-chat').addEventListener('click', async () => {
@@ -3015,7 +3141,12 @@ function attachEvents() {
       const bs = document.getElementById('btn-settings')
       if (!bs || (e.target.id !== 'btn-settings' && !bs.contains(e.target))) hideSettings()
     }
-    // 套餐用量 UI 已删（v0.5.x）
+    // v0.5.z: 点 popover 外面就关（btn-usage click 用 stopPropagation 自己处理开关）
+    const up = document.getElementById('usage-popover')
+    const ub = document.getElementById('btn-usage')
+    if (up && !up.hidden && ub && !up.contains(e.target) && !ub.contains(e.target)) {
+      toggleUsagePopover(false)
+    }
   })
 
   // Keyboard shortcuts
@@ -3091,6 +3222,7 @@ function attachEvents() {
       if (slashOpen) hideSlash()
       else if (modeOpen) hideMode()
       else if (settingsOpen) hideSettings()
+      else { const up2 = document.getElementById('usage-popover'); if (up2 && !up2.hidden) toggleUsagePopover(false) }
     }
     // Ctrl+K / Cmd+K 聚焦输入
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
