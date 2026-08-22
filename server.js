@@ -60,8 +60,9 @@ const server = http.createServer(async (req, res) => {
     return res.end()
   }
 
-  // Static HTML
-  if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html')) {
+  // Static HTML (ignore query string for cache-busting)
+  const pathname = (req.url || '/').split('?')[0]
+  if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
     return res.end(html)
   }
@@ -129,6 +130,9 @@ const server = http.createServer(async (req, res) => {
     child.stdin.end()
 
     let buf = ''
+    let lastUsage = null
+    let lastSessionId = null
+    let lastDurationMs = null
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk) => {
       buf += chunk
@@ -139,6 +143,14 @@ const server = http.createServer(async (req, res) => {
         if (!line) continue
         try {
           const msg = JSON.parse(line)
+          // capture usage + sessionId from the final exec.result or the full message event
+          if (msg.type === 'exec.result') {
+            if (msg.sessionId) lastSessionId = msg.sessionId
+            if (typeof msg.durationMs === 'number') lastDurationMs = msg.durationMs
+          }
+          if (msg.type === 'message' && msg.message?.usage) {
+            lastUsage = msg.message.usage
+          }
           sse(res, 'stream', msg)
         } catch {
           sse(res, 'stdout', { line })
@@ -169,7 +181,15 @@ const server = http.createServer(async (req, res) => {
         }
         buf = ''
       }
-      sse(res, 'done', { code, sig, stderr: stderrBuf })
+      // include lastUsage/lastSessionId in the done event so the UI can show usage
+      sse(res, 'done', {
+        code,
+        sig,
+        stderr: stderrBuf,
+        usage: lastUsage,
+        sessionId: lastSessionId,
+        durationMs: lastDurationMs,
+      })
       res.end()
     })
 
