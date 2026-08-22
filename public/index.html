@@ -242,6 +242,9 @@ a { color: var(--accent); text-decoration: none; }
 }
 .workspace-item:hover, .session-item:hover { background: var(--bg-hover); }
 .workspace-item.active, .session-item.active { background: var(--bg-active); }
+/* v0.5.x: workspace 项不假装可点（架构上做不到远程选择） */
+.workspace-item { cursor: default; }
+.workspace-item:hover { background: transparent; }
 .workspace-icon, .session-icon {
   width: 16px; height: 16px;
   color: var(--text-tertiary);
@@ -434,6 +437,18 @@ a { color: var(--accent); text-decoration: none; }
   padding: 4px 0;
 }
 .quota-usage-summary b { color: var(--text); }
+.quota-raw {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: ui-monospace, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 8px;
+  background: var(--bg-elevated);
+  border-radius: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
 
 .btn-menu {
   display: flex;
@@ -742,6 +757,9 @@ a { color: var(--accent); text-decoration: none; }
 .btn-tool .icon { width: 14px; height: 14px; }
 .btn-tool.active { background: var(--accent-bg); color: var(--accent-text); }
 .btn-tool .mode-icon { width: 14px; height: 14px; margin-right: 2px; }
+/* v0.5.x: btn-folder 不假装可点（只是显示当前 workspace） */
+#btn-folder { cursor: default; }
+#btn-folder:hover { background: transparent; color: var(--text-secondary); }
 
 /* v0.5.x: 窄屏自适应 — 模式按钮只显示图标，隐藏 label
    触发条件：聊天区窄于 720px 时（input-toolbar 容纳不下） */
@@ -2585,42 +2603,68 @@ async function toggleQuota() {
   quotaExpand.hidden = !quotaExpanded
   if (quotaExpanded) {
     renderQuota()
-    // 触发 /usage 命令拉数据
-    try { await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
+    // 触发 /usage 命令拉数据（首次或 60s 过期）
+    const u = state?.usage
+    if (!u?.fetchedAt || (Date.now() - u.fetchedAt > 60000)) {
+      try { await fetch('/api/usage' + TOKEN_QUERY, { method: 'POST', headers: HEADERS }) } catch {}
+    }
   }
 }
 function hideQuota() { quotaExpanded = false; quotaCard.classList.remove('expanded'); quotaExpand.hidden = true }
+
+// 提取 "80% left" / "30% used" 中的数字；不识别返回 null
+function parsePercent(text) {
+  if (!text) return null
+  const m = String(text).match(/(\d+(?:\.\d+)?)\s*%/)
+  return m ? parseFloat(m[1]) : null
+}
 function renderQuota() {
   const u = state?.usage
   if (!u || !u.fetchedAt || (Date.now() - u.fetchedAt > 60000)) {
     quotaContent.innerHTML = `<div class="quota-expand-loading">${t('usage_loading')}</div>`
     return
   }
-  const weeklyPercent = (100 - (u.weekly === 'Unlimited' ? 0 : 0))
-  const weekly = `
-    <div class="quota-item">
-      <div class="quota-item-header">
-        <span class="quota-item-title">${currentLang === 'zh' ? '每周限额' : 'Weekly limit'}</span>
-        <span class="quota-item-percent">${u.weekly === 'Unlimited' ? '∞' : '2%'}</span>
-      </div>
-      <div class="quota-bar"><div class="quota-bar-fill" style="width:${u.weekly === 'Unlimited' ? 0 : 2}%"></div></div>
-      <div class="quota-item-reset">${currentLang === 'zh' ? '6 天 15 小时 46 分钟后重置' : 'Resets in 6d 15h 46m'}</div>
-    </div>
-  `
+  const isZh = currentLang === 'zh'
+
+  // 5 小时限额：mcode 输出 "80% left"，kimi 风格显示已用 % = 100 - left%
+  // 兼容服务端两种字段名（u.fiveHourPercent 已是 left%, 或 u.fiveHourLeft 是字符串）
+  let fiveLeft = parsePercent(u.fiveHourLeft) ?? (typeof u.fiveHourPercent === 'number' ? u.fiveHourPercent : null)
+  const fiveUsed = fiveLeft != null ? Math.max(0, Math.min(100, 100 - fiveLeft)) : null
   const fiveHour = `
     <div class="quota-item">
       <div class="quota-item-header">
-        <span class="quota-item-title">${currentLang === 'zh' ? '5 小时限额' : '5-hour limit'}</span>
-        <span class="quota-item-percent">${u.fiveHourPercent ?? 3}%</span>
+        <span class="quota-item-title">${isZh ? '5 小时限额' : '5-hour limit'}</span>
+        <span class="quota-item-percent">${fiveUsed != null ? fiveUsed + '%' : '—'}</span>
       </div>
-      <div class="quota-bar"><div class="quota-bar-fill ${(u.fiveHourPercent ?? 3) > 80 ? 'danger' : (u.fiveHourPercent ?? 3) > 50 ? 'high' : ''}" style="width:${u.fiveHourPercent ?? 3}%"></div></div>
-      <div class="quota-item-reset">${u.fiveHourReset ? `${currentLang === 'zh' ? '重置' : 'Resets in'} ${u.fiveHourReset}` : ''}</div>
+      <div class="quota-item-reset">${u.fiveHourReset ? `${isZh ? '重置' : 'Resets in'} ${escapeHtml(u.fiveHourReset)}` : ''}</div>
     </div>
   `
+
+  // 每周限额：mcode 输出 "Weekly Unlimited" 或 "Weekly 2% used" 等
+  const isUnlimited = /unlimited|无限/i.test(u.weekly || '')
+  const weeklyUsed = parsePercent(u.weekly)  // 如果 raw 是 "2% left/used" 才解析
+  const weekly = `
+    <div class="quota-item">
+      <div class="quota-item-header">
+        <span class="quota-item-title">${isZh ? '每周限额' : 'Weekly limit'}</span>
+        <span class="quota-item-percent">${isUnlimited ? '∞' : (weeklyUsed != null ? weeklyUsed + '%' : '—')}</span>
+      </div>
+      <div class="quota-item-reset">${isUnlimited ? (isZh ? '无限' : 'Unlimited') : ''}</div>
+    </div>
+  `
+
+  // 套餐信息：plan 名 + 到期 + 余额
   const plan = u.plan ? `<div class="quota-usage-summary"><b>${escapeHtml(u.plan)}</b></div>` : ''
-  const expires = u.expires ? `<div class="quota-usage-summary">${currentLang === 'zh' ? '到期' : 'Expires'}: ${escapeHtml(u.expires)}</div>` : ''
-  const credits = u.credits ? `<div class="quota-usage-summary">${currentLang === 'zh' ? '余额' : 'Credits'}: ${escapeHtml(u.credits)}</div>` : ''
-  quotaContent.innerHTML = plan + expires + credits + weekly + fiveHour
+  const expires = u.expires ? `<div class="quota-usage-summary">${isZh ? '到期' : 'Expires'}: ${escapeHtml(u.expires)}</div>` : ''
+  const credits = (u.credits != null) ? `<div class="quota-usage-summary">${isZh ? '余额' : 'Credits'}: ${escapeHtml(String(u.credits))}</div>` : ''
+
+  // 如果结构化字段都缺失，至少把 raw 显示出来（mcode 0.1.2 的 /usage 经常只能拿到 LLM 对话式回复）
+  const noStructured = !u.plan && !u.expires && u.credits == null && fiveUsed == null && isUnlimited && weeklyUsed == null
+  const rawFallback = noStructured && u.raw
+    ? `<div class="quota-raw">${escapeHtml(u.raw.slice(0, 400))}${u.raw.length > 400 ? '…' : ''}</div>`
+    : ''
+
+  quotaContent.innerHTML = plan + expires + credits + weekly + fiveHour + rawFallback
 }
 
 // ============================================================
