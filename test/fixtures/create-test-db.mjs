@@ -26,7 +26,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 // MAVIS_DB_PATH resolve to this file with no symlink trickery.
 const DB_DIR = resolve(HERE, 'v2', 'sqlite')
 const DB = resolve(DB_DIR, 'runtime-state.sqlite')
-const SQLITE3 = process.env.SQLITE3_BIN || 'C:\\Users\\mjc39\\anaconda3\\Library\\bin\\sqlite3.exe'
+const SQLITE3 = process.env.SQLITE3_BIN || 'sqlite3' // PATH default — see config.js#detectSqlite3Bin
 
 // Recreate directory from scratch
 import { mkdirSync, rmSync } from 'node:fs'

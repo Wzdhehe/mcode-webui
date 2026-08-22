@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
-const SQLITE3 = 'C:\\Users\\mjc39\\anaconda3\\Library\\bin\\sqlite3.exe'
+const SQLITE3 = process.env.SQLITE3_BIN || 'sqlite3' // PATH default — see config.js#detectSqlite3Bin
 const MCODE_DB = 'C:\\Users\\mjc39\\.minimax\\v2\\sqlite\\runtime-state.sqlite'
 
 if (!existsSync(MCODE_DB)) {

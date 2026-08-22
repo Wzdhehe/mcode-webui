@@ -168,11 +168,11 @@ Get-Content "$env:USERPROFILE\.minimax-code\webui\.webui-sessions.json" | Conver
 
 The mcode-side session store is SQLite:
 ```powershell
-& "$env:USERPROFILE\anaconda3\Library\bin\sqlite3.exe" `
-  "$env:USERPROFILE\.minimax\v2\sqlite\runtime-state.sqlite" `
-  ".tables"
-& "$env:USERPROFILE\anaconda3\Library\bin\sqlite3.exe" `
-  "$env:USERPROFILE\.minimax\v2\sqlite\runtime-state.sqlite" `
+# v0.5.bx-44: webui no longer hardcodes an anaconda sqlite3 path.
+# webui/server/lib/config.js#detectSqlite3Bin probes PATH first, then
+# platform fallbacks. For ad-hoc manual queries, just rely on PATH:
+sqlite3 "$env:USERPROFILE\.minimax\v2\sqlite\runtime-state.sqlite" ".tables"
+sqlite3 "$env:USERPROFILE\.minimax\v2\sqlite\runtime-state.sqlite" `
   "SELECT id, title, cwd FROM local_runtime_sessions ORDER BY updated_at DESC LIMIT 10"
 ```
 

@@ -5,6 +5,7 @@ import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // __dirname here = webui/server/lib/. We need webui/ as root, so go up 3 levels.
@@ -65,8 +66,72 @@ export const MAVIS_DB_PATH = join(
   "runtime-state.sqlite",
 );
 export const SQLITE3_BIN =
-  process.env.SQLITE3_BIN ||
-  "C:\\Users\\mjc39\\anaconda3\\Library\\bin\\sqlite3.exe";
+  detectSqlite3Bin() ?? "sqlite3"; // fallback: rely on PATH (spawn will ENOENT gracefully if missing)
+
+// v0.5.bx-44 (red-line-2): platform-specific fallback paths to try when
+//   probing for sqlite3 binary. Pure function for testability — no FS /
+//   process side effects. mcode-plugin-guide red-lines.md §"测试可复现性"
+//   forbids hardcoding host-specific paths in shipped source.
+export function getPlatformFallbackPaths(
+  platform = process.platform,
+  env = process.env,
+  home = homedir(),
+) {
+  const paths = [];
+  if (platform === "win32") {
+    // Anaconda / Miniconda (commonly ship sqlite3.exe on Windows dev machines)
+    paths.push(`${home}\\anaconda3\\Library\\bin\\sqlite3.exe`);
+    paths.push(`${home}\\Anaconda3\\Library\\bin\\sqlite3.exe`);
+    paths.push(`${home}\\miniconda3\\Library\\bin\\sqlite3.exe`);
+    paths.push(`${home}\\Miniconda3\\Library\\bin\\sqlite3.exe`);
+    // WindowsApps (scoop / winget install there)
+    const local = env && env.LOCALAPPDATA;
+    if (local) paths.push(`${local}\\Microsoft\\WindowsApps\\sqlite3.exe`);
+    // System32 (rare but possible)
+    paths.push("C:\\Windows\\System32\\sqlite3.exe");
+  } else if (platform === "darwin") {
+    paths.push("/usr/bin/sqlite3");
+    paths.push("/opt/homebrew/bin/sqlite3"); // Apple Silicon Homebrew
+    paths.push("/usr/local/bin/sqlite3"); // Intel Homebrew / manual install
+  } else {
+    // linux + other unix
+    paths.push("/usr/bin/sqlite3");
+    paths.push("/usr/local/bin/sqlite3");
+  }
+  return paths;
+}
+
+// Probe a single binary: returns true if it works (`--version` exits 0).
+//   Uses spawnSync with stdio:ignore so it doesn't pollute output.
+//   2s timeout — sqlite3 --version is instant on any sane system.
+function probeBinary(cmd) {
+  try {
+    const r = spawnSync(cmd, ["--version"], {
+      windowsHide: true,
+      stdio: "ignore",
+      timeout: 2000,
+    });
+    return r.status === 0 && !r.error;
+  } catch {
+    return false;
+  }
+}
+
+// Resolve sqlite3 binary path. Order:
+//   1. process.env.SQLITE3_BIN (explicit override; must actually work)
+//   2. "sqlite3" on PATH (probe --version)
+//   3. Platform-specific fallback list (first that works)
+//   4. null (caller should degrade gracefully — mavis-usage.js returns null
+//          on spawn ENOENT, same as today)
+export function detectSqlite3Bin() {
+  const envBin = process.env.SQLITE3_BIN;
+  if (envBin && probeBinary(envBin)) return envBin;
+  if (probeBinary("sqlite3")) return "sqlite3";
+  for (const p of getPlatformFallbackPaths()) {
+    if (probeBinary(p)) return p;
+  }
+  return null;
+}
 
 // v0.5.bn: 默认工作区必须有真实路径，否则 mcode acp session/new 报 "Invalid params"
 //   之前的 null 设计是想要"用户没选就不发"语义，但 acp 必须传 cwd
